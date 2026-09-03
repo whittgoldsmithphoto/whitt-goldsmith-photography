@@ -1,5 +1,6 @@
 import { HeadBucketCommand, PutBucketCorsCommand, S3Client } from "@aws-sdk/client-s3";
 import Stripe from "stripe";
+import { env as cloudflareEnv } from "cloudflare:workers";
 import { getSql } from "./db";
 
 export type R2Secrets = {
@@ -25,7 +26,17 @@ export type SmugmugSecrets = {
 };
 
 function env(name: string) {
-  return process.env[name]?.trim() || "";
+  const processValue = typeof process !== "undefined" ? process.env[name]?.trim() : "";
+  if (processValue) return processValue;
+  // Cloudflare Worker bindings (including encrypted secrets) are exposed via
+  // the runtime env proxy rather than Node's process.env. Read this lazily so
+  // the proxy is only touched while handling a request, never at module scope.
+  try {
+    const value = (cloudflareEnv as unknown as Record<string, unknown>)[name];
+    return typeof value === "string" ? value.trim() : "";
+  } catch {
+    return "";
+  }
 }
 
 function parseJson<T>(raw: string | null | undefined): T | null {
