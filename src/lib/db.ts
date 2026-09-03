@@ -1,14 +1,12 @@
 import { pendingMigrations } from "../../scripts/migration-plan.mjs";
+import { databaseConnectionString } from "./runtime-env.server";
 
 /** Which database backend is active. */
 export type DbSource = "neon" | "pglite";
 
 // An empty/whitespace DATABASE_URL (an easy misconfig in deploy UIs) must mean
 // "unset" — otherwise production would silently run on the PGLite fallback.
-const rawDatabaseUrl =
-  typeof process !== "undefined" ? process.env.DATABASE_URL : undefined;
-const databaseUrl =
-  rawDatabaseUrl && rawDatabaseUrl.trim() ? rawDatabaseUrl : undefined;
+const databaseUrl = typeof process !== "undefined" ? databaseConnectionString() : undefined;
 
 function runningOnCloudflareWorkers() {
   try {
