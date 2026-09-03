@@ -1,6 +1,14 @@
 import type { ReactNode } from "react";
 import { RedirectToSignIn, SignedIn, SignedOut } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { useCatalog } from "@/lib/catalog/client";
+import { CatalogStatus } from "@/components/catalog/public";
+
+function VerifiedOwner({ children }: { children: ReactNode }) {
+  const status = useCatalog("op=owner");
+  if (!status.data) return <CatalogStatus {...status} />;
+  return <>{children}</>;
+}
 
 export function RequireOwner({ children }: { children: ReactNode }) {
   const { isPending } = useCurrentUserState();
@@ -14,7 +22,9 @@ export function RequireOwner({ children }: { children: ReactNode }) {
   }
   return (
     <>
-      <SignedIn>{children}</SignedIn>
+      <SignedIn>
+        <VerifiedOwner>{children}</VerifiedOwner>
+      </SignedIn>
       <SignedOut>
         <RedirectToSignIn />
       </SignedOut>

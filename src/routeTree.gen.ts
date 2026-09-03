@@ -24,6 +24,7 @@ import { Route as PublishRouteImport } from './routes/publish'
 import { Route as SellRouteImport } from './routes/sell'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as UploadRouteImport } from './routes/upload'
+import { Route as ApiCatalogRouteImport } from './routes/api/catalog'
 import { Route as CheckoutThanksRouteImport } from './routes/checkout.thanks'
 import { Route as FoldersFolderIdRouteImport } from './routes/folders.$folderId'
 import { Route as GalleriesIndexRouteImport } from './routes/galleries.index'
@@ -110,6 +111,11 @@ const UploadRoute = UploadRouteImport.update({
   path: '/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCatalogRoute = ApiCatalogRouteImport.update({
+  id: '/api/catalog',
+  path: '/api/catalog',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CheckoutThanksRoute = CheckoutThanksRouteImport.update({
   id: '/thanks',
   path: '/thanks',
@@ -177,6 +183,7 @@ export interface FileRoutesByFullPath {
   '/sell': typeof SellRoute
   '/settings': typeof SettingsRoute
   '/upload': typeof UploadRoute
+  '/api/catalog': typeof ApiCatalogRoute
   '/checkout/thanks': typeof CheckoutThanksRoute
   '/folders/$folderId': typeof FoldersFolderIdRoute
   '/galleries/$galleryId': typeof GalleriesGalleryIdRoute
@@ -202,6 +209,7 @@ export interface FileRoutesByTo {
   '/sell': typeof SellRoute
   '/settings': typeof SettingsRoute
   '/upload': typeof UploadRoute
+  '/api/catalog': typeof ApiCatalogRoute
   '/checkout/thanks': typeof CheckoutThanksRoute
   '/folders/$folderId': typeof FoldersFolderIdRoute
   '/galleries/$galleryId': typeof GalleriesGalleryIdRoute
@@ -230,6 +238,7 @@ export interface FileRoutesById {
   '/sell': typeof SellRoute
   '/settings': typeof SettingsRoute
   '/upload': typeof UploadRoute
+  '/api/catalog': typeof ApiCatalogRoute
   '/checkout/thanks': typeof CheckoutThanksRoute
   '/folders/$folderId': typeof FoldersFolderIdRoute
   '/galleries/$galleryId': typeof GalleriesGalleryIdRoute
@@ -259,6 +268,7 @@ export interface FileRouteTypes {
     | '/sell'
     | '/settings'
     | '/upload'
+    | '/api/catalog'
     | '/checkout/thanks'
     | '/folders/$folderId'
     | '/galleries/$galleryId'
@@ -284,6 +294,7 @@ export interface FileRouteTypes {
     | '/sell'
     | '/settings'
     | '/upload'
+    | '/api/catalog'
     | '/checkout/thanks'
     | '/folders/$folderId'
     | '/galleries/$galleryId'
@@ -311,6 +322,7 @@ export interface FileRouteTypes {
     | '/sell'
     | '/settings'
     | '/upload'
+    | '/api/catalog'
     | '/checkout/thanks'
     | '/folders/$folderId'
     | '/galleries/$galleryId'
@@ -339,6 +351,7 @@ export interface RootRouteChildren {
   SellRoute: typeof SellRoute
   SettingsRoute: typeof SettingsRoute
   UploadRoute: typeof UploadRoute
+  ApiCatalogRoute: typeof ApiCatalogRoute
   FoldersFolderIdRoute: typeof FoldersFolderIdRoute
   OrdersOrderIdRoute: typeof OrdersOrderIdRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -451,6 +464,13 @@ declare module '@tanstack/react-router' {
       path: '/upload'
       fullPath: '/upload'
       preLoaderRoute: typeof UploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/catalog': {
+      id: '/api/catalog'
+      path: '/api/catalog'
+      fullPath: '/api/catalog'
+      preLoaderRoute: typeof ApiCatalogRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/checkout/thanks': {
@@ -582,6 +602,7 @@ const rootRouteChildren: RootRouteChildren = {
   SellRoute: SellRoute,
   SettingsRoute: SettingsRoute,
   UploadRoute: UploadRoute,
+  ApiCatalogRoute: ApiCatalogRoute,
   FoldersFolderIdRoute: FoldersFolderIdRoute,
   OrdersOrderIdRoute: OrdersOrderIdRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,

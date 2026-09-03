@@ -1,11 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Organizer } from "@/components/organizer/organizer";
+import { CatalogOrganizer } from "@/components/catalog/organizer";
 import { RequireOwner } from "@/components/require-owner";
-
 export const Route = createFileRoute("/organize")({
   component: () => (
     <RequireOwner>
-      <Organizer />
+      <CatalogOrganizer />
     </RequireOwner>
   ),
 });

@@ -1,9 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { Mark } from "@/components/mark";
-import { useStudioStore } from "@/lib/store";
+import { defaultStudio } from "@/lib/seed";
 
 export function SiteFooter() {
-  const studio = useStudioStore((s) => s.studio);
+  const studio = defaultStudio;
   return (
     <footer className="mt-auto border-t border-border/60 px-4 py-8 sm:px-6">
       <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4">

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
 const searchSchema = z.object({
-  setup: z.string().optional(),
+  setup: z.coerce.string().optional(),
 });
 
 export const Route = createFileRoute("/login")({
@@ -48,8 +48,8 @@ function Login() {
       <h1 className="font-display mt-2 text-4xl tracking-tight">{firstRun ? "Set up" : "Owner"}</h1>
       <p className="mt-2 text-sm text-muted-foreground">
         {firstRun
-          ? "Create the one owner account. After this, bookmark the owner door — it is not linked from the public site."
-          : "Back of the house. Guests never see this page from the galleries."}
+          ? "Create your account. Studio access must then be granted to its account ID in OWNER_USER_IDS."
+          : "Sign in with an account that has been granted studio access."}
       </p>
       {authEnabled ? (
         <div className="mt-8 grid gap-3">

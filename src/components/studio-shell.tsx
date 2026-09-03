@@ -10,6 +10,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SignedIn, UserButton } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useStudioStore } from "@/lib/store";
+import { defaultStudio } from "@/lib/seed";
 import { cn } from "@/lib/utils";
 
 const PUBLIC_NAV = [
@@ -32,9 +33,19 @@ const STUDIO_NAV = [
 export function StudioShell({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const overlay = pathname === "/";
-  const studio = useStudioStore((s) => s.studio);
+  const legacyPage = [
+    "/favorites",
+    "/keywords",
+    "/sell",
+    "/migrate",
+    "/settings",
+    "/publish",
+    "/cart",
+    "/checkout",
+    "/orders",
+  ].some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  const studio = defaultStudio;
   const persist = useStudioStore.persist;
-  const hydrated = useStudioStore((s) => s.hydrated);
   const setHydrated = useStudioStore((s) => s.setHydrated);
   const { user } = useCurrentUserState();
   const [scrolled, setScrolled] = useState(false);
@@ -109,7 +120,10 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
                   <nav className="mt-8 flex flex-col gap-1">
                     {nav.map((item) => (
                       <SheetTrigger key={item.to} asChild>
-                        <Link to={item.to} className="flex h-12 items-center text-base text-foreground">
+                        <Link
+                          to={item.to}
+                          className="flex h-12 items-center text-base text-foreground"
+                        >
                           {item.label}
                         </Link>
                       </SheetTrigger>
@@ -134,7 +148,19 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
         </header>
 
         <main className={cn(overlay ? "" : "pt-16")}>
-          {hydrated ? children : <ShellSkeleton overlay={overlay} />}
+          {legacyPage && (
+            <SignedIn>
+              <div
+                role="note"
+                className="mx-auto mt-6 max-w-[1400px] rounded-lg border border-border p-4 text-sm text-muted-foreground"
+              >
+                This page still includes tools from the previous local workspace. Its photo, proof,
+                and pricing controls do not edit the shared catalog yet. Use Organizer for saved
+                galleries and uploads.
+              </div>
+            </SignedIn>
+          )}
+          {children}
         </main>
         {pathname === "/login" || pathname === "/organize" ? null : <SiteFooter />}
 
@@ -152,21 +178,5 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
         />
       </div>
     </TooltipProvider>
-  );
-}
-
-function ShellSkeleton({ overlay }: { overlay: boolean }) {
-  return (
-    <div className={cn("px-6", overlay ? "pt-28" : "pt-10")}>
-      <div className="mx-auto max-w-[1400px] space-y-4">
-        <div className="h-10 w-48 rounded-md bg-muted" />
-        <div className="h-4 w-72 rounded-md bg-muted" />
-        <div className="mt-8 grid grid-cols-2 gap-3 md:grid-cols-3">
-          <div className="aspect-[3/2] rounded-lg bg-muted" />
-          <div className="aspect-[3/2] rounded-lg bg-muted" />
-          <div className="aspect-[3/2] hidden rounded-lg bg-muted md:block" />
-        </div>
-      </div>
-    </div>
   );
 }

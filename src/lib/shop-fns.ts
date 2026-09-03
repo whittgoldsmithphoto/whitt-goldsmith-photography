@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { authMiddleware } from "@/lib/auth/middleware";
+import { ownerMiddleware as authMiddleware } from "@/lib/auth/owner-middleware";
 import type { Address } from "./address";
 import { addressReady } from "./address";
 import { seedProducts } from "./seed";

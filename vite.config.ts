@@ -162,7 +162,10 @@ export default defineConfig(({ command, isPreview, mode }) => {
     port: 8081,
     strictPort: true,
   },
-  resolve: { tsconfigPaths: true },
+  resolve: {
+    tsconfigPaths: true,
+    alias: cloudflare ? {} : { "cloudflare:workers": join(process.cwd(), "src/lib/node-worker-env.ts") },
+  },
   plugins: [
     ...(cloudflare ? [cloudflarePlugin({ viteEnvironment: { name: "ssr" } })] : []),
     pgliteBootstrapPlugin(),
