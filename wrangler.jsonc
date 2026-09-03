@@ -10,6 +10,6 @@
   // After creating a Cloudflare Hyperdrive configuration, add its ID here:
   // "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "<your-hyperdrive-id>" }],
   "vars": {
-    "VITE_AUTH_ENABLED": "true"
-  }
+    "VITE_AUTH_ENABLED": "true",
+  },
 }

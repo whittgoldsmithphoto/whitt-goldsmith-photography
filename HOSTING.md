@@ -6,13 +6,13 @@ Public site: galleries and guest checkout. Owner door: `/login` (first time `/lo
 
 ## One-time map
 
-| Piece | Cloudflare |
-| --- | --- |
-| This app | Workers (this repo) |
-| Photographs | R2 — already connected in Settings |
-| Domain | Same zone as R2 |
-| Sessions / orders | Hyperdrive → Neon Postgres |
-| Payments | Stripe Tax (webhook on the Worker URL) |
+| Piece             | Cloudflare                             |
+| ----------------- | -------------------------------------- |
+| This app          | Workers (this repo)                    |
+| Photographs       | R2 — already connected in Settings     |
+| Domain            | Same zone as R2                        |
+| Sessions / orders | Hyperdrive → Neon Postgres             |
+| Payments          | Stripe Tax (webhook on the Worker URL) |
 
 I keep editing here. You publish from GitHub → Cloudflare. I am not in the live path.
 
@@ -50,12 +50,12 @@ DATABASE_URL="postgresql://…" npm run db:migrate
 4. Deploy command: `npx wrangler deploy --config dist/server/wrangler.json`
 5. After the first deploy, **Settings → Variables and Secrets**:
 
-| Name | Value |
-| --- | --- |
-| `VITE_AUTH_ENABLED` | `true` (already in wrangler vars) |
-| `BETTER_AUTH_URL` | `https://your-domain` |
-| `BETTER_AUTH_SECRET` | long random string |
-| `DATABASE_URL` | Hyperdrive connection string |
+| Name                 | Value                             |
+| -------------------- | --------------------------------- |
+| `VITE_AUTH_ENABLED`  | `true` (already in wrangler vars) |
+| `BETTER_AUTH_URL`    | `https://your-domain`             |
+| `BETTER_AUTH_SECRET` | long random string                |
+| `DATABASE_URL`       | Hyperdrive connection string      |
 
 R2 and Stripe can stay in the in-app Settings screen after you sign in. Or set them here too:
 
