@@ -43,6 +43,7 @@ function CheckoutPage() {
         const product = products.find((p) => p.id === item.productId);
         const photo = photos.find((p) => p.id === item.photoId);
         return {
+          productId: item.productId,
           name: `${photo?.title ?? "Photograph"} · ${product?.name ?? "Print"}`,
           amount: product?.price ?? 0,
           qty: item.qty,

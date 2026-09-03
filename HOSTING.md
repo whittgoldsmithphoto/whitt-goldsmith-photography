@@ -26,7 +26,15 @@ Create a repo and push this folder.
 2. Copy the pooled connection string.
 3. In Cloudflare: **Storage & databases → Hyperdrive → Create**. Point it at that Neon URL. Copy the Hyperdrive connection string — that is `DATABASE_URL` on the Worker.
 
-Then apply schema once from a machine that can reach Neon:
+Then bind that Hyperdrive configuration to this Worker in `wrangler.jsonc`:
+
+```jsonc
+"hyperdrive": [{ "binding": "HYPERDRIVE", "id": "<your-hyperdrive-id>" }]
+```
+
+The repository currently has a placeholder comment for this account-specific ID. Do not deploy until the real ID is present and the Worker can reach the database.
+
+Apply schema once from a machine that can reach Neon:
 
 ```
 DATABASE_URL="postgresql://…" npm run db:migrate

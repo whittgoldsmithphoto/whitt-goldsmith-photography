@@ -7,6 +7,8 @@
   "observability": { "enabled": true },
   "workers_dev": true,
   "preview_urls": true,
+  // After creating a Cloudflare Hyperdrive configuration, add its ID here:
+  // "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "<your-hyperdrive-id>" }],
   "vars": {
     "VITE_AUTH_ENABLED": "true"
   }

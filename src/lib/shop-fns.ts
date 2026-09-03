@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import type { Address } from "./address";
 import { addressReady } from "./address";
+import { seedProducts } from "./seed";
 
 export const getIntegrationStatus = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
@@ -97,14 +98,23 @@ export const createStripeCheckout = createServerFn({ method: "POST" })
     email: string;
     name: string;
     note: string;
-    items: { name: string; amount: number; qty: number; photoId?: string }[];
+    items: { productId: string; name: string; amount: number; qty: number; photoId?: string }[];
     successPath: string;
     cancelPath: string;
   }) => input)
   .handler(async ({ data }) => {
     const { getStripeSecrets } = await import("./secrets.server");
     const secrets = await getStripeSecrets();
-    if (!secrets) throw new Error("Stripe is not connected yet.");
+    if (!secrets?.webhookSecret)
+      throw new Error("Stripe is not fully connected yet. Add the webhook signing secret before taking payments.");
+    if (!data.items.length || data.items.length > 100) throw new Error("Your cart is invalid.");
+    const items = data.items.map((item) => {
+      const product = seedProducts.find((candidate) => candidate.id === item.productId);
+      if (!product || product.price !== item.amount || !Number.isSafeInteger(item.qty) || item.qty < 1 || item.qty > 50) {
+        throw new Error("Your cart changed. Please return to the gallery and try again.");
+      }
+      return { ...item, name: product.name, amount: product.price };
+    });
     const Stripe = (await import("stripe")).default;
     const stripe = new Stripe(secrets.secretKey);
     const { getRequest } = await import("@tanstack/react-start/server");
@@ -120,9 +130,9 @@ export const createStripeCheckout = createServerFn({ method: "POST" })
       metadata: {
         buyerName: data.name,
         note: data.note.slice(0, 400),
-        items: JSON.stringify(data.items).slice(0, 450),
+        items: JSON.stringify(items).slice(0, 450),
       },
-      line_items: data.items.map((item) => ({
+      line_items: items.map((item) => ({
         quantity: item.qty,
         price_data: {
           currency: "usd",
