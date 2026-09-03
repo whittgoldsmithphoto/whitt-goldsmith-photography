@@ -90,7 +90,7 @@ function PublishPage() {
           <p>Build command:</p>
           <Code>npm run build:cloudflare</Code>
           <p>Deploy command:</p>
-          <Code>npx wrangler deploy</Code>
+          <Code>npx wrangler deploy --config dist/server/wrangler.json</Code>
         </Step>
 
         <Step n="5" title="Secrets on the Worker">

@@ -39,7 +39,7 @@ DATABASE_URL="postgresql://…" npm run db:migrate
 1. [Workers & Pages](https://dash.cloudflare.com/) → **Create** → **Workers** → **Connect to Git**.
 2. Select the repo.
 3. Build command: `npm run build:cloudflare`
-4. Deploy command: `npx wrangler deploy`
+4. Deploy command: `npx wrangler deploy --config dist/server/wrangler.json`
 5. After the first deploy, **Settings → Variables and Secrets**:
 
 | Name | Value |

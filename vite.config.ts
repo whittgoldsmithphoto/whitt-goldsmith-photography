@@ -147,7 +147,10 @@ function authPopupPlugin(): Plugin {
 // The dev server starts once `src/router.tsx` and `src/routes/` exist — see
 // AGENTS.md § "First scaffold".
 export default defineConfig(({ command, isPreview, mode }) => {
-  const cloudflare = mode === "cloudflare" || process.env.CLOUDFLARE === "1";
+  const cloudflare =
+    mode === "cloudflare" ||
+    process.env.CLOUDFLARE === "1" ||
+    process.env.WORKERS_CI === "1";
   return {
   server: {
     host: "0.0.0.0",
