@@ -31,6 +31,34 @@ Changes to the proposed sequence:
 
 ## API boundaries
 
+### Second increment: photo management
+
+Migration `0006_photo_management.sql` adds customer-visible captions, display order,
+hidden/archive flags and optimistic photo revisions. The Organizer can edit these
+fields and restore archived photographs. Lower display-order numbers appear first;
+ties retain upload order with an ID tie-breaker. This is a numeric ordering control,
+not drag-and-drop or bulk editing.
+
+Hidden and archived photographs are excluded from public index/detail responses and
+their old preview/thumbnail endpoints return 404. The allowlisted owner can still
+read their previews and originals. Archive is reversible and does not delete R2
+objects. It cannot recall image bytes a visitor already downloaded. Public DTOs
+expose captions but not owner editing state. Edits and audit events share one SQL
+statement; stale revisions return 409. A partial index covers visible ready photos
+in gallery display order.
+
+Staging must apply **both 0005 and 0006**, in order, before deploying this revision.
+Neither migration has been applied to the live database by this increment.
+
+Second-increment verification: all 235 tests passed (195 script tests plus 40
+application tests, including eight catalog tests); typecheck, lint (six existing
+warnings) and the Cloudflare build passed in `/private/tmp/wgp-photo-controls.rTmKBc`.
+The copy contains HEAD plus this increment and retains the baseline files missing
+from the working folder. The new photo editor has not yet received browser-based
+or live-provider acceptance testing. The database tests cover cross-instance
+visibility, direct-media denial, original retention, restore, ordering, stale
+revisions, validation and atomic audit recording.
+
 All operations use `/api/catalog`. Mutations require a matching Origin header. JSON responses and images are not publicly cached.
 
 | Request | Access | Purpose |
@@ -41,6 +69,7 @@ All operations use `/api/catalog`. Mutations require a matching Origin header. J
 | GET media with `owner=1` | Owner | Owner preview or original delivery |
 | GET `?op=owner` | Owner | Folders, galleries, ready photos and upload statuses |
 | POST `?op=gallery` / `folder` | Owner | Validated catalog writes; gallery revisions prevent stale saves |
+| POST `?op=photo` | Owner | Caption, display order, hide, archive/restore; photo revision required |
 | POST `?op=reserve` | Owner | Immutable original reservation and duplicate detection |
 | POST `?op=upload&id=…` | Reserving owner | Bounded binary upload, byte verification and processing |
 | POST `?op=retry&id=…` | Reserving owner | Retry processing an existing stored original |
@@ -79,7 +108,7 @@ Not yet verified: actual allowed-owner login on Cloudflare; real R2 uploads and 
 
 ## Remaining work from the audit
 
-Phase A: provision staging; prove the real provider path; add multipart/resumable uploads and RAW/TIFF support through a suitable processor; move processing to a durable queue for larger batches; add photo metadata edits/archive/reorder and folder moves; review/import old local data explicitly; paginate large libraries; clean expired grants/attempt counters and orphaned derivative objects.
+Phase A: provision staging; prove the real provider path; add multipart/resumable uploads and RAW/TIFF support through a suitable processor; move processing to a durable queue for larger batches; add richer sports metadata, bulk/drag ordering and folder moves; review/import old local data explicitly; paginate large libraries; clean expired grants/attempt counters and orphaned derivative objects.
 
 Phase B: persistent customer favorites/proof lists, notes and notifications, policy-backed download actions, and customer/owner proof review across devices. Legacy favorites and keyword pages still use local storage and must not be presented as completed server workflows.
 

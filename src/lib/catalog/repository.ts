@@ -7,6 +7,7 @@ import type {
   OwnerCatalog,
   GalleryInput,
   ReservationInput,
+  PhotoInput,
 } from "./types.ts";
 
 export class CatalogError extends Error {
@@ -58,6 +59,11 @@ type GalleryRow = {
   updated_at: string | Date;
 };
 type PhotoRow = {
+  caption: string;
+  hidden: boolean;
+  archived: boolean;
+  display_order: number;
+  revision: number;
   id: string;
   gallery_id: string;
   owner_id: string;
@@ -124,6 +130,7 @@ function photoView(row: PhotoRow): CatalogPhoto {
     id: row.id,
     galleryId: row.gallery_id,
     filename: row.filename,
+    caption: row.caption,
     width: row.width || 1,
     height: row.height || 1,
     src: `/api/catalog?op=media&id=${row.id}&kind=preview`,
@@ -155,11 +162,12 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
     }
     throw new CatalogError("Gallery password required", 401);
   }
-  async function photos(id?: string) {
+  async function photos(id?: string, owner = false) {
     return id
-      ? sql<PhotoRow>`select * from catalog_photos where gallery_id=${id} and status='ready' order by created_at,id`
+      ? sql<PhotoRow>`select * from catalog_photos where gallery_id=${id} and status='ready'
+          and (${owner} or (hidden=false and archived=false)) order by display_order,created_at,id`
       : sql<PhotoRow>`select p.* from catalog_photos p join catalog_galleries g on g.id=p.gallery_id
-          where p.status='ready' and g.published=true and g.visibility='public' and g.password_hash is null order by p.created_at,p.id`;
+          where p.status='ready' and p.hidden=false and p.archived=false and g.published=true and g.visibility='public' and g.password_hash is null order by p.display_order,p.created_at,p.id`;
   }
   return {
     async publicIndex(): Promise<PublicCatalog> {
@@ -181,12 +189,13 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
     },
     async detail(id: string, token?: string, owner = false) {
       const row = await authorized(id, token, owner);
-      return { gallery: galleryView(row), photos: (await photos(id)).map(photoView) };
+      return { gallery: galleryView(row), photos: (await photos(id, owner)).map(photoView) };
     },
     async ownerIndex(): Promise<OwnerCatalog> {
       const galleries =
         await sql<GalleryRow>`select * from catalog_galleries order by updated_at desc,id`;
-      const all = await sql<PhotoRow>`select * from catalog_photos order by created_at desc,id`;
+      const all =
+        await sql<PhotoRow>`select * from catalog_photos order by display_order,created_at,id`;
       const folders = await sql<{
         id: string;
         parent_id: string | null;
@@ -194,7 +203,15 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
       }>`select * from catalog_folders order by created_at,id`;
       return {
         galleries: galleries.map(galleryView),
-        photos: all.filter((p) => p.status === "ready").map(photoView),
+        photos: all
+          .filter((p) => p.status === "ready")
+          .map((p) => ({
+            ...photoView(p),
+            hidden: p.hidden,
+            archived: p.archived,
+            displayOrder: p.display_order,
+            revision: p.revision,
+          })),
         folders: folders.map((f) => ({ id: f.id, parentId: f.parent_id, title: f.title })),
         jobs: all.map((p) => ({
           id: p.id,
@@ -206,6 +223,38 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
           bytes: p.bytes,
           updatedAt: new Date(p.updated_at).toISOString(),
         })),
+      };
+    },
+    async savePhoto(raw: PhotoInput, owner: string) {
+      const data = z
+        .object({
+          id: idSchema,
+          revision: z.number().int().positive(),
+          caption: z.string().trim().max(2000),
+          hidden: z.boolean(),
+          archived: z.boolean(),
+          displayOrder: z.number().int().min(0).max(2147483647),
+        })
+        .strict()
+        .parse(raw);
+      // One statement keeps the optimistic update and its audit event atomic.
+      const rows = await sql<PhotoRow>`with changed as (
+        update catalog_photos set caption=${data.caption},hidden=${data.hidden},archived=${data.archived},
+        display_order=${data.displayOrder},revision=revision+1,updated_at=now()
+        where id=${data.id} and revision=${data.revision} and status='ready' returning *
+      ), logged as (
+        insert into catalog_audit(id,actor_id,action,target_id)
+        select ${crypto.randomUUID()},${owner},'photo.updated',id from changed returning id
+      ) select changed.* from changed cross join logged`;
+      if (!rows[0])
+        throw new CatalogError("Photo changed or is not ready. Reload before saving.", 409);
+      const p = rows[0];
+      return {
+        ...photoView(p),
+        hidden: p.hidden,
+        archived: p.archived,
+        displayOrder: p.display_order,
+        revision: p.revision,
       };
     },
     async saveGallery(raw: GalleryInput, owner: string) {
@@ -386,6 +435,7 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
       const row = rows[0];
       if (!row) throw new CatalogError("Image unavailable", 404);
       await authorized(row.gallery_id, token, owner);
+      if (!owner && (row.hidden || row.archived)) throw new CatalogError("Image unavailable", 404);
       if (kind === "original") {
         if (!owner) throw new CatalogError("Image unavailable", 404);
         return { bytes: await media.get(row.original_key), mime: row.mime };

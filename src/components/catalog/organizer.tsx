@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { catalogFetch, useCatalog } from "@/lib/catalog/client";
-import type { CatalogGallery, GalleryInput, OwnerCatalog } from "@/lib/catalog/types";
+import type { CatalogGallery, GalleryInput, OwnerCatalog, PhotoInput } from "@/lib/catalog/types";
 import { CatalogStatus } from "./public";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ export function CatalogOrganizer() {
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<GalleryInput | null>(null);
   const [folderName, setFolderName] = useState("");
+  const [photoDraft, setPhotoDraft] = useState<PhotoInput | null>(null);
   if (!state.data) return <CatalogStatus {...state} />;
   const { galleries, folders, photos, jobs } = state.data;
   const active = galleries.find((g) => g.id === selected);
@@ -145,7 +146,10 @@ export function CatalogOrganizer() {
             <button
               key={g.id}
               type="button"
-              onClick={() => setSelected(g.id)}
+              onClick={() => {
+                setSelected(g.id);
+                setPhotoDraft(null);
+              }}
               aria-pressed={selected === g.id}
               className={`block w-full rounded-lg border p-4 text-left ${selected === g.id ? "border-foreground" : "border-border"}`}
             >
@@ -193,14 +197,103 @@ export function CatalogOrganizer() {
                 {photos
                   .filter((p) => p.galleryId === active.id)
                   .map((p) => (
-                    <img
+                    <button
                       key={p.id}
-                      src={`${p.thumbSrc}&owner=1`}
-                      alt={p.filename}
-                      className="aspect-[4/3] w-full rounded object-cover"
-                    />
+                      type="button"
+                      disabled={busy}
+                      className="rounded border border-border p-2 text-left"
+                      onClick={() =>
+                        setPhotoDraft({
+                          id: p.id,
+                          revision: p.revision,
+                          caption: p.caption,
+                          hidden: p.hidden,
+                          archived: p.archived,
+                          displayOrder: p.displayOrder,
+                        })
+                      }
+                    >
+                      <img
+                        src={`${p.thumbSrc}&owner=1`}
+                        alt={p.caption || p.filename}
+                        className="aspect-[4/3] w-full rounded object-cover"
+                      />
+                      <span className="mt-2 block break-all text-sm">{p.filename}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {p.archived ? "Archived" : p.hidden ? "Hidden" : "In gallery"} · Order{" "}
+                        {p.displayOrder} · Edit
+                      </span>
+                    </button>
                   ))}
               </div>
+              {photoDraft && (
+                <form
+                  className="mt-6 space-y-4 rounded border border-border p-4"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void action(async () => {
+                      await catalogFetch("op=photo", photoDraft);
+                      setPhotoDraft(null);
+                    });
+                  }}
+                >
+                  <h3 className="font-display text-2xl">Edit photograph</h3>
+                  <label className="block">
+                    Customer-visible caption
+                    <Textarea
+                      maxLength={2000}
+                      value={photoDraft.caption}
+                      onChange={(e) => setPhotoDraft({ ...photoDraft, caption: e.target.value })}
+                    />
+                  </label>
+                  <label className="block">
+                    Display order (lower numbers first; ties keep upload order)
+                    <Input
+                      type="number"
+                      required
+                      min={0}
+                      max={2147483647}
+                      step={1}
+                      value={photoDraft.displayOrder}
+                      onChange={(e) =>
+                        setPhotoDraft({ ...photoDraft, displayOrder: Number(e.target.value) })
+                      }
+                    />
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={photoDraft.hidden}
+                      onChange={(e) => setPhotoDraft({ ...photoDraft, hidden: e.target.checked })}
+                    />{" "}
+                    Hide from customers
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={photoDraft.archived}
+                      onChange={(e) => setPhotoDraft({ ...photoDraft, archived: e.target.checked })}
+                    />{" "}
+                    Archive photograph
+                  </label>
+                  <p className="text-sm text-muted-foreground">
+                    Hidden and archived photos cannot be opened by customers, including through old
+                    image links. Originals are retained. Uncheck Archive to restore; uncheck Hide
+                    too if you want customers to see it.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button disabled={busy}>Save photograph</Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => setPhotoDraft(null)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              )}
               <h3 className="font-display mt-8 text-2xl">Upload history</h3>
               <ul className="mt-4 space-y-3">
                 {jobs

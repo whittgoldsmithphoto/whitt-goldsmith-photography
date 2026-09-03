@@ -99,6 +99,7 @@ export async function catalogRequest(request: Request): Promise<Response> {
         );
       }
       const actor = await owner();
+      if (op === "photo") return Response.json(await catalog.savePhoto(data, actor), { headers });
       if (op === "gallery")
         return Response.json(await catalog.saveGallery(data, actor), { headers });
       if (op === "folder")

@@ -291,7 +291,12 @@ function CatalogLightbox({
           Close
         </Button>
       </div>
-      <img src={photo.src} alt={photo.filename} className="max-h-[75svh] w-full object-contain" />
+      <img
+        src={photo.src}
+        alt={photo.caption || photo.filename}
+        className="max-h-[75svh] w-full object-contain"
+      />
+      {photo.caption && <p className="mt-3 text-center">{photo.caption}</p>}
       <div className="mt-3 flex justify-between">
         <Button variant="outline" onClick={() => step(-1)}>
           Previous

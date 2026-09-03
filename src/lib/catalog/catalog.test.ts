@@ -12,6 +12,12 @@ async function fixture() {
   await db.exec(
     await readFile(new URL("../../../migrations/0005_catalog.sql", import.meta.url), "utf8"),
   );
+  await db.exec(
+    await readFile(
+      new URL("../../../migrations/0006_photo_management.sql", import.meta.url),
+      "utf8",
+    ),
+  );
   const sql = (async (strings: TemplateStringsArray, ...values: unknown[]) => {
     let query = strings[0];
     for (let i = 0; i < values.length; i++) query += `$${i + 1}${strings[i + 1]}`;
@@ -92,9 +98,107 @@ async function fixture() {
     },
   };
 }
+test("photo edits persist, protect hidden media, restore originals, and reject stale saves", async () => {
+  const f = await fixture();
+  try {
+    const g = await f.create();
+    const r = await f.reserve(g.id);
+    await f.catalog.upload(r.id, f.bytes, "owner");
+    await f.catalog.saveGallery(
+      { ...f.input, id: g.id, revision: g.revision, published: true, visibility: "public" },
+      "owner",
+    );
+    const input = {
+      id: r.id,
+      revision: 1,
+      caption: "CCES — test caption",
+      hidden: false,
+      archived: false,
+      displayOrder: 12,
+    };
+    let saved = await f.catalog.savePhoto(input, "owner");
+    const second = createCatalog(f.sql, f.media);
+    assert.equal((await second.detail(g.id)).photos[0].caption, input.caption);
+    assert.equal("revision" in (await second.publicIndex()).photos[0], false);
+    await assert.rejects(() => f.catalog.savePhoto(input, "owner"), /Reload/);
+    const original = await f.catalog.media(r.id, "original", undefined, true);
+    for (const flag of ["hidden", "archived"] as const) {
+      saved = await f.catalog.savePhoto(
+        { ...input, revision: saved.revision, [flag]: true },
+        "owner",
+      );
+      assert.equal((await second.publicIndex()).photos.length, 0);
+      assert.equal((await second.detail(g.id)).photos.length, 0);
+      for (const kind of ["preview", "thumb", "original"]) {
+        await assert.rejects(() => second.media(r.id, kind), /unavailable/);
+      }
+      assert.equal((await second.ownerIndex()).photos[0][flag], true);
+      assert.deepEqual(
+        (await second.media(r.id, "original", undefined, true)).bytes,
+        original.bytes,
+      );
+      saved = await f.catalog.savePhoto({ ...input, revision: saved.revision }, "owner");
+      assert.equal((await second.detail(g.id)).photos.length, 1);
+      assert.ok((await second.media(r.id, "preview")).bytes.length);
+    }
+    await assert.rejects(() =>
+      f.catalog.savePhoto({ ...input, revision: saved.revision, displayOrder: -1 }, "owner"),
+    );
+    await assert.rejects(() =>
+      f.catalog.savePhoto(
+        { ...input, revision: saved.revision, caption: "x".repeat(2001) },
+        "owner",
+      ),
+    );
+    const events = await f.sql`select * from catalog_audit where action='photo.updated'`;
+    assert.equal(events.length, 5);
+  } finally {
+    await f.db.close();
+  }
+});
+
+test("photo display order is shared and deterministic", async () => {
+  const f = await fixture();
+  try {
+    const g = await f.create();
+    const a = await f.reserve(g.id);
+    await f.catalog.upload(a.id, f.bytes, "owner");
+    const bytes = new Uint8Array([...f.bytes, 4]);
+    const b = await f.catalog.reserve(
+      {
+        galleryId: g.id,
+        filename: "second.jpg",
+        mime: "image/jpeg",
+        bytes: bytes.length,
+        checksum: await digest(bytes),
+      },
+      "owner",
+    );
+    await f.catalog.upload(b.id, bytes, "owner");
+    await f.catalog.saveGallery(
+      { ...f.input, id: g.id, revision: g.revision, published: true, visibility: "public" },
+      "owner",
+    );
+    await f.catalog.savePhoto(
+      { id: a.id, revision: 1, caption: "", hidden: false, archived: false, displayOrder: 20 },
+      "owner",
+    );
+    assert.deepEqual(
+      (await f.catalog.detail(g.id)).photos.map((p) => p.id),
+      [b.id, a.id],
+    );
+    assert.deepEqual(
+      (await f.catalog.ownerIndex()).photos.map((p) => p.id),
+      [b.id, a.id],
+    );
+  } finally {
+    await f.db.close();
+  }
+});
+
 test("owner access rejects anonymous users, arbitrary accounts, and missing configuration", () => {
   assert.throws(() => assertCatalogOwner(undefined, "owner"), /Sign in/);
-  assert.throws(() => assertCatalogOwner('dev-user', 'dev-user'), /Sign in/);
+  assert.throws(() => assertCatalogOwner("dev-user", "dev-user"), /Sign in/);
   assert.throws(() => assertCatalogOwner("attacker", "owner"), /not the studio owner/);
   assert.throws(() => assertCatalogOwner("owner", ""), /not been configured/);
   assert.equal(assertCatalogOwner("owner", "another, owner"), "owner");

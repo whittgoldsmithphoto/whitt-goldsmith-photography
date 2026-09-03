@@ -18,6 +18,21 @@ export type CatalogPhoto = {
   height: number;
   src: string;
   thumbSrc: string;
+  caption: string;
+};
+export type OwnerCatalogPhoto = CatalogPhoto & {
+  hidden: boolean;
+  archived: boolean;
+  displayOrder: number;
+  revision: number;
+};
+export type PhotoInput = {
+  id: string;
+  revision: number;
+  caption: string;
+  hidden: boolean;
+  archived: boolean;
+  displayOrder: number;
 };
 export type CatalogFolder = { id: string; parentId: string | null; title: string };
 export type PublicCatalog = {
@@ -25,7 +40,8 @@ export type PublicCatalog = {
   photos: CatalogPhoto[];
   folders: CatalogFolder[];
 };
-export type OwnerCatalog = PublicCatalog & {
+export type OwnerCatalog = Omit<PublicCatalog, "photos"> & {
+  photos: OwnerCatalogPhoto[];
   jobs: {
     id: string;
     galleryId: string;
