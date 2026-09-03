@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "whitt-goldsmith-photography",
+  "compatibility_date": "2026-09-03",
+  "compatibility_flags": ["nodejs_compat", "nodejs_compat_populate_process_env"],
+  "main": "@tanstack/react-start/server-entry",
+  "observability": { "enabled": true },
+  "workers_dev": true,
+  "preview_urls": true,
+  "vars": {
+    "VITE_AUTH_ENABLED": "true"
+  }
+}

@@ -1,0 +1,11 @@
+services:
+  studio:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      VITE_AUTH_ENABLED: "true"
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:8080}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-change-me-in-production}
+      DATABASE_URL: ${DATABASE_URL:-}
+    restart: unless-stopped

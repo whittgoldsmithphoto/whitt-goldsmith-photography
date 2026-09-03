@@ -1,0 +1,7 @@
+node_modules
+artifacts
+screenshots
+.git
+.grok/preview.log
+.grok/preview.pid
+*.zip
