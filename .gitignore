@@ -12,6 +12,13 @@ artifacts
 screenshots
 .grok
 AGENTS.md
+.grok/app-env.json
+!.grok/
+!.grok/app-env.json
+!.grok/skills/
+!.grok/skills/og/
+!.grok/skills/og/SKILL.md
+!AGENTS.md
 .node_modules.lock
 .wrangler
 .dev.vars
