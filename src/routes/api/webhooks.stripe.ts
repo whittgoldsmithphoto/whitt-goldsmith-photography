@@ -21,14 +21,43 @@ export const Route = createFileRoute("/api/webhooks/stripe")({
           const session = event.data.object;
           const { getSql } = await import("@/lib/db");
           const sql = await getSql();
+          const seen = await sql<{
+            event_id: string;
+          }>`select event_id from stripe_webhook_events where event_id = ${event.id}`;
+          if (seen[0]) return new Response("ok");
           const id = session.id;
-          const existing = await sql<{ id: string }>`select id from shop_orders where stripe_session_id = ${id}`;
+          const existing = await sql<{
+            id: string;
+          }>`select id from shop_orders where stripe_session_id = ${id}`;
           if (!existing[0]) {
             const extra = session as typeof session & {
-              shipping_details?: { name?: string | null; address?: { line1?: string | null; line2?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; country?: string | null } | null } | null;
-              collected_information?: { shipping_details?: { name?: string | null; address?: { line1?: string | null; line2?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; country?: string | null } | null } | null };
+              shipping_details?: {
+                name?: string | null;
+                address?: {
+                  line1?: string | null;
+                  line2?: string | null;
+                  city?: string | null;
+                  state?: string | null;
+                  postal_code?: string | null;
+                  country?: string | null;
+                } | null;
+              } | null;
+              collected_information?: {
+                shipping_details?: {
+                  name?: string | null;
+                  address?: {
+                    line1?: string | null;
+                    line2?: string | null;
+                    city?: string | null;
+                    state?: string | null;
+                    postal_code?: string | null;
+                    country?: string | null;
+                  } | null;
+                } | null;
+              };
             };
-            const shipping = extra.collected_information?.shipping_details ?? extra.shipping_details;
+            const shipping =
+              extra.collected_information?.shipping_details ?? extra.shipping_details;
             const addr = shipping?.address;
             const items = session.metadata?.items || "[]";
             const number = `WG-${String(Date.now()).slice(-6)}`;
@@ -65,6 +94,21 @@ export const Route = createFileRoute("/api/webhooks/stripe")({
               )
             `;
           }
+          await sql`
+            insert into stripe_webhook_events (event_id, event_type)
+            values (${event.id}, ${event.type})
+            on conflict (event_id) do nothing
+          `;
+        } else {
+          // Record successfully verified events even when this version does
+          // not need to act on them, preventing repeated processing on retry.
+          const { getSql } = await import("@/lib/db");
+          const sql = await getSql();
+          await sql`
+            insert into stripe_webhook_events (event_id, event_type)
+            values (${event.id}, ${event.type})
+            on conflict (event_id) do nothing
+          `;
         }
         return new Response("ok");
       },

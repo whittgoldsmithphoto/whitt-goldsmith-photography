@@ -7,14 +7,18 @@ import { seedProducts } from "./seed";
 export const getIntegrationStatus = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async () => {
-    const { getR2Secrets, getStripeSecrets, getSmugmugSecrets, smugmugConnected } = await import("./secrets.server");
+    const { getR2Secrets, getStripeSecrets, getSmugmugSecrets, smugmugConnected } =
+      await import("./secrets.server");
     const r2 = await getR2Secrets();
     const stripe = await getStripeSecrets();
     const smug = await getSmugmugSecrets();
     return {
       r2: Boolean(r2),
       r2Bucket: r2?.bucket || "",
-      stripe: Boolean(stripe),
+      // Stripe is only "connected" for the shop when both the API key and
+      // webhook signing secret are present. An API key alone can create a
+      // checkout session but cannot safely fulfill orders.
+      stripe: Boolean(stripe?.secretKey && stripe.webhookSecret),
       stripeLive: Boolean(stripe?.secretKey.startsWith("sk_live_")),
       webhook: Boolean(stripe?.webhookSecret),
       smugmug: smugmugConnected(smug),
@@ -30,13 +34,15 @@ export const probeIntegrations = createServerFn({ method: "POST" })
 
 export const saveR2Connection = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: {
-    accountId: string;
-    accessKeyId: string;
-    secretAccessKey: string;
-    bucket: string;
-    publicBaseUrl: string;
-  }) => input)
+  .validator(
+    (input: {
+      accountId: string;
+      accessKeyId: string;
+      secretAccessKey: string;
+      bucket: string;
+      publicBaseUrl: string;
+    }) => input,
+  )
   .handler(async ({ data }) => {
     const { saveR2Secrets } = await import("./secrets.server");
     return saveR2Secrets(data);
@@ -54,7 +60,8 @@ export const saveStudioShipFrom = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: Address) => input)
   .handler(async ({ data }) => {
-    if (!addressReady(data)) throw new Error("Ship-from needs a street, city, state, ZIP, and phone.");
+    if (!addressReady(data))
+      throw new Error("Ship-from needs a street, city, state, ZIP, and phone.");
     const { writeSetting } = await import("./secrets.server");
     await writeSetting("ship_from", JSON.stringify(data));
     return { ok: true as const };
@@ -65,7 +72,9 @@ export const loadShipFrom = createServerFn({ method: "GET" })
   .handler(async () => {
     const { getSql } = await import("./db");
     const sql = await getSql();
-    const rows = await sql<{ value: string }>`select value from shop_settings where key = ${"ship_from"}`;
+    const rows = await sql<{
+      value: string;
+    }>`select value from shop_settings where key = ${"ship_from"}`;
     if (!rows[0]?.value) return null;
     try {
       return JSON.parse(rows[0].value) as Address;
@@ -76,14 +85,16 @@ export const loadShipFrom = createServerFn({ method: "GET" })
 
 export const createR2Upload = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: {
-    photoId: string;
-    kind: "orig" | "display" | "thumb";
-    contentType: string;
-    folderSlug?: string;
-    gallerySlug?: string;
-    filename?: string;
-  }) => input)
+  .validator(
+    (input: {
+      photoId: string;
+      kind: "orig" | "display" | "thumb";
+      contentType: string;
+      folderSlug?: string;
+      gallerySlug?: string;
+      filename?: string;
+    }) => input,
+  )
   .handler(async ({ data }) => {
     const { r2Ready } = await import("./secrets.server");
     if (!(await r2Ready())) return { connected: false as const };
@@ -94,23 +105,33 @@ export const createR2Upload = createServerFn({ method: "POST" })
   });
 
 export const createStripeCheckout = createServerFn({ method: "POST" })
-  .validator((input: {
-    email: string;
-    name: string;
-    note: string;
-    items: { productId: string; name: string; amount: number; qty: number; photoId?: string }[];
-    successPath: string;
-    cancelPath: string;
-  }) => input)
+  .validator(
+    (input: {
+      email: string;
+      name: string;
+      note: string;
+      items: { productId: string; name: string; amount: number; qty: number; photoId?: string }[];
+      successPath: string;
+      cancelPath: string;
+    }) => input,
+  )
   .handler(async ({ data }) => {
     const { getStripeSecrets } = await import("./secrets.server");
     const secrets = await getStripeSecrets();
     if (!secrets?.webhookSecret)
-      throw new Error("Stripe is not fully connected yet. Add the webhook signing secret before taking payments.");
+      throw new Error(
+        "Stripe is not fully connected yet. Add the webhook signing secret before taking payments.",
+      );
     if (!data.items.length || data.items.length > 100) throw new Error("Your cart is invalid.");
     const items = data.items.map((item) => {
       const product = seedProducts.find((candidate) => candidate.id === item.productId);
-      if (!product || product.price !== item.amount || !Number.isSafeInteger(item.qty) || item.qty < 1 || item.qty > 50) {
+      if (
+        !product ||
+        product.price !== item.amount ||
+        !Number.isSafeInteger(item.qty) ||
+        item.qty < 1 ||
+        item.qty > 50
+      ) {
         throw new Error("Your cart changed. Please return to the gallery and try again.");
       }
       return { ...item, name: product.name, amount: product.price };

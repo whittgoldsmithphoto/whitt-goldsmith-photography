@@ -79,10 +79,13 @@ function CheckoutPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-10 sm:px-6 sm:py-14">
-      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Order</p>
+      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+        Order
+      </p>
       <h1 className="font-display mt-2 text-4xl tracking-tight">Checkout</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Guest checkout. No account. Name and email are recorded with the order. Tax is calculated by Stripe.
+        Guest checkout. No account. Name and email are recorded with the order. Tax is calculated by
+        Stripe.
       </p>
       <div className="mt-4 space-y-1 text-sm text-muted-foreground">
         <p className="flex justify-between gap-4">
@@ -117,7 +120,13 @@ function CheckoutPage() {
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="co-email">Email</Label>
-          <Input id="co-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <Input
+            id="co-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="co-note">Note</Label>
