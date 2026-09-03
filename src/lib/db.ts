@@ -6,7 +6,7 @@ export type DbSource = "neon" | "pglite";
 
 // An empty/whitespace DATABASE_URL (an easy misconfig in deploy UIs) must mean
 // "unset" — otherwise production would silently run on the PGLite fallback.
-const databaseUrl = typeof process !== "undefined" ? databaseConnectionString() : undefined;
+const explicitDatabaseUrl = typeof process !== "undefined" ? process.env.DATABASE_URL?.trim() || undefined : undefined;
 
 function runningOnCloudflareWorkers() {
   try {
@@ -26,7 +26,7 @@ function runningOnCloudflareWorkers() {
  * the app has a working database even with nothing configured — the live preview
  * included. Swap in Neon later by just setting `DATABASE_URL`; no code changes.
  */
-export const dbSource: DbSource = databaseUrl ? "neon" : "pglite";
+export const dbSource: DbSource = explicitDatabaseUrl ? "neon" : "pglite";
 
 /**
  * Minimal shared SQL surface, satisfied by both Neon and PGLite. Both the
@@ -95,7 +95,7 @@ function toSql(run: Run): Sql {
   return sql;
 }
 
-function createNeonSql(): Promise<Sql> {
+function createNeonSql(connectionString: string): Promise<Sql> {
   globalRef.__pgSqlPromise__ ??= (async () => {
     // Regular Postgres driver: node-postgres (`pg`) — works directly with Neon's
     // pooled endpoint. One pool per process; warm serverless instances reuse it.
@@ -103,7 +103,7 @@ function createNeonSql(): Promise<Sql> {
     types.setTypeParser(OID_INT8, Number);
     types.setTypeParser(OID_DATE, identity);
     types.setTypeParser(OID_INTERVAL, identity);
-    const pool = new Pool({ connectionString: databaseUrl });
+    const pool = new Pool({ connectionString });
     return toSql(async <T>(text: string, params: unknown[]) => {
       const res = await pool.query(text, params);
       return res.rows as T[];
@@ -186,12 +186,13 @@ async function createSql(): Promise<Sql> {
         "or a server route loader, never from client code.",
     );
   }
-  if (!databaseUrl && runningOnCloudflareWorkers()) {
+  const connectionString = explicitDatabaseUrl ?? databaseConnectionString();
+  if (!connectionString && runningOnCloudflareWorkers()) {
     throw new Error(
       "DATABASE_URL is missing on this Worker. Add the Hyperdrive connection string in Cloudflare → Worker → Settings → Variables.",
     );
   }
-  return dbSource === "neon" ? createNeonSql() : createPgliteSql();
+  return connectionString ? createNeonSql(connectionString) : createPgliteSql();
 }
 
 /**
@@ -215,7 +216,7 @@ export function getSql(): Promise<Sql> {
  * Kysely dialect). Throws when `DATABASE_URL` is set (that path uses Neon).
  */
 export async function getPglite(): Promise<import("@electric-sql/pglite").PGlite> {
-  if (dbSource !== "pglite") {
+  if (explicitDatabaseUrl || databaseConnectionString()) {
     throw new Error("getPglite() is only available on the PGLite fallback (no DATABASE_URL)");
   }
   await getSql();
@@ -235,7 +236,7 @@ export async function getPglite(): Promise<import("@electric-sql/pglite").PGlite
  * module kick it off immediately (see bottom of file).
  */
 export function ensureDbReady(): Promise<void> {
-  if (dbSource !== "pglite") return Promise.resolve();
+  if (explicitDatabaseUrl) return Promise.resolve();
   return getSql().then(() => undefined);
 }
 
