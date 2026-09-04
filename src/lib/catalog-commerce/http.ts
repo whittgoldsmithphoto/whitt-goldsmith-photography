@@ -35,9 +35,12 @@ export function createCommerceHandler(deps: CommerceDependencies) {
         if (op === "status")
           return json({
             checkoutAvailable: Boolean(deps.liveCheckout),
+            sandboxCheckoutAvailable: Boolean(deps.sandboxCheckout),
             reason: deps.liveCheckout
               ? "Digital checkout available; final tax is calculated by Stripe."
-              : "Stripe, tax and fulfillment acceptance checks are incomplete.",
+              : deps.sandboxCheckout
+                ? "Sandbox checkout is available to the owner for staging verification."
+                : "Stripe, tax and fulfillment acceptance checks are incomplete.",
             quoteOnly: !deps.liveCheckout,
           });
         if (op === "owner") {
