@@ -6,6 +6,7 @@ import { digest } from "./repository";
 import { bindingStorage, type CatalogR2Binding } from "./r2-binding";
 import { privateMetadataFreeJpeg } from "./jpeg-privacy";
 import { mediaQueueConfigured } from "./media-queue.server";
+import { DERIVATIVE_VARIANT_NAMES, VARIANT_MAX_EDGE } from "./media-variants";
 
 type ImageChain = {
   transform(options: Record<string, unknown>): ImageChain;
@@ -118,8 +119,11 @@ export function catalogMedia(): CatalogMedia {
       return {
         width: info.width,
         height: info.height,
-        preview: await render(2000),
-        thumb: await render(480),
+        variants: Object.fromEntries(
+          await Promise.all(
+            DERIVATIVE_VARIANT_NAMES.map(async (name) => [name, await render(VARIANT_MAX_EDGE[name])]),
+          ),
+        ) as Awaited<ReturnType<CatalogMedia["process"]>>["variants"],
       };
     },
   };

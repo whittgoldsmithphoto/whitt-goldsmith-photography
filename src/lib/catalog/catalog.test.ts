@@ -7,6 +7,7 @@ import { assertCatalogOwner } from "./owner.ts";
 import { bindingStorage } from "./r2-binding.ts";
 import type { Sql } from "../db.ts";
 import type { GalleryInput } from "./types.ts";
+import { DERIVATIVE_VARIANT_NAMES } from "./media-variants.ts";
 
 async function fixture() {
   const db = new PGlite();
@@ -34,6 +35,12 @@ async function fixture() {
   await db.exec(
     await readFile(new URL("../../../migrations/0023_media_jobs.sql", import.meta.url), "utf8"),
   );
+  await db.exec(
+    await readFile(
+      new URL("../../../migrations/0024_media_variants.sql", import.meta.url),
+      "utf8",
+    ),
+  );
   const sql = (async (strings: TemplateStringsArray, ...values: unknown[]) => {
     let query = strings[0];
     for (let i = 0; i < values.length; i++) query += `$${i + 1}${strings[i + 1]}`;
@@ -55,7 +62,7 @@ async function fixture() {
     async get(key) {
       const data = objects.get(key);
       if (!data) throw new Error("Missing");
-      if (failReadback && key.includes("/thumb-")) return new Uint8Array([0]);
+      if (failReadback && key.includes("/thumbnail-")) return new Uint8Array([0]);
       return data;
     },
     async putOriginal(key, bytes) {
@@ -71,8 +78,12 @@ async function fixture() {
       return {
         width: 600,
         height: 400,
-        preview: new Uint8Array([255, 216, 255, 2]),
-        thumb: new Uint8Array([255, 216, 255, 3]),
+        variants: Object.fromEntries(
+          DERIVATIVE_VARIANT_NAMES.map((name, index) => [
+            name,
+            new Uint8Array([255, 216, 255, index + 2]),
+          ]),
+        ) as Awaited<ReturnType<CatalogMedia["process"]>>["variants"],
       };
     },
   };
@@ -192,6 +203,33 @@ test("gallery customer instructions and restrictive download policies persist wi
       (await f.catalog.media(photo.id, "original", undefined, true)).bytes,
       f.bytes,
       "Owner access is unchanged",
+    );
+  } finally {
+    await f.db.close();
+  }
+});
+
+test("ready photos publish a complete versioned media variant manifest", async () => {
+  const f = await fixture();
+  try {
+    const gallery = await f.create();
+    const reservation = await f.reserve(gallery.id);
+    assert.equal((await f.catalog.upload(reservation.id, f.bytes, "owner")).status, "ready");
+    const variants = await f.sql<{
+      name: string;
+      transformation_version: number;
+      object_key: string;
+    }>`select name,transformation_version,object_key from catalog_media_variants
+      where photo_id=${reservation.id} order by name`;
+    assert.deepEqual(
+      variants.map((variant) => variant.name),
+      ["display", "original", "placeholder", "small", "small-2x", "thumbnail", "thumbnail-2x"],
+    );
+    assert.ok(variants.every((variant) => variant.transformation_version === 1));
+    assert.ok(
+      variants
+        .filter((variant) => variant.name !== "original")
+        .every((variant) => variant.object_key.includes("/v1/")),
     );
   } finally {
     await f.db.close();
@@ -527,7 +565,7 @@ test("shared catalog: private draft -> verified previews -> published to another
     assert.equal((await other.detail(g.id)).gallery.title, saved.title);
     assert.deepEqual(
       (await other.media(r.id, "preview")).bytes,
-      new Uint8Array([255, 216, 255, 2]),
+      new Uint8Array([255, 216, 255, 7]),
     );
     await assert.rejects(other.media(r.id, "original"), /unavailable/);
     assert.deepEqual((await other.media(r.id, "original", undefined, true)).bytes, f.bytes);

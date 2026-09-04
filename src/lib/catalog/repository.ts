@@ -17,6 +17,14 @@ import {
   enqueueMediaJob,
   failMediaJob,
 } from "./media-jobs.ts";
+import {
+  DERIVATIVE_VARIANT_NAMES,
+  MEDIA_VARIANT_NAMES,
+  VARIANT_MAX_EDGE,
+  derivativeVariantKey,
+  fittedDimensions,
+  type DerivativeVariantName,
+} from "./media-variants.ts";
 export { CatalogError } from "./errors.ts";
 const DERIVATIVE_TRANSFORMATION_VERSION = 1;
 const idSchema = z.string().uuid();
@@ -90,7 +98,11 @@ export interface CatalogMedia {
   get(key: string): Promise<Uint8Array>;
   process(
     bytes: Uint8Array,
-  ): Promise<{ width: number; height: number; preview: Uint8Array; thumb: Uint8Array }>;
+  ): Promise<{
+    width: number;
+    height: number;
+    variants: Record<DerivativeVariantName, Uint8Array>;
+  }>;
   putDerivative(key: string, bytes: Uint8Array): Promise<void>;
 }
 export async function digest(bytes: Uint8Array): Promise<string> {
@@ -436,16 +448,38 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
         if (original.length !== row.bytes || (await digest(original)) !== row.checksum)
           throw new Error("Original verification failed");
         const output = await media.process(original);
-        for (const kind of ["preview", "thumb"] as const) {
-          const bytes = output[kind];
-          if (!bytes.length) throw new Error("Empty derivative");
+        const storedVariants = new Map<DerivativeVariantName, { key: string; bytes: Uint8Array }>();
+        for (const kind of DERIVATIVE_VARIANT_NAMES) {
+          const bytes = output.variants[kind];
+          if (!bytes?.length) throw new Error("Missing or empty derivative");
           const checksum = await digest(bytes);
-          const key = `catalog/derivatives/${id}/${kind}-${checksum}.jpg`;
+          const key = derivativeVariantKey(id, kind, checksum, DERIVATIVE_TRANSFORMATION_VERSION);
           await media.putDerivative(key, bytes);
           const stored = await media.get(key);
           if ((await digest(stored)) !== checksum)
             throw new Error("Derivative verification failed");
-          await sql`insert into catalog_derivatives(photo_id,kind,object_key,bytes,checksum) select ${id},${kind},${key},${bytes.length},${checksum}
+          const dimensions = fittedDimensions(output.width, output.height, VARIANT_MAX_EDGE[kind]);
+          await sql`insert into catalog_media_variants(photo_id,name,transformation_version,object_key,mime,bytes,checksum,width,height)
+            select ${id},${kind},${DERIVATIVE_TRANSFORMATION_VERSION},${key},'image/jpeg',${bytes.length},${checksum},${dimensions.width},${dimensions.height}
+            where exists(select 1 from catalog_photos where id=${id} and operation_token=${lease})
+            on conflict(photo_id,name,transformation_version) do update set
+              object_key=excluded.object_key,mime=excluded.mime,bytes=excluded.bytes,checksum=excluded.checksum,
+              width=excluded.width,height=excluded.height,updated_at=now()`;
+          storedVariants.set(kind, { key, bytes });
+        }
+        await sql`insert into catalog_media_variants(photo_id,name,transformation_version,object_key,mime,bytes,checksum,width,height)
+          select ${id},'original',${DERIVATIVE_TRANSFORMATION_VERSION},${row.original_key},${row.mime},${row.bytes},${row.checksum},${output.width},${output.height}
+          where exists(select 1 from catalog_photos where id=${id} and operation_token=${lease})
+          on conflict(photo_id,name,transformation_version) do update set
+            object_key=excluded.object_key,mime=excluded.mime,bytes=excluded.bytes,checksum=excluded.checksum,
+            width=excluded.width,height=excluded.height,updated_at=now()`;
+        for (const [legacyKind, variantKind] of [
+          ["preview", "display"],
+          ["thumb", "thumbnail"],
+        ] as const) {
+          const variant = storedVariants.get(variantKind)!;
+          await sql`insert into catalog_derivatives(photo_id,kind,object_key,bytes,checksum)
+            select ${id},${legacyKind},${variant.key},${variant.bytes.length},${await digest(variant.bytes)}
             where exists(select 1 from catalog_photos where id=${id} and operation_token=${lease})
             on conflict(photo_id,kind) do update set object_key=excluded.object_key,bytes=excluded.bytes,checksum=excluded.checksum`;
         }
@@ -456,6 +490,8 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
           update catalog_photos set status='ready',width=${output.width},height=${output.height},error=null,updated_at=now()
           where id=${id} and operation_token=${lease}
             and exists(select 1 from catalog_media_jobs where id=${job.id} and status='processing' and lease_token=${job.leaseToken})
+            and (select count(*) from catalog_media_variants
+              where photo_id=${id} and transformation_version=${DERIVATIVE_TRANSFORMATION_VERSION})=${MEDIA_VARIANT_NAMES.length}
           returning id
         ) update catalog_media_jobs set
           status='completed',lease_token=null,worker_id=null,leased_until=null,
@@ -496,7 +532,7 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
       }
     },
     async media(id: string, kind: string, token?: string, owner = false) {
-      if (!["preview", "thumb", "original"].includes(kind))
+      if (!new Set<string>(["preview", "thumb", ...MEDIA_VARIANT_NAMES]).has(kind))
         throw new CatalogError("Image unavailable", 404);
       const rows = await sql<PhotoRow>`select * from catalog_photos where id=${id}`;
       const row = rows[0];
@@ -508,6 +544,11 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
         return { bytes: await media.get(row.original_key), mime: row.mime };
       }
       if (row.status !== "ready") throw new CatalogError("Image unavailable", 404);
+      const namedKind = kind === "preview" ? "display" : kind === "thumb" ? "thumbnail" : kind;
+      const named = await sql<{ object_key: string; mime: string }>`select object_key,mime
+        from catalog_media_variants where photo_id=${id} and name=${namedKind}
+        order by transformation_version desc limit 1`;
+      if (named[0]) return { bytes: await media.get(named[0].object_key), mime: named[0].mime };
       const derivative = await sql<{
         object_key: string;
       }>`select object_key from catalog_derivatives where photo_id=${id} and kind=${kind}`;
