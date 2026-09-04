@@ -43,7 +43,7 @@ const reservationSchema = z
     checksum: z.string().regex(/^[a-f0-9]{64}$/),
   })
   .strict();
-type GalleryRow = {
+export type GalleryRow = {
   id: string;
   folder_id: string | null;
   title: string;
@@ -58,7 +58,7 @@ type GalleryRow = {
   revision: number;
   updated_at: string | Date;
 };
-type PhotoRow = {
+export type PhotoRow = {
   caption: string;
   hidden: boolean;
   archived: boolean;
@@ -111,7 +111,7 @@ async function passwordMatches(password: string, hash: string) {
   for (let i = 0; i < hash.length; i++) diff |= hash.charCodeAt(i) ^ (candidate.charCodeAt(i) || 0);
   return diff === 0;
 }
-function galleryView(row: GalleryRow): CatalogGallery {
+export function galleryView(row: GalleryRow): CatalogGallery {
   return {
     id: row.id,
     folderId: row.folder_id,
@@ -127,7 +127,7 @@ function galleryView(row: GalleryRow): CatalogGallery {
     updatedAt: new Date(row.updated_at).toISOString(),
   };
 }
-function photoView(row: PhotoRow): CatalogPhoto {
+export function photoView(row: PhotoRow): CatalogPhoto {
   return {
     id: row.id,
     galleryId: row.gallery_id,
@@ -173,6 +173,7 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
   }
   return {
     ...createProofService(sql, authorized),
+    authorizeGallery: authorized,
     async publicIndex(): Promise<PublicCatalog> {
       const rows =
         await sql<GalleryRow>`select * from catalog_galleries where published=true and visibility='public' and password_hash is null order by updated_at desc,id`;

@@ -11,6 +11,8 @@ import { CatalogDiagnostics } from "./diagnostics";
 import { SportsMetadataEditor } from "@/lib/sports/SportsMetadataEditor";
 import { IntegrityPanel } from "@/lib/catalog-integrity/IntegrityPanel";
 import { FolderManager } from "./folder-manager";
+import { LibrarySearch } from "./library-search";
+import { apiFetch } from "@/lib/auth/api-fetch";
 
 export function CatalogOrganizer() {
   const state = useCatalog<OwnerCatalog>("op=owner");
@@ -19,6 +21,7 @@ export function CatalogOrganizer() {
   const [busy, setBusy] = useState(false);
   const [foldersOpen, setFoldersOpen] = useState(false);
   const [galleryQuery, setGalleryQuery] = useState("");
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const [draft, setDraft] = useState<GalleryInput | null>(null);
   const [photoDraft, setPhotoDraft] = useState<PhotoInput | null>(null);
   const [batchItems, setBatchItems] = useState<UploadItem[]>([]);
@@ -108,6 +111,34 @@ export function CatalogOrganizer() {
           {message}
         </p>
       )}
+      <details
+        className="mt-4 border-b border-border"
+        open={libraryOpen}
+        onToggle={(event) => setLibraryOpen(event.currentTarget.open)}
+      >
+        <summary className="text-sm font-medium">Search all photographs</summary>
+        {libraryOpen && (
+          <LibrarySearch
+            onOpenGallery={(galleryId, photoId) => {
+              setSelected(galleryId);
+              const photo = photos.find((item) => item.id === photoId);
+              setPhotoDraft(
+                photo
+                  ? {
+                      id: photo.id,
+                      revision: photo.revision,
+                      caption: photo.caption,
+                      hidden: photo.hidden,
+                      archived: photo.archived,
+                      displayOrder: photo.displayOrder,
+                    }
+                  : null,
+              );
+              setLibraryOpen(false);
+            }}
+          />
+        )}
+      </details>
       <div className="catalog-layout mt-5 grid gap-6 lg:grid-cols-[250px_minmax(0,1fr)]">
         <aside className="catalog-directory min-w-0 space-y-2">
           <h2 className="mb-3 text-sm font-semibold">Your galleries</h2>
@@ -315,6 +346,33 @@ export function CatalogOrganizer() {
                   }}
                 >
                   <h3 className="font-display text-2xl">Edit photograph</h3>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() =>
+                      void action(async () => {
+                        const response = await apiFetch(
+                          `/api/catalog/galleries/${encodeURIComponent(active.id)}/cover`,
+                          {
+                            method: "POST",
+                            credentials: "same-origin",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              photoId: photoDraft.id,
+                              revision: active.revision,
+                            }),
+                          },
+                        );
+                        const result = await response.json();
+                        if (!response.ok)
+                          throw new Error(result.error?.message || "Could not change cover");
+                        setMessage("Gallery cover saved. Publication settings were not changed.");
+                      })
+                    }
+                  >
+                    Use as gallery cover
+                  </Button>
                   <img
                     src={`/api/catalog?op=media&id=${encodeURIComponent(photoDraft.id)}&kind=preview&owner=1`}
                     alt="Owner preview of the selected photograph"

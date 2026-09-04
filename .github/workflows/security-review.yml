@@ -2,7 +2,13 @@ name: Security review
 on:
   pull_request:
   push:
-    branches: [audit/server-catalog, security/second-audit-hardening, ui/consolidated-workspace]
+    branches:
+      [
+        audit/server-catalog,
+        security/second-audit-hardening,
+        ui/consolidated-workspace,
+        backend/resource-foundation,
+      ]
 permissions:
   contents: read
 jobs:
@@ -19,4 +25,10 @@ jobs:
       - run: npm run verify:staging
       - run: npx playwright install --with-deps chromium
       - run: node scripts/catalog-proof-browser-check.mjs
+      - run: node scripts/catalog-resource-browser-check.mjs
+      - run: node --experimental-strip-types scripts/catalog-load-baseline.mjs --output catalog-baseline.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: catalog-baseline
+          path: catalog-baseline.json
       - run: npm audit --audit-level=high

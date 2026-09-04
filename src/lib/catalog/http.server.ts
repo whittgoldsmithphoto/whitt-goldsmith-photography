@@ -10,6 +10,8 @@ const headers = {
   "Cache-Control": "private, no-store",
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "no-referrer",
+  Link: '</api/catalog/galleries>; rel="successor-version"',
+  "X-Catalog-API": "legacy-compatibility",
 };
 const cookieName = (id: string) => `wgp-gallery-${id}`;
 function token(request: Request, id: string) {
@@ -90,6 +92,7 @@ export async function catalogRequest(request: Request): Promise<Response> {
           "0013_customer_download_authorization.sql",
           "0014_remove_legacy_download.sql",
           "0015_gallery_client_limits.sql",
+          "0016_catalog_pagination_and_covers.sql",
         ];
         return Response.json(
           {

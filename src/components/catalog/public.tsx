@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { catalogFetch, useCatalog } from "@/lib/catalog/client";
-import type { CatalogGallery, CatalogPhoto, PublicCatalog } from "@/lib/catalog/types";
+import { catalogFetch } from "@/lib/catalog/client";
+import { useResourcePage } from "@/lib/catalog/resource-client";
+import type { GallerySummary } from "@/lib/catalog/gallery-service";
+import type { CatalogGallery, CatalogPhoto } from "@/lib/catalog/types";
 import { defaultStudio } from "@/lib/seed";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,20 +69,14 @@ export function CatalogIndex({
   page: "home" | "galleries" | "about";
   folderId?: string;
 }) {
-  const state = useCatalog<PublicCatalog>("op=index");
   const [query, setQuery] = useState("");
-  if (!state.data) return <CatalogStatus {...state} />;
-  const { galleries, photos, folders } = state.data;
-  const folder = folderId ? folders.find((f) => f.id === folderId) : undefined;
-  if (folderId && !folder) return <div className="px-6 py-24">Folder unavailable.</div>;
-  const descendants = new Set(folderId ? [folderId] : []);
-  for (let i = 0; i < folders.length; i++)
-    for (const f of folders) if (f.parentId && descendants.has(f.parentId)) descendants.add(f.id);
-  const listed = galleries.filter(
-    (g) =>
-      (!folderId || (g.folderId && descendants.has(g.folderId))) &&
-      `${g.title} ${g.description} ${g.category}`.toLowerCase().includes(query.toLowerCase()),
+  const state = useResourcePage<GallerySummary>(
+    `/api/catalog/galleries?limit=50&q=${encodeURIComponent(query)}${folderId ? `&folder=${encodeURIComponent(folderId)}` : ""}`,
+    true,
   );
+  if (!state.data) return <CatalogStatus {...state} />;
+  const listed = state.data.data;
+  const photos = listed.flatMap((g) => (g.cover ? [g.cover] : []));
   const home = page === "home";
   return (
     <div className="mx-auto max-w-[1440px] px-4 pb-16 pt-10 sm:px-6 sm:pt-14 lg:px-10">
@@ -88,7 +84,7 @@ export function CatalogIndex({
         {defaultStudio.location}
       </p>
       <h1 className="font-display mt-3 max-w-4xl text-4xl font-normal leading-tight sm:text-6xl">
-        {home || page === "about" ? defaultStudio.name : folder?.title || "Find your photos"}
+        {home || page === "about" ? defaultStudio.name : "Find your photos"}
       </h1>
       <p className="mt-5 max-w-2xl text-lg text-muted-foreground">
         {page === "about"
@@ -142,7 +138,9 @@ export function CatalogIndex({
             )}
           </div>
           <p className="mt-3 text-sm text-muted-foreground" role="status">
-            {listed.length} {listed.length === 1 ? "gallery" : "galleries"}
+            {state.loading
+              ? "Searching…"
+              : `${listed.length} ${listed.length === 1 ? "gallery" : "galleries"}${state.data.page.hasMore ? " loaded" : ""}`}
           </p>
         </div>
       )}
@@ -168,14 +166,35 @@ export function CatalogIndex({
             )}
           </div>
         ))}
+      {page !== "about" && state.data.page.hasMore && (
+        <Button
+          variant="outline"
+          className="mt-8"
+          disabled={state.loading || state.loadingMore}
+          onClick={() => void state.loadMore()}
+        >
+          {state.loadingMore ? "Loading…" : "Load more galleries"}
+        </Button>
+      )}
+      {state.error && (
+        <p role="alert" className="mt-4">
+          {state.error.message} Retry using Load more galleries.
+        </p>
+      )}
     </div>
   );
 }
 export function CatalogGalleryPage({ id }: { id: string }) {
   const proof = useProofSelection(id);
-  const state = useCatalog<{ gallery: CatalogGallery; photos: CatalogPhoto[] }>(
-    `op=detail&id=${encodeURIComponent(id)}`,
+  const resource = useResourcePage<CatalogPhoto>(
+    `/api/catalog/galleries/${encodeURIComponent(id)}/photos?limit=50`,
   );
+  const state = {
+    ...resource,
+    data: resource.data?.gallery
+      ? { gallery: resource.data.gallery, photos: resource.data.data }
+      : undefined,
+  };
   const [password, setPassword] = useState("");
   const [unlockError, setUnlockError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -269,6 +288,7 @@ export function CatalogGalleryPage({ id }: { id: string }) {
       <ProofPanel proof={proof} galleryId={id} />
       <p className="mb-4 mt-8 border-t border-border pt-5 text-sm text-muted-foreground">
         {photos.length} {photos.length === 1 ? "photograph" : "photographs"}
+        {resource.data?.page.hasMore ? " loaded" : ""}
       </p>
       <div className="grid grid-cols-2 gap-x-3 gap-y-6 md:grid-cols-3 md:gap-x-5">
         {photos.map((p, i) => (
@@ -303,6 +323,21 @@ export function CatalogGalleryPage({ id }: { id: string }) {
         ))}
       </div>
       {!photos.length && <p>No photographs are available in this gallery.</p>}
+      {resource.data?.page.hasMore && (
+        <Button
+          variant="outline"
+          className="mt-8"
+          disabled={resource.loadingMore}
+          onClick={() => void resource.loadMore()}
+        >
+          {resource.loadingMore ? "Loading…" : "Load more photographs"}
+        </Button>
+      )}
+      {resource.error && (
+        <p role="alert" className="mt-4">
+          {resource.error.message} Retry using Load more photographs.
+        </p>
+      )}
       {open !== null && (
         <CatalogLightbox
           photos={photos}

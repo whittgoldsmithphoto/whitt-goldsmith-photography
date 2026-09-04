@@ -39,6 +39,7 @@ import { Route as KeywordsIndexRouteImport } from './routes/keywords.index'
 import { Route as KeywordsTagRouteImport } from './routes/keywords.$tag'
 import { Route as OrdersOrderIdRouteImport } from './routes/orders.$orderId'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiCatalogSplatRouteImport } from './routes/api/catalog_.$'
 import { Route as ApiSmugmugCallbackRouteImport } from './routes/api/smugmug.callback'
 import { Route as ApiWebhooksStripeRouteImport } from './routes/api/webhooks.stripe'
 
@@ -192,6 +193,11 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCatalogSplatRoute = ApiCatalogSplatRouteImport.update({
+  id: '/api/catalog_/$',
+  path: '/api/catalog/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSmugmugCallbackRoute = ApiSmugmugCallbackRouteImport.update({
   id: '/api/smugmug/callback',
   path: '/api/smugmug/callback',
@@ -234,6 +240,7 @@ export interface FileRoutesByFullPath {
   '/galleries/': typeof GalleriesIndexRoute
   '/keywords/': typeof KeywordsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/catalog/$': typeof ApiCatalogSplatRoute
   '/api/smugmug/callback': typeof ApiSmugmugCallbackRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
 }
@@ -266,6 +273,7 @@ export interface FileRoutesByTo {
   '/galleries': typeof GalleriesIndexRoute
   '/keywords': typeof KeywordsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/catalog/$': typeof ApiCatalogSplatRoute
   '/api/smugmug/callback': typeof ApiSmugmugCallbackRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
 }
@@ -301,6 +309,7 @@ export interface FileRoutesById {
   '/galleries/': typeof GalleriesIndexRoute
   '/keywords/': typeof KeywordsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/catalog_/$': typeof ApiCatalogSplatRoute
   '/api/smugmug/callback': typeof ApiSmugmugCallbackRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
 }
@@ -337,6 +346,7 @@ export interface FileRouteTypes {
     | '/galleries/'
     | '/keywords/'
     | '/api/auth/$'
+    | '/api/catalog/$'
     | '/api/smugmug/callback'
     | '/api/webhooks/stripe'
   fileRoutesByTo: FileRoutesByTo
@@ -369,6 +379,7 @@ export interface FileRouteTypes {
     | '/galleries'
     | '/keywords'
     | '/api/auth/$'
+    | '/api/catalog/$'
     | '/api/smugmug/callback'
     | '/api/webhooks/stripe'
   id:
@@ -403,6 +414,7 @@ export interface FileRouteTypes {
     | '/galleries/'
     | '/keywords/'
     | '/api/auth/$'
+    | '/api/catalog_/$'
     | '/api/smugmug/callback'
     | '/api/webhooks/stripe'
   fileRoutesById: FileRoutesById
@@ -433,6 +445,7 @@ export interface RootRouteChildren {
   FoldersFolderIdRoute: typeof FoldersFolderIdRoute
   OrdersOrderIdRoute: typeof OrdersOrderIdRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiCatalogSplatRoute: typeof ApiCatalogSplatRoute
   ApiSmugmugCallbackRoute: typeof ApiSmugmugCallbackRoute
   ApiWebhooksStripeRoute: typeof ApiWebhooksStripeRoute
 }
@@ -649,6 +662,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/catalog_/$': {
+      id: '/api/catalog_/$'
+      path: '/api/catalog/$'
+      fullPath: '/api/catalog/$'
+      preLoaderRoute: typeof ApiCatalogSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/smugmug/callback': {
       id: '/api/smugmug/callback'
       path: '/api/smugmug/callback'
@@ -732,6 +752,7 @@ const rootRouteChildren: RootRouteChildren = {
   FoldersFolderIdRoute: FoldersFolderIdRoute,
   OrdersOrderIdRoute: OrdersOrderIdRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiCatalogSplatRoute: ApiCatalogSplatRoute,
   ApiSmugmugCallbackRoute: ApiSmugmugCallbackRoute,
   ApiWebhooksStripeRoute: ApiWebhooksStripeRoute,
 }
