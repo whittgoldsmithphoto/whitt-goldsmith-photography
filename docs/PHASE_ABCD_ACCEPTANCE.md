@@ -35,6 +35,17 @@ The working directory already had unrelated deleted tracked stock assets and `sc
 
 No original photos, watermark credentials, database connection strings, auth secrets or payment secrets are committed. Previous iterations remain in Git history; changes are pushed to the existing review branch without rewriting history or replacing `main`.
 
-## Remaining acceptance
+## Final checkpoint — 9:32 PM EDT
+
+- Feature commits `6aae6f7` and `6c4d98f` are pushed to `audit/server-catalog`. Final staging Worker version: `128f88dc-2b70-4330-92cc-5da3d80248e5` at https://wgp-catalog-staging.whittgoldsmithmedia.workers.dev. Production was not deployed.
+- After the preview-deterrent and integrity-feedback changes, the complete release snapshot again passed **205 script tests + 99 TypeScript tests (304 total)**, typechecking, lint (zero errors/six existing warnings), Cloudflare build and staging configuration guard.
+- The customer browser harness verifies photo-specific context-menu cancellation and drag prevention alongside normal keyboard navigation, zoom and focus restoration. These are bypassable save deterrents, **not screenshot prevention or DRM**. See `PREVIEW_DETERRENTS.md`.
+- The new live owner integrity check returned **VERIFIED** for SWG01452.jpg (6,826,940 bytes), SWG01538.jpg (2,310,885 bytes), and SWG03038.jpg (10,242,855 bytes). Each check read the original and compared its byte count and SHA-256; it did not rewrite the object or prove backup availability.
+- After reload, gallery settings retained the `Football` folder and `Private staging test. Customer downloads remain disabled.` instructions. Visibility remained **Private — owner only**, Published remained unchecked, and download policy remained **No customer downloads**.
+- Final owner diagnostics reported staging/shared-postgres, configured R2/Images/watermark, and no missing required catalog migrations through **0013**. Configuration checks are distinct from the original-read and derivative tests above.
+- Final anonymous HTTP checks: `/api/commerce?op=status` returned checkout unavailable / quote-only; owner catalog, diagnostics and owner-original reads returned **401**; the private preview returned **404**. Same-origin unauthenticated `POST /api/catalog-integrity` returned **401**. `POST /api/commerce-webhook` and `POST /api/commerce-download` each returned **503**, explicitly disabled pending sandbox acceptance.
+- An initial check accidentally used `/api/commerce/status` (404) and `scope=owner` (public empty index). Those are not the application's operation URLs; the corrected `?op=status` and `?op=owner` checks above establish the relevant behavior.
+
+## Remaining acceptance gates
 
 See `PHASE_ABCD_REMAINING.md` for the full checklist. In particular, public/password gallery and cross-device proof flows need deployment-level acceptance; the real supplied photos remain private. RAW/TIFF, true multipart/background processing, real payment-to-authorized-download delivery, prints and Lightroom/AI/QR workflows remain incomplete. Stripe checkout stays disabled. Do not promote production based only on this evidence.

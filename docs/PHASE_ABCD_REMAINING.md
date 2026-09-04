@@ -2,7 +2,7 @@
 
 September 3, 2026. Compared with the supplied `GROK_NEXT_PHASE_AUDIT.md` and current source. This is the current remaining-work checklist; older increment notes in `CATALOG_PHASE_A.md` and `PLAN_EXECUTION_STATUS.md` include historical statements that predate these additions.
 
-**Not ready to call the whole plan complete or launch commerce.** Staging migrations through 0012 have been applied; final release and live evidence are recorded in `PHASE_ABCD_ACCEPTANCE.md`. Schema/deployment success is not proof of a complete customer workflow. Production/custom-domain promotion remains separate, and SmugMug stays in place.
+**Not ready to call the whole plan complete or launch commerce.** Staging migrations through 0013 have been applied; final release and live evidence are recorded in `PHASE_ABCD_ACCEPTANCE.md`. Schema/deployment success is not proof of a complete customer workflow. Production/custom-domain promotion remains separate, and SmugMug stays in place.
 
 ## Evidence boundaries
 
@@ -44,6 +44,7 @@ September 3, 2026. Compared with the supplied `GROK_NEXT_PHASE_AUDIT.md` and cur
 ### Implemented and locally exercised
 
 - Responsive watermarked thumbnail/lightbox browsing, captions/filenames, zoom/fit, favorites, keyboard navigation, focus restoration and failed-preview retry.
+- Photo-specific right-click and drag-save deterrents with a local accessible notice, without global keyboard blocking or telemetry. These do not prevent screenshots, browser-tool extraction or copying already delivered preview pixels; private originals and server-watermarked derivatives remain the actual protection.
 - Account-backed proof selections and notes, reference IDs, durable revisions, stale-save rejection with the draft retained, and warnings before abandoning unsaved selections.
 - Owner proof inbox, revision-specific review acknowledgement, search, pagination and reviewed/unreviewed filters; later customer edits become unread.
 - Revision-safe gallery-specific instructions and a persisted `none`/`purchased_only` download policy, safe default `none`. Public copy reflects the policy; neither setting alone grants originals.
@@ -52,8 +53,8 @@ September 3, 2026. Compared with the supplied `GROK_NEXT_PHASE_AUDIT.md` and cur
 ### Remaining
 
 - Record the same proof workflow on deployed staging across fresh customer/owner sessions, including password-gallery grants and later access revocation.
-- Richer comment threads and actual owner email/other notifications. The in-app inbox is not email delivery. Verify the new instructions/policy on staging after final deployment.
-- Entitlement/policy-controlled single-photo and whole-gallery download delivery; whole-gallery download SKU/archive generation. Favoriting never grants a download.
+- Richer comment threads and actual owner email/other notifications. The in-app inbox is not email delivery. Instructions, folder and no-download policy persistence passed live staging readback; customer-facing presentation still needs deployed public-gallery acceptance.
+- Activate and verify the implemented single-photo entitlement/policy-controlled delivery only after sandbox payment acceptance; customer download UI and whole-gallery download SKU/archive generation remain. Favoriting never grants a download.
 - Complete the intended share/buy flows only when their access/commerce contracts exist, and perform final accessibility/offline/error-state checks on deployed galleries.
 
 **Phase B exit is a returning customer's saved selection visible to the owner from another session/device on the target deployment.**
