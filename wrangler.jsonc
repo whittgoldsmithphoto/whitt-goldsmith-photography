@@ -8,8 +8,15 @@
   "workers_dev": true,
   "preview_urls": true,
   "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "78c0c17c5ba844f4bb678dbbb1846311" }],
+  "r2_buckets": [{ "binding": "CATALOG_BUCKET", "bucket_name": "whitt-goldsmith-photos" }],
+  "images": { "binding": "IMAGES" },
   "vars": {
     "VITE_AUTH_ENABLED": "true",
+    "CATALOG_ENV": "production",
+    "BETTER_AUTH_URL": "https://whitt-goldsmith-photography.whittgoldsmithmedia.workers.dev",
+    "CATALOG_LIVE_CHECKOUT_ENABLED": "false",
+    "CATALOG_LIVE_DOWNLOADS_ENABLED": "false",
+    "CATALOG_LIVE_WEBHOOK_ENABLED": "false"
   },
   "env": {
     "staging": {
