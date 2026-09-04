@@ -1,12 +1,12 @@
 # Live sales implementation — 2026-09-04
 
-This source revision builds the digital-photo live payment path. It does **not** activate real charges or replace the old production Worker. Older readiness documents describe earlier deployment snapshots.
+The digital-photo live payment path is now deployed to the existing production Worker. It does **not** activate real charges. See [current production evidence](PRODUCTION_UPGRADE_2026-09-04.md); older statements below describe earlier deployment snapshots.
 
 ## Implemented
 
 - Customer photo checkout reads saved owner prices/licenses and uses a server-created quote; browser totals are not accepted. Coupons use the existing server ledger.
 - Separate production secret/account configuration and live event mode verification; test credentials and test switches cannot authorize live sales.
-- Stripe Checkout automatic tax, exclusive of saved base prices. Provider preflight requires active tax settings, the configured digital tax code, and active US South Carolina registrations only, matching the owner's stated registration scope. It does not determine the owner's tax obligations.
+- Stripe Checkout automatic tax, exclusive of saved base prices, with billing address collection. Provider preflight requires active tax settings and the configured digital tax code. An empty registration list is allowed for digital-only setup; existing registrations must still match the reviewed US South Carolina scope. It does not determine the owner's tax obligations or claim that unregistered jurisdictions are exempt.
 - Signed payment verification checks session, account, currency, immutable base price, calculated tax, PaymentIntent and charge before fulfillment.
 - Migration 0021 commits tax totals and payment/entitlement state atomically. Replay does not issue a second entitlement; conflicting totals fail; refunds revoke access through the existing review ledger.
 - Live downloads have independent explicit release/delivery gates. New checkout requires downloads and webhook processing enabled. Turning off new checkout does not turn off webhook processing.

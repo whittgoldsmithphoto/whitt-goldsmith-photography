@@ -35,6 +35,44 @@ export interface CheckoutProvider {
 }
 export class CheckoutError extends Error {}
 
+/** An empty registration list is not proof of exemption or a provider failure.
+ * Keep automatic tax and the separate release-acceptance gate; never fabricate
+ * a registration just to let digital-only checkout pass provider preflight.
+ */
+export function assertStripeTaxConfiguration(
+  config: Pick<CheckoutConfiguration, "environment" | "digitalTaxCode">,
+  tax: {
+    livemode: boolean;
+    status: string;
+    defaults: { provider?: string; tax_code?: string | null };
+  },
+  registrations: {
+    has_more: boolean;
+    data: Array<{
+      livemode: boolean;
+      country: string;
+      country_options: { us?: { state: string } };
+    }>;
+  },
+) {
+  if (
+    tax.livemode !== (config.environment === "production") ||
+    tax.status !== "active" ||
+    tax.defaults.provider !== "stripe" ||
+    tax.defaults.tax_code !== config.digitalTaxCode ||
+    registrations.has_more ||
+    registrations.data.some(
+      (reg) =>
+        reg.livemode !== (config.environment === "production") ||
+        reg.country !== "US" ||
+        reg.country_options.us?.state !== "SC",
+    )
+  )
+    throw new CheckoutError(
+      "Stripe Tax settings or existing registrations differ from the reviewed configuration",
+    );
+}
+
 function configuration(config: CheckoutConfiguration, requireAcceptance = true) {
   if (
     !["staging", "production"].includes(config.environment) ||
@@ -83,23 +121,7 @@ export function stripeCheckoutProvider(config: CheckoutConfiguration): CheckoutP
           stripe.tax.settings.retrieve(),
           stripe.tax.registrations.list({ status: "active", limit: 100 }),
         ]);
-        if (
-          tax.livemode !== (config.environment === "production") ||
-          tax.status !== "active" ||
-          tax.defaults.provider !== "stripe" ||
-          tax.defaults.tax_code !== config.digitalTaxCode ||
-          registrations.has_more ||
-          !registrations.data.length ||
-          registrations.data.some(
-            (reg) =>
-              reg.livemode !== (config.environment === "production") ||
-              reg.country !== "US" ||
-              reg.country_options.us?.state !== "SC",
-          )
-        )
-          throw new CheckoutError(
-            "Stripe Tax must match the approved South Carolina registration and digital tax code",
-          );
+        assertStripeTaxConfiguration(config, tax, registrations);
       }
     },
     create: (params, key) => stripe.checkout.sessions.create(params, { idempotencyKey: key }),
