@@ -353,7 +353,14 @@ try {
   const mobileMenu = ownerPage.getByRole("dialog");
   await mobileMenu.getByRole("link", { name: "Organizer", exact: true }).click();
   await mobileMenu.waitFor({ state: "hidden" });
+  if (process.env.WGP_UI_REVIEW)
+    await ownerPage.screenshot({ path: "test-results/owner-mobile.png" });
   await ownerPage.setViewportSize({ width: 1440, height: 900 });
+  await ownerPage.getByRole("heading", { name: gallery.title, exact: true }).waitFor();
+  await ownerPage.getByLabel("Search galleries", { exact: true }).fill("NO MATCHING GALLERY");
+  await ownerPage.getByText("No matching galleries.", { exact: true }).waitFor();
+  await ownerPage.getByRole("button", { name: "Clear search", exact: true }).click();
+  assert.equal(await ownerPage.getByLabel("Search galleries", { exact: true }).inputValue(), "");
   if (process.env.WGP_UI_REVIEW) await ownerPage.screenshot({ path: "test-results/owner-ui.png" });
   await ownerPage.getByText("Manage folders", { exact: true }).click();
   const manager = ownerPage.getByRole("region", { name: "Folder manager", exact: true });

@@ -18,6 +18,7 @@ export function CatalogOrganizer() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [foldersOpen, setFoldersOpen] = useState(false);
+  const [galleryQuery, setGalleryQuery] = useState("");
   const [draft, setDraft] = useState<GalleryInput | null>(null);
   const [photoDraft, setPhotoDraft] = useState<PhotoInput | null>(null);
   const [batchItems, setBatchItems] = useState<UploadItem[]>([]);
@@ -27,7 +28,8 @@ export function CatalogOrganizer() {
   const retryBatch = useRef<{ galleryId: string; files: File[] } | null>(null);
   if (!state.data) return <CatalogStatus {...state} />;
   const { galleries, folders, photos, jobs } = state.data;
-  const active = galleries.find((g) => g.id === selected);
+  const active = galleries.find((g) => g.id === selected) || galleries[0];
+  const activePhotoCount = photos.filter((photo) => photo.galleryId === active?.id).length;
   const edit = (g?: CatalogGallery) =>
     setDraft(
       g
@@ -94,8 +96,8 @@ export function CatalogOrganizer() {
     }
   }
   return (
-    <div className="mx-auto max-w-[1400px] px-4 py-10 sm:px-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="catalog-workbench mx-auto max-w-[1600px] px-4 py-6 sm:px-6">
+      <div className="management-toolbar flex flex-wrap items-center justify-between gap-4">
         <h1 className="font-display text-4xl">Organizer</h1>
         <Button disabled={busy} onClick={() => edit()}>
           New gallery
@@ -106,50 +108,83 @@ export function CatalogOrganizer() {
           {message}
         </p>
       )}
-      <div className="my-6 border-y border-border">
-        <details open={foldersOpen} onToggle={(event) => setFoldersOpen(event.currentTarget.open)}>
-          <summary className="cursor-pointer py-3 text-sm font-medium">Manage folders</summary>
-          <div className="pb-4">
-            {!busy && (
-              <FolderManager
-                onSaved={() => {
-                  setMessage("Folder saved to the shared catalog.");
-                  state.reload();
-                }}
-              />
-            )}
-          </div>
-        </details>
-      </div>
-      <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <aside className="space-y-2">
+      <div className="catalog-layout mt-5 grid gap-6 lg:grid-cols-[250px_minmax(0,1fr)]">
+        <aside className="catalog-directory min-w-0 space-y-2">
           <h2 className="mb-3 text-sm font-semibold">Your galleries</h2>
-          {galleries.length === 0 && <p>No saved galleries yet.</p>}
-          {galleries.map((g) => (
-            <button
-              key={g.id}
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                setSelected(g.id);
-                setPhotoDraft(null);
-              }}
-              aria-pressed={selected === g.id}
-              className={`block w-full rounded-lg border p-4 text-left ${selected === g.id ? "border-foreground" : "border-border"}`}
-            >
-              <span className="text-sm font-semibold">{g.title}</span>
-              <span className="mt-1 block text-xs text-muted-foreground">
-                {g.published ? g.visibility : "Draft"}
-                {g.requiresPassword ? " · password" : ""}
-              </span>
+          <label className="block text-xs text-muted-foreground" htmlFor="owner-gallery-search">
+            Search galleries
+          </label>
+          <Input
+            id="owner-gallery-search"
+            value={galleryQuery}
+            onChange={(event) => setGalleryQuery(event.target.value)}
+            placeholder="Gallery name"
+          />
+          {galleryQuery && (
+            <button className="min-h-11 text-sm underline" onClick={() => setGalleryQuery("")}>
+              Clear search
             </button>
-          ))}
+          )}
+          <div className="border-b border-border">
+            <details
+              open={foldersOpen}
+              onToggle={(event) => setFoldersOpen(event.currentTarget.open)}
+            >
+              <summary className="cursor-pointer py-3 text-sm font-medium">Manage folders</summary>
+              <div className="pb-4">
+                {!busy && (
+                  <FolderManager
+                    onSaved={() => {
+                      setMessage("Folder saved to the shared catalog.");
+                      state.reload();
+                    }}
+                  />
+                )}
+              </div>
+            </details>
+          </div>
+          {galleries.length === 0 && <p>No saved galleries yet.</p>}
+          {galleryQuery &&
+            !galleries.some((g) => g.title.toLowerCase().includes(galleryQuery.toLowerCase())) && (
+              <p className="py-4 text-sm text-muted-foreground">No matching galleries.</p>
+            )}
+          {galleries
+            .filter((g) => g.title.toLowerCase().includes(galleryQuery.toLowerCase()))
+            .map((g) => (
+              <button
+                key={g.id}
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setSelected(g.id);
+                  setPhotoDraft(null);
+                }}
+                aria-pressed={active?.id === g.id}
+                className="catalog-directory-item block w-full border-l-2 p-3 text-left"
+              >
+                <span className="text-sm font-semibold">{g.title}</span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {g.published ? g.visibility : "Draft"}
+                  {g.requiresPassword ? " · password" : ""}
+                </span>
+              </button>
+            ))}
         </aside>
-        <section>
+        <section className="catalog-canvas min-w-0">
           {active ? (
             <>
-              <h2 className="text-2xl font-semibold">{active.title}</h2>
-              <p className="mt-2 text-muted-foreground">{active.description}</p>
+              <div key={active.id} className="management-reveal">
+                <p className="mb-2 text-xs text-muted-foreground">
+                  {active.published ? active.visibility : "Draft"} · {activePhotoCount}{" "}
+                  {activePhotoCount === 1 ? "photograph" : "photographs"}
+                </p>
+                <h2 className="text-xl font-semibold">{active.title}</h2>
+                {active.description && (
+                  <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+                    {active.description}
+                  </p>
+                )}
+              </div>
               <div className="my-5 flex flex-wrap gap-3">
                 <Button variant="outline" disabled={busy} onClick={() => edit(active)}>
                   Gallery settings
@@ -162,10 +197,10 @@ export function CatalogOrganizer() {
                   </Button>
                 )}
               </div>
-              <label className="my-6 block rounded-lg border border-dashed border-border p-6">
+              <label className="catalog-upload my-5 block border-y border-border p-4 text-sm">
                 Upload JPEG or PNG photographs
                 <input
-                  className="mt-3 block w-full text-sm"
+                  className="mt-3 block w-full text-sm file:mr-4 file:rounded file:border file:border-input file:bg-secondary file:px-4 file:py-2 file:text-foreground"
                   type="file"
                   accept="image/jpeg,image/png"
                   multiple
@@ -234,7 +269,7 @@ export function CatalogOrganizer() {
                   </ul>
                 </section>
               )}
-              <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
                 {photos
                   .filter((p) => p.galleryId === active.id)
                   .map((p) => (
@@ -242,7 +277,8 @@ export function CatalogOrganizer() {
                       key={p.id}
                       type="button"
                       disabled={busy}
-                      className="rounded border border-border p-2 text-left"
+                      className="catalog-frame min-w-0 border border-border p-2 text-left"
+                      aria-pressed={photoDraft?.id === p.id}
                       onClick={() =>
                         setPhotoDraft({
                           id: p.id,

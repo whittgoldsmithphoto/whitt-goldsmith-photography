@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Menu } from "lucide-react";
+import { Menu, Images, ListChecks, ReceiptText } from "lucide-react";
 import { Toaster } from "sonner";
 import { catalogFetch } from "@/lib/catalog/client";
 import { SiteFooter } from "@/components/site-footer";
@@ -26,9 +26,9 @@ const PUBLIC_NAV = [
 ];
 
 const STUDIO_NAV = [
-  { to: "/organize" as const, label: "Organizer" },
-  { to: "/favorites" as const, label: "Proofs" },
-  { to: "/sell" as const, label: "Selling" },
+  { to: "/organize" as const, label: "Organizer", icon: Images },
+  { to: "/favorites" as const, label: "Proofs", icon: ListChecks },
+  { to: "/sell" as const, label: "Selling", icon: ReceiptText },
 ];
 
 export function StudioShell({ children }: { children: React.ReactNode }) {
@@ -82,14 +82,21 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
 
   return (
     <TooltipProvider delayDuration={250}>
-      <div className="min-h-svh bg-background text-foreground">
+      <div
+        className={cn("min-h-svh bg-background text-foreground", inStudio && "management-shell")}
+      >
         <a
           href="#main-content"
           className="fixed left-4 top-2 z-[100] -translate-y-24 rounded-md bg-primary px-4 py-3 text-primary-foreground focus:translate-y-0"
         >
           Skip to content
         </a>
-        <header className="fixed inset-x-0 top-0 z-40 border-b bg-background">
+        <header
+          className={cn(
+            "fixed inset-x-0 top-0 z-40 border-b bg-background",
+            inStudio && "management-header",
+          )}
+        >
           <div className="mx-auto flex h-16 max-w-[1400px] items-center justify-between px-4 sm:px-6">
             <Link to="/" className="min-w-0">
               <span className="block max-w-[13rem] text-sm font-semibold leading-tight sm:max-w-none sm:text-base">
@@ -182,23 +189,16 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
         </header>
 
         {inStudio && (
-          <aside className="fixed bottom-0 left-0 top-16 hidden w-48 border-r bg-card px-3 py-8 md:block">
-            <p className="mb-5 px-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Owner studio
-            </p>
-            <nav aria-label="Owner workspace" className="space-y-1">
+          <aside className="management-rail fixed bottom-0 left-0 top-16 hidden w-24 border-r md:block">
+            <nav aria-label="Owner workspace" className="pt-5">
               {STUDIO_NAV.map((item) => (
                 <Link
                   key={item.to}
                   to={item.to}
                   aria-current={active(item.to) ? "page" : undefined}
-                  className={cn(
-                    "flex min-h-12 items-center rounded-md border-l-2 px-3 text-sm",
-                    active(item.to)
-                      ? "border-primary bg-accent font-semibold"
-                      : "border-transparent text-muted-foreground hover:bg-secondary hover:text-foreground",
-                  )}
+                  className="management-destination"
                 >
+                  <item.icon size={21} strokeWidth={1.4} aria-hidden="true" />
                   {item.label}
                 </Link>
               ))}
@@ -208,7 +208,7 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
         <main
           id="main-content"
           tabIndex={-1}
-          className={cn("pt-16", inStudio && "owner-workspace md:pl-48")}
+          className={cn("pt-16", inStudio && "owner-workspace md:pl-24")}
         >
           {legacyPage && (
             <SignedIn>

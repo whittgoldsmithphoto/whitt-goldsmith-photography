@@ -12,6 +12,10 @@ Reference: Whitt's September 3 website style guide, used as direction rather tha
 
 Desktop uses a narrow owner sidebar. Mobile uses one opaque, dismissible navigation drawer. Public navigation never exposes owner destinations based solely on being signed in: the server capability check remains required. Route guards and backend permissions are unchanged.
 
+## Management revision after owner review
+
+The first sidebar treatment was rejected as too generic and less usable. The public design is retained unchanged. Management returns to neutral near-black surfaces, compact square-edged controls and restrained monochrome actions, scoped to authenticated management routes only. A compact labelled tool rail replaces the wide dashboard sidebar. Organizer uses a searchable gallery directory beside a photo working area, opens the first available gallery automatically, and places folder tools with the directory. Gallery and photo selections have explicit states; short panel-entry and hover transitions respect reduced motion. Selling retains its functional grouping with flat section tabs rather than rounded button cards.
+
 ## Visual direction
 
 Charcoal surfaces, flat action blue, readable neutral text, serif public titles, and system sans-serif controls. Owner headings remain practical sans-serif. Gallery captions sit beneath photographs; proofing retains a predictable grid and explicit selected state. No stock photos, fabricated events, sales metrics, or published-photo changes.
