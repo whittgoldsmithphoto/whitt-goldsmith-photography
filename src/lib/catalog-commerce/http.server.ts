@@ -5,7 +5,11 @@ import { createCatalog, CatalogError } from "../catalog/repository";
 import { catalogMedia, runtimeSetting } from "../catalog/media.server";
 import { commerceHeaders, createCommerceHandler } from "./http";
 import { createSandboxCheckout, stripeCheckoutProvider } from "./checkout.server";
-import { consumeCheckoutAttempt, sandboxCheckoutSettings } from "./checkout-settings";
+import {
+  consumeCheckoutAttempt,
+  sandboxCheckoutSettings,
+  liveCheckoutSettings,
+} from "./checkout-settings";
 import { z } from "zod";
 
 export async function commerceRequest(request: Request) {
@@ -28,7 +32,9 @@ export async function commerceRequest(request: Request) {
       return (await catalog.detail(galleryId, token)).gallery.revision;
     };
     const config = sandboxCheckoutSettings(runtimeSetting);
-    const cancelConfig = sandboxCheckoutSettings(runtimeSetting, true);
+    const liveConfig = liveCheckoutSettings(runtimeSetting);
+    const cancelConfig =
+      sandboxCheckoutSettings(runtimeSetting, true) ?? liveCheckoutSettings(runtimeSetting, true);
     const cancellation = cancelConfig
       ? createSandboxCheckout(
           sql,
@@ -36,6 +42,17 @@ export async function commerceRequest(request: Request) {
           cancelConfig,
           stripeCheckoutProvider(cancelConfig),
         )
+      : undefined;
+    const cancel = cancellation
+      ? async (customerId: string, input: unknown) => {
+          const { orderId } = z.object({ orderId: z.string().uuid() }).strict().parse(input);
+          const [order] = await sql.query<{ quote_id: string }>(
+            "SELECT quote_id FROM commerce_orders WHERE id=$1 AND customer_id=$2",
+            [orderId, customerId],
+          );
+          if (!order) throw new CatalogError("Order unavailable", 404);
+          return cancellation.cancel(customerId, { quoteId: order.quote_id });
+        }
       : undefined;
     return await createCommerceHandler({
       sql,
@@ -45,17 +62,16 @@ export async function commerceRequest(request: Request) {
       sandboxCheckout: config
         ? createSandboxCheckout(sql, authorizeGallery, config, stripeCheckoutProvider(config))
         : undefined,
-      sandboxCancel: cancellation
-        ? async (customerId, input) => {
-            const { orderId } = z.object({ orderId: z.string().uuid() }).strict().parse(input);
-            const [order] = await sql.query<{ quote_id: string }>(
-              "SELECT quote_id FROM commerce_orders WHERE id=$1 AND customer_id=$2",
-              [orderId, customerId],
-            );
-            if (!order) throw new CatalogError("Order unavailable", 404);
-            return cancellation.cancel(customerId, { quoteId: order.quote_id });
-          }
+      liveCheckout: liveConfig
+        ? createSandboxCheckout(
+            sql,
+            authorizeGallery,
+            liveConfig,
+            stripeCheckoutProvider(liveConfig),
+          )
         : undefined,
+      sandboxCancel: cancelConfig?.environment === "staging" ? cancel : undefined,
+      liveCancel: cancelConfig?.environment === "production" ? cancel : undefined,
       checkoutAttempt: (customerId) => consumeCheckoutAttempt(sql, customerId),
     })(request);
   } catch {

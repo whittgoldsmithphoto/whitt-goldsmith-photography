@@ -1,5 +1,7 @@
 # Live Stripe readiness
 
+Latest source progress: [Live sales implementation and activation checklist](LIVE_SALES_IMPLEMENTATION.md). The live adapter and automatic-tax source now exist but are not yet deployed or provider-accepted. Historical sandbox-only statements below describe earlier revisions.
+
 ## Latest actual-provider acceptance
 
 Follow-up account inspection: live account `acct_1UBQ70D2rNLvqnsK` Account status shows Payments and Payouts Active and "No active tasks to complete". Account details separately asks for phone verification to process payments from the Dashboard; this is not evidence that API payments are disabled. No account information, payout destination or tax setting was changed. Owner confirmation of real pricing/license/refund terms and tax registrations remains necessary.

@@ -15,6 +15,8 @@ export interface CommerceDependencies {
   /** Owner-only acceptance path, never a public checkout capability. */
   sandboxCheckout?(customerId: string, input: unknown): Promise<unknown>;
   sandboxCancel?(customerId: string, input: unknown): Promise<unknown>;
+  liveCheckout?(customerId: string, input: unknown): Promise<unknown>;
+  liveCancel?(customerId: string, input: unknown): Promise<unknown>;
   checkoutAttempt?(customerId: string): Promise<void>;
 }
 
@@ -32,9 +34,11 @@ export function createCommerceHandler(deps: CommerceDependencies) {
       if (request.method === "GET") {
         if (op === "status")
           return json({
-            checkoutAvailable: false,
-            reason: "Stripe, tax and fulfillment acceptance checks are incomplete.",
-            quoteOnly: true,
+            checkoutAvailable: Boolean(deps.liveCheckout),
+            reason: deps.liveCheckout
+              ? "Digital checkout available; final tax is calculated by Stripe."
+              : "Stripe, tax and fulfillment acceptance checks are incomplete.",
+            quoteOnly: !deps.liveCheckout,
           });
         if (op === "owner") {
           await deps.owner();
@@ -59,8 +63,28 @@ export function createCommerceHandler(deps: CommerceDependencies) {
             galleryPrices,
             coupons,
             orders,
-            checkoutAvailable: false,
+            checkoutAvailable: Boolean(deps.liveCheckout),
           });
+        }
+        if (op === "offers") {
+          const galleryId = z
+            .string()
+            .trim()
+            .min(1)
+            .max(150)
+            .parse(url.searchParams.get("galleryId"));
+          await deps.authorizeGallery(galleryId);
+          if (!deps.liveCheckout) return json({ products: [], checkoutAvailable: false });
+          const products = await deps.sql.query(
+            `SELECT p.id,p.name,p.license,r.unit_cents FROM catalog_galleries g
+             LEFT JOIN commerce_gallery_prices gp ON gp.gallery_id=g.id
+             JOIN commerce_prices r ON r.price_list_id=COALESCE(gp.price_list_id,(SELECT id FROM commerce_price_lists WHERE is_default))
+             JOIN commerce_products p ON p.id=r.product_id AND p.active AND p.kind='digital_photo'
+             WHERE g.id=$1 AND g.published AND g.visibility<>'private' AND g.download_policy='purchased_only'
+             ORDER BY p.name,p.id LIMIT 100`,
+            [galleryId],
+          );
+          return json({ products, checkoutAvailable: true });
         }
         if (op === "order")
           return json(
@@ -72,7 +96,8 @@ export function createCommerceHandler(deps: CommerceDependencies) {
           await deps.owner();
           return json({
             sandboxCheckoutAvailable: Boolean(deps.sandboxCheckout),
-            liveCheckoutAvailable: false,
+            liveCheckoutAvailable: Boolean(deps.liveCheckout),
+            cancellationAvailable: Boolean(deps.liveCancel || deps.sandboxCancel),
           });
         }
         return json({ error: "Unknown commerce operation" }, 404);
@@ -111,12 +136,19 @@ export function createCommerceHandler(deps: CommerceDependencies) {
       if (op === "quote")
         return json({
           quote: await commerce.quote(await deps.user(), body),
-          checkoutAvailable: false,
-          notice:
-            "Quote preview only. Tax assessment and Stripe acceptance are not configured; this is not a purchasable offer.",
+          checkoutAvailable: Boolean(deps.liveCheckout),
+          notice: deps.liveCheckout
+            ? "Price before tax. Final tax is calculated securely at checkout."
+            : "Quote preview only. Tax assessment and Stripe acceptance are not configured; this is not a purchasable offer.",
         });
       if (op === "checkout") {
         const customer = await deps.user();
+        if (deps.liveCheckout) {
+          if (!deps.checkoutAttempt)
+            return json({ error: "Checkout protection is not configured" }, 503);
+          await deps.checkoutAttempt(customer);
+          return json(await deps.liveCheckout(customer, body));
+        }
         if (deps.sandboxCheckout) {
           await deps.owner();
           if (!deps.checkoutAttempt)
@@ -133,13 +165,13 @@ export function createCommerceHandler(deps: CommerceDependencies) {
       }
       if (op === "cancel-checkout") {
         const customer = await deps.user();
-        if (!deps.sandboxCancel)
+        if (!deps.sandboxCancel && !deps.liveCancel)
           return json({ error: "Checkout cancellation is unavailable" }, 503);
-        await deps.owner();
+        if (!deps.liveCancel) await deps.owner();
         if (!deps.checkoutAttempt)
           return json({ error: "Checkout protection is not configured" }, 503);
         await deps.checkoutAttempt(customer);
-        return json(await deps.sandboxCancel(customer, body));
+        return json(await (deps.liveCancel || deps.sandboxCancel)!(customer, body));
       }
       if (
         ![

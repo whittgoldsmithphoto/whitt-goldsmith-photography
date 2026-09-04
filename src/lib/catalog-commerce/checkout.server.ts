@@ -2,8 +2,9 @@ import Stripe from "stripe";
 import { z } from "zod";
 import type { Sql } from "../db.ts";
 import { createCommerce, type Quote, type Order } from "./service.ts";
+import { verifiedCheckoutTax } from "./stripe-tax.ts";
 
-/** Exposed only through the default-off owner sandbox acceptance route. Never live checkout. */
+/** Explicit, isolated payment configuration. Live and sandbox credentials never mix. */
 export interface CheckoutConfiguration {
   environment: string;
   checkoutEnabled: boolean;
@@ -12,9 +13,13 @@ export interface CheckoutConfiguration {
   secretKey: string;
   accountId: string;
   origin: string;
+  taxMode?: "stripe";
+  digitalTaxCode?: string;
+  liveAccepted?: boolean;
 }
 export interface CheckoutProvider {
   accountId(): Promise<string>;
+  preflight?(): Promise<void>;
   create(
     params: Stripe.Checkout.SessionCreateParams,
     key: string,
@@ -32,12 +37,17 @@ export class CheckoutError extends Error {}
 
 function configuration(config: CheckoutConfiguration, requireAcceptance = true) {
   if (
-    config.environment !== "staging" ||
+    !["staging", "production"].includes(config.environment) ||
+    (config.environment === "production" &&
+      (config.liveAccepted !== true || config.taxMode !== "stripe")) ||
+    (config.taxMode === "stripe" && !/^txcd_[0-9]{8}$/.test(config.digitalTaxCode || "")) ||
     (requireAcceptance &&
       (config.checkoutEnabled !== true ||
         config.deliveryAccepted !== true ||
         config.sandboxTaxFixtureAccepted !== true)) ||
-    !/^sk_test_[A-Za-z0-9_]+$/.test(config.secretKey) ||
+    !(
+      config.environment === "production" ? /^sk_live_[A-Za-z0-9_]+$/ : /^sk_test_[A-Za-z0-9_]+$/
+    ).test(config.secretKey) ||
     !/^acct_[A-Za-z0-9]+$/.test(config.accountId)
   )
     throw new CheckoutError("Sandbox checkout is disabled");
@@ -51,7 +61,7 @@ function configuration(config: CheckoutConfiguration, requireAcceptance = true) 
     throw new CheckoutError("Checkout origin must be an explicit HTTPS origin");
 }
 
-/** SDK adapter uses direct-account test credentials only; never Connect headers. */
+/** SDK adapter uses direct-account credentials; never Connect headers. */
 export function stripeCheckoutProvider(config: CheckoutConfiguration): CheckoutProvider {
   configuration(config, false);
   const stripe = new Stripe(config.secretKey, {
@@ -61,6 +71,37 @@ export function stripeCheckoutProvider(config: CheckoutConfiguration): CheckoutP
   });
   return {
     accountId: async () => (await stripe.accounts.retrieve(null)).id,
+    preflight: async () => {
+      const account = await stripe.accounts.retrieve(null);
+      if (
+        config.environment === "production" &&
+        (!account.charges_enabled || !account.payouts_enabled)
+      )
+        throw new CheckoutError("Stripe payments and payouts must be enabled");
+      if (config.taxMode === "stripe") {
+        const [tax, registrations] = await Promise.all([
+          stripe.tax.settings.retrieve(),
+          stripe.tax.registrations.list({ status: "active", limit: 100 }),
+        ]);
+        if (
+          tax.livemode !== (config.environment === "production") ||
+          tax.status !== "active" ||
+          tax.defaults.provider !== "stripe" ||
+          tax.defaults.tax_code !== config.digitalTaxCode ||
+          registrations.has_more ||
+          !registrations.data.length ||
+          registrations.data.some(
+            (reg) =>
+              reg.livemode !== (config.environment === "production") ||
+              reg.country !== "US" ||
+              reg.country_options.us?.state !== "SC",
+          )
+        )
+          throw new CheckoutError(
+            "Stripe Tax must match the approved South Carolina registration and digital tax code",
+          );
+      }
+    },
     create: (params, key) => stripe.checkout.sessions.create(params, { idempotencyKey: key }),
     retrieve: (id) => stripe.checkout.sessions.retrieve(id),
     expire: (id) => stripe.checkout.sessions.expire(id),
@@ -79,7 +120,7 @@ export function stripeCheckoutProvider(config: CheckoutConfiguration): CheckoutP
               session.client_reference_id === input.orderId &&
               session.metadata?.wgp_order_id === input.orderId &&
               session.metadata?.wgp_quote_id === input.quoteId &&
-              session.metadata?.wgp_environment === "staging",
+              session.metadata?.wgp_environment === config.environment,
           ),
         );
         if (!result.has_more) return { sessions, complete: true };
@@ -184,23 +225,25 @@ export function createSandboxCheckout(
       0,
     );
     if (
-      !session.id.startsWith("cs_test_") ||
+      !session.id.startsWith(config.environment === "production" ? "cs_live_" : "cs_test_") ||
       session.object !== "checkout.session" ||
-      session.livemode !== false ||
+      session.livemode !== (config.environment === "production") ||
       session.mode !== "payment" ||
       session.client_reference_id !== order.id ||
       session.metadata?.wgp_order_id !== order.id ||
       session.metadata?.wgp_quote_id !== order.quote_id ||
-      session.metadata?.wgp_environment !== "staging" ||
-      session.amount_total !== amount ||
+      session.metadata?.wgp_environment !== config.environment ||
+      (config.taxMode !== "stripe" && session.amount_total !== amount) ||
       session.currency !== "usd" ||
       session.expires_at !== saved.params.expires_at ||
       (saved.provider_session_id && saved.provider_session_id !== session.id)
     )
       throw new CheckoutError("Stripe session does not match the pending order");
+    if (config.taxMode === "stripe")
+      verifiedCheckoutTax(session, amount!, session.status === "complete");
   }
   async function resolveSession(order: Order, saved: Attempt) {
-    if (saved.account_id !== config.accountId || saved.environment !== "staging")
+    if (saved.account_id !== config.accountId || saved.environment !== config.environment)
       throw new CheckoutError("Checkout account changed");
     const id = saved.provider_session_id ?? order.provider_session_id;
     let session: Stripe.Checkout.Session;
@@ -297,6 +340,7 @@ export function createSandboxCheckout(
   }
   const checkout = async (customerId: string, input: unknown) => {
     const { quoteId } = inputValues(customerId, input);
+    await provider.preflight?.();
     let quote: Quote;
     try {
       quote = await snapshot(customerId, quoteId);
@@ -309,7 +353,11 @@ export function createSandboxCheckout(
     await account();
     const order = await commerce.orderForQuote(customerId, quoteId);
     if (order.status !== "pending") throw new CheckoutError("Order is not pending");
-    const metadata = { wgp_order_id: order.id, wgp_quote_id: quoteId, wgp_environment: "staging" };
+    const metadata = {
+      wgp_order_id: order.id,
+      wgp_quote_id: quoteId,
+      wgp_environment: config.environment,
+    };
     const expiresAt = Math.floor(Date.now() / 1000) + 3600;
     const params: Stripe.Checkout.SessionCreateParams = {
       mode: "payment",
@@ -317,17 +365,38 @@ export function createSandboxCheckout(
       client_reference_id: order.id,
       metadata,
       payment_intent_data: { metadata },
-      line_items: lines,
+      line_items:
+        config.taxMode === "stripe"
+          ? lines.map((line) => ({
+              ...line,
+              price_data: {
+                ...line.price_data!,
+                tax_behavior: "exclusive",
+                product_data: {
+                  ...line.price_data!.product_data!,
+                  tax_code: config.digitalTaxCode,
+                },
+              },
+            }))
+          : lines,
       success_url: `${config.origin}/checkout/complete?orderId=${encodeURIComponent(order.id)}`,
       cancel_url: `${config.origin}/checkout/cancel?orderId=${encodeURIComponent(order.id)}`,
       allow_promotion_codes: false,
-      automatic_tax: { enabled: false },
+      automatic_tax: { enabled: config.taxMode === "stripe" },
+      ...(config.taxMode === "stripe" ? { billing_address_collection: "required" as const } : {}),
       expires_at: expiresAt,
     };
     await sql.query(
       `INSERT INTO commerce_checkout_attempts(order_id,account_id,origin,environment,params,expires_at)
-      VALUES($1,$2,$3,'staging',$4::jsonb,to_timestamp($5)) ON CONFLICT(order_id) DO NOTHING`,
-      [order.id, config.accountId, config.origin, JSON.stringify(params), expiresAt],
+      VALUES($1,$2,$3,$6,$4::jsonb,to_timestamp($5)) ON CONFLICT(order_id) DO NOTHING`,
+      [
+        order.id,
+        config.accountId,
+        config.origin,
+        JSON.stringify(params),
+        expiresAt,
+        config.environment,
+      ],
     );
     const saved = (await attempt(order.id))!;
     if (!["reserved", "bound"].includes(saved.state))

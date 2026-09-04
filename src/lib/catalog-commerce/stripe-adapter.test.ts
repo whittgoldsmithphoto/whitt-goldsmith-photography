@@ -9,11 +9,14 @@ import { applyVerifiedSessionOutcome, type VerifiedSessionOutcome } from "./sess
 import { applyVerifiedPaymentReview, type VerifiedPaymentReview } from "./payment-review.ts";
 import {
   acceptSandboxWebhook,
+  acceptConfiguredWebhook,
   type SandboxOrder,
   type SandboxProvider,
   type SandboxCommerce,
   type SandboxWebhookConfig,
 } from "./stripe-adapter.ts";
+import { liveCheckoutSettings } from "./checkout-settings.ts";
+import { liveWebhookConfiguration } from "./stripe-webhook-http.ts";
 import { createSandboxWebhookHandler, sandboxWebhookConfiguration } from "./stripe-webhook-http.ts";
 
 const secret = "whsec_generated_local_test_fixture_only";
@@ -145,6 +148,112 @@ function fixture() {
     calls: () => calls,
   };
 }
+
+test("live tax payments require separate mode, verified inclusive totals and atomic settlement", async () => {
+  const f = fixture();
+  const liveConfig = {
+    webhookSecret: secret,
+    expectedAccountId: "acct_fixture",
+    expectedLivemode: true as const,
+    environment: "production" as const,
+    taxMode: "stripe" as const,
+  };
+  Object.assign(f.session, {
+    id: "cs_live_fixture",
+    livemode: true,
+    amount_subtotal: 2500,
+    amount_total: 2675,
+    total_details: { amount_tax: 175, amount_discount: 0, amount_shipping: 0 },
+    automatic_tax: { enabled: true, status: "complete" },
+    metadata: { wgp_order_id: "order", wgp_quote_id: "quote", wgp_environment: "production" },
+  });
+  f.order.provider_session_id = f.session.id;
+  Object.assign(f.intent, { livemode: true, amount: 2675, amount_received: 2675 });
+  Object.assign(f.paidCharge, { livemode: true, amount: 2675, amount_captured: 2675 });
+  let settlements = 0;
+  f.commerce.applyTaxed = async (event, tax, review) => {
+    assert.equal(tax, 175);
+    assert.equal(event.amountCents, 2675);
+    assert.equal(review, false);
+    settlements++;
+    return { status: "paid" };
+  };
+  const event = envelope(f.session, "checkout.session.completed", { livemode: true });
+  assert.equal(
+    (await acceptConfiguredWebhook(event.raw, event.signature, liveConfig, f.provider, f.commerce))
+      .applied,
+    "paid",
+  );
+  assert.equal(settlements, 1);
+  assert.equal(f.applied.length, 0);
+  await assert.rejects(
+    acceptSandboxWebhook(event.raw, event.signature, config, f.provider, f.commerce),
+    /Live-mode/,
+  );
+  f.intent.amount_received = 2500;
+  await assert.rejects(
+    acceptConfiguredWebhook(event.raw, event.signature, liveConfig, f.provider, f.commerce),
+    /paid amount/,
+  );
+  assert.equal(settlements, 1);
+  f.intent.amount_received = 2675;
+  f.session.automatic_tax.status = "failed";
+  await assert.rejects(
+    acceptConfiguredWebhook(event.raw, event.signature, liveConfig, f.provider, f.commerce),
+    /tax calculation/,
+  );
+  assert.equal(settlements, 1);
+});
+
+test("live configuration cannot inherit sandbox approval or mixed credentials", () => {
+  const values: Record<string, string> = {
+    CATALOG_ENV: "production",
+    BETTER_AUTH_URL: "https://photos.example.com",
+    CATALOG_LIVE_RELEASE_ACCEPTED: "true",
+    CATALOG_LIVE_TAX_ACCEPTED: "true",
+    CATALOG_LIVE_DELIVERY_ACCEPTED: "true",
+    CATALOG_LIVE_CHECKOUT_ENABLED: "true",
+    CATALOG_LIVE_DOWNLOADS_ENABLED: "true",
+    CATALOG_LIVE_STRIPE_SECRET_KEY: "sk_live_fixture",
+    CATALOG_LIVE_STRIPE_WEBHOOK_SECRET: "whsec_fixture",
+    CATALOG_LIVE_STRIPE_ACCOUNT_ID: "acct_fixture",
+    CATALOG_STRIPE_DIGITAL_TAX_CODE: "txcd_12345678",
+    CATALOG_LIVE_WEBHOOK_ENABLED: "true",
+  };
+  const get = (key: string) => values[key] || "";
+  assert.equal(liveCheckoutSettings(get)?.environment, "production");
+  assert.equal(liveWebhookConfiguration(get)?.expectedLivemode, true);
+  for (const key of [
+    "CATALOG_LIVE_RELEASE_ACCEPTED",
+    "CATALOG_LIVE_TAX_ACCEPTED",
+    "CATALOG_LIVE_DELIVERY_ACCEPTED",
+    "CATALOG_LIVE_WEBHOOK_ENABLED",
+    "CATALOG_LIVE_DOWNLOADS_ENABLED",
+    "CATALOG_LIVE_STRIPE_ACCOUNT_ID",
+    "CATALOG_STRIPE_DIGITAL_TAX_CODE",
+  ])
+    assert.equal(
+      liveCheckoutSettings((name) => (name === key ? "" : get(name))),
+      undefined,
+    );
+  assert.equal(
+    liveCheckoutSettings((name) => (name === "CATALOG_ENV" ? "staging" : get(name))),
+    undefined,
+  );
+  assert.equal(
+    liveCheckoutSettings((name) =>
+      name === "CATALOG_LIVE_STRIPE_SECRET_KEY" ? "sk_test_fixture" : get(name),
+    ),
+    undefined,
+  );
+  values.CATALOG_LIVE_CHECKOUT_ENABLED = "false";
+  assert.equal(liveCheckoutSettings(get), undefined);
+  assert.ok(
+    liveCheckoutSettings(get, true),
+    "Cancel remains possible while new checkout is disabled",
+  );
+  assert.ok(liveWebhookConfiguration(get), "Webhooks stay active while new checkout is disabled");
+});
 
 test("delayed paid events cannot grant after a refund, partial refund, dispute or incomplete capture", async () => {
   for (const patch of [

@@ -175,6 +175,54 @@ async function fixture() {
   };
 }
 
+test("live offers use saved prices and disappear for unavailable galleries or disabled sales", async () => {
+  const f = await fixture();
+  try {
+    await f.db.exec(
+      await readFile(
+        new URL("../../../migrations/0012_gallery_customer_policy.sql", import.meta.url),
+        "utf8",
+      ),
+    );
+    await f.db.exec(
+      "UPDATE catalog_galleries SET download_policy='purchased_only' WHERE id='gallery'",
+    );
+    const deps = {
+      sql: f.sql,
+      authorizeGallery: f.authorizeGallery,
+      user: async () => "customer",
+      owner: async () => {
+        throw Object.assign(new Error("Owner only"), { status: 403 });
+      },
+      liveCheckout: async () => ({ url: "https://checkout.stripe.com/c/pay/cs_live_fixture" }),
+    };
+    const request = () =>
+      new Request("https://example.test/api/commerce?op=offers&galleryId=gallery");
+    const handler = createCommerceHandler(deps);
+    const offers = await (await handler(request())).json();
+    assert.deepEqual(offers.products, [
+      { id: "digital", name: "Digital original", license: "Personal use only", unit_cents: 2500 },
+    ]);
+    await f.commerce.configurePrice({
+      priceListId: "default",
+      productId: "digital",
+      unitCents: 3900,
+    });
+    assert.equal((await (await handler(request())).json()).products[0].unit_cents, 3900);
+    await f.db.exec("UPDATE catalog_galleries SET published=false WHERE id='gallery'");
+    assert.deepEqual((await (await handler(request())).json()).products, []);
+    const disabled = createCommerceHandler({ ...deps, liveCheckout: undefined });
+    assert.deepEqual(await (await disabled(request())).json(), {
+      products: [],
+      checkoutAvailable: false,
+    });
+    f.deny();
+    assert.notEqual((await handler(request())).status, 200);
+  } finally {
+    await f.db.close();
+  }
+});
+
 test("quote uses database prices/licenses, inherits default and explicit gallery list", async () => {
   const f = await fixture();
   try {

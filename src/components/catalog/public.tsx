@@ -11,6 +11,7 @@ import { ProofPanel } from "./proof-selection";
 import { useProofSelection, type ProofController } from "@/lib/catalog/use-proof";
 import { PreviewImage } from "./preview-image";
 import { ProtectedPhoto } from "./protected-photo";
+import { CheckoutPhoto } from "./checkout-photo";
 
 export function CatalogStatus({
   loading,
@@ -268,7 +269,7 @@ export function CatalogGalleryPage({ id }: { id: string }) {
         )}
         <p className="text-sm text-muted-foreground">
           {gallery.downloadPolicy === "purchased_only"
-            ? "Download policy: purchased files only. Customer downloads are not available yet; a confirmed purchase and valid download entitlement will be required."
+            ? "Download policy: purchased files only. Available purchase options appear in the photo viewer. Downloads require a verified payment and valid authorization."
             : "Download policy: no customer downloads. You can view protected previews and save a proof selection."}
         </p>
       </section>
@@ -417,6 +418,7 @@ function CatalogLightbox({
         </Button>
       </div>
       <PreviewImage key={photo.id} photo={photo} />
+      <CheckoutPhoto key={`buy:${photo.id}`} galleryId={photo.galleryId} photoId={photo.id} />
       {photo.caption && <p className="mt-3 text-center">{photo.caption}</p>}
       {proof.selection && (
         <Button

@@ -1,13 +1,26 @@
 import {
-  acceptSandboxWebhook,
+  acceptConfiguredWebhook,
   CommerceWebhookError,
   type SandboxWebhookConfig,
   type SandboxCommerce,
   type SandboxProvider,
+  type LiveWebhookConfig,
 } from "./stripe-adapter.ts";
 
 export function createSandboxWebhookHandler(
   config: SandboxWebhookConfig | undefined,
+  provider: SandboxProvider,
+  commerce: SandboxCommerce,
+) {
+  return createConfiguredWebhookHandler(
+    config?.environment === "staging" && config.expectedLivemode === false ? config : undefined,
+    provider,
+    commerce,
+  );
+}
+
+export function createConfiguredWebhookHandler(
+  config: SandboxWebhookConfig | LiveWebhookConfig | undefined,
   provider: SandboxProvider,
   commerce: SandboxCommerce,
 ) {
@@ -44,7 +57,7 @@ export function createSandboxWebhookHandler(
         offset += chunk.length;
       }
       return respond(
-        await acceptSandboxWebhook(
+        await acceptConfiguredWebhook(
           new TextDecoder("utf-8", { fatal: true }).decode(raw),
           signature,
           config,
@@ -81,5 +94,26 @@ export function sandboxWebhookConfiguration(
     expectedAccountId: setting("CATALOG_STRIPE_ACCOUNT_ID"),
     expectedLivemode: false,
     environment: "staging",
+    ...(setting("CATALOG_STRIPE_TAX_MODE") === "stripe" ? { taxMode: "stripe" as const } : {}),
+  };
+}
+
+export function liveWebhookConfiguration(
+  setting: (name: string) => string,
+): LiveWebhookConfig | undefined {
+  if (
+    setting("CATALOG_ENV") !== "production" ||
+    setting("CATALOG_LIVE_WEBHOOK_ENABLED") !== "true" ||
+    !/^sk_live_[A-Za-z0-9_]+$/.test(setting("CATALOG_LIVE_STRIPE_SECRET_KEY")) ||
+    !/^whsec_[A-Za-z0-9_]+$/.test(setting("CATALOG_LIVE_STRIPE_WEBHOOK_SECRET")) ||
+    !/^acct_[A-Za-z0-9]+$/.test(setting("CATALOG_LIVE_STRIPE_ACCOUNT_ID"))
+  )
+    return;
+  return {
+    webhookSecret: setting("CATALOG_LIVE_STRIPE_WEBHOOK_SECRET"),
+    expectedAccountId: setting("CATALOG_LIVE_STRIPE_ACCOUNT_ID"),
+    expectedLivemode: true,
+    environment: "production",
+    taxMode: "stripe",
   };
 }

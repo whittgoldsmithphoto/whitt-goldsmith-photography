@@ -2,6 +2,7 @@ import Stripe from "stripe";
 import type { VerifiedPayment } from "./service.ts";
 import type { VerifiedSessionOutcome } from "./session-outcomes.ts";
 import type { VerifiedPaymentReview } from "./payment-review.ts";
+import { verifiedCheckoutTax } from "./stripe-tax.ts";
 
 export class CommerceWebhookError extends Error {
   status: number;
@@ -17,6 +18,7 @@ export interface SandboxOrder {
   provider_payment_id: string | null;
   total_cents: number;
   currency: string;
+  tax_cents?: number;
 }
 export interface SandboxProvider {
   accountId(): Promise<string>;
@@ -32,12 +34,25 @@ export interface SandboxCommerce {
   applySessionOutcome(event: VerifiedSessionOutcome): Promise<{ status: string }>;
   orderById?(id: string): Promise<SandboxOrder | undefined>;
   applyReview?(event: VerifiedPaymentReview): Promise<{ status: string }>;
+  applyTaxed?(
+    event: VerifiedPayment | VerifiedPaymentReview,
+    taxCents: number,
+    review: boolean,
+  ): Promise<{ status: string }>;
 }
 export interface SandboxWebhookConfig {
   webhookSecret: string;
   expectedAccountId: string;
   expectedLivemode: false;
   environment: "staging";
+  taxMode?: "stripe";
+}
+export interface LiveWebhookConfig {
+  webhookSecret: string;
+  expectedAccountId: string;
+  expectedLivemode: true;
+  environment: "production";
+  taxMode: "stripe";
 }
 function fail(message: string, status = 400): never {
   throw new CommerceWebhookError(message, status);
@@ -57,9 +72,23 @@ export async function acceptSandboxWebhook(
   provider: SandboxProvider,
   commerce: SandboxCommerce,
 ) {
+  if (config.environment !== "staging" || config.expectedLivemode !== false)
+    fail("Sandbox webhook is not configured", 503);
+  return acceptConfiguredWebhook(rawBody, signature, config, provider, commerce);
+}
+
+export async function acceptConfiguredWebhook(
+  rawBody: string,
+  signature: string,
+  config: SandboxWebhookConfig | LiveWebhookConfig,
+  provider: SandboxProvider,
+  commerce: SandboxCommerce,
+) {
+  const live = config.environment === "production";
   if (
-    config.expectedLivemode !== false ||
-    config.environment !== "staging" ||
+    !["staging", "production"].includes(config.environment) ||
+    config.expectedLivemode !== live ||
+    (live && config.taxMode !== "stripe") ||
     !/^acct_[A-Za-z0-9]+$/.test(config.expectedAccountId) ||
     !config.webhookSecret.startsWith("whsec_")
   )
@@ -90,7 +119,12 @@ export async function acceptSandboxWebhook(
     timestamps[0] > Math.floor(Date.now() / 1000) + 300
   )
     fail("Invalid webhook signature timestamp", 400);
-  if (event.livemode !== false) fail("Live-mode events are forbidden on this sandbox endpoint");
+  if (event.livemode !== live)
+    fail(
+      live
+        ? "Test-mode events are forbidden on this live endpoint"
+        : "Live-mode events are forbidden on this sandbox endpoint",
+    );
   if (!event.id?.startsWith("evt_")) fail("Invalid event identity");
   // This adapter is for a direct account, not Connect or organization destinations.
   if (event.account || (event as Stripe.Event & { context?: string }).context)
@@ -116,9 +150,15 @@ export async function acceptSandboxWebhook(
     allowPending = false,
     expectedStatus: "complete" | "expired" = "complete",
   ) {
+    if (config.taxMode === "stripe") {
+      const base = order.total_cents - (order.tax_cents || 0);
+      const tax = verifiedCheckoutTax(session, base, expectedStatus === "complete");
+      order.total_cents = base + tax;
+      order.tax_cents = tax;
+    }
     if (
       session.object !== "checkout.session" ||
-      session.livemode !== false ||
+      session.livemode !== live ||
       session.mode !== "payment" ||
       session.id !== order.provider_session_id ||
       session.status !== expectedStatus ||
@@ -126,7 +166,7 @@ export async function acceptSandboxWebhook(
       session.client_reference_id !== order.id ||
       session.metadata?.wgp_order_id !== order.id ||
       session.metadata?.wgp_quote_id !== order.quote_id ||
-      session.metadata?.wgp_environment !== "staging" ||
+      session.metadata?.wgp_environment !== config.environment ||
       session.amount_total !== order.total_cents ||
       session.currency !== order.currency ||
       order.currency !== "usd"
@@ -148,7 +188,7 @@ export async function acceptSandboxWebhook(
       const supplied = event.data.object as Stripe.Dispute;
       if (
         supplied.object !== "dispute" ||
-        supplied.livemode !== false ||
+        supplied.livemode !== live ||
         !supplied.id?.startsWith("dp_")
       )
         fail("Invalid dispute object");
@@ -157,7 +197,7 @@ export async function acceptSandboxWebhook(
       if (
         dispute.id !== supplied.id ||
         dispute.object !== "dispute" ||
-        dispute.livemode !== false ||
+        dispute.livemode !== live ||
         !reference(dispute.charge)?.startsWith("ch_")
       )
         fail("Dispute identity mismatch", 409);
@@ -166,7 +206,7 @@ export async function acceptSandboxWebhook(
       const supplied = event.data.object as Stripe.Charge;
       if (
         supplied.object !== "charge" ||
-        supplied.livemode !== false ||
+        supplied.livemode !== live ||
         !supplied.id?.startsWith("ch_")
       )
         fail("Invalid refund object");
@@ -176,7 +216,7 @@ export async function acceptSandboxWebhook(
     if (
       charge.id !== chargeId ||
       charge.object !== "charge" ||
-      charge.livemode !== false ||
+      charge.livemode !== live ||
       !charge.paid ||
       (!isDispute &&
         (!Number.isSafeInteger(charge.amount_refunded) ||
@@ -194,10 +234,10 @@ export async function acceptSandboxWebhook(
       if (
         intent.id !== paymentId ||
         intent.object !== "payment_intent" ||
-        intent.livemode !== false ||
+        intent.livemode !== live ||
         intent.amount !== charge.amount ||
         intent.currency !== charge.currency ||
-        intent.metadata?.wgp_environment !== "staging" ||
+        intent.metadata?.wgp_environment !== config.environment ||
         !intent.metadata?.wgp_order_id
       )
         fail("Adverse payment identity mismatch", 409);
@@ -209,16 +249,18 @@ export async function acceptSandboxWebhook(
       !order?.provider_session_id ||
       (order.provider_payment_id === null && !commerce.applyReview) ||
       (order.provider_payment_id !== null && order.provider_payment_id !== paymentId) ||
-      charge.amount !== order.total_cents ||
+      (config.taxMode !== "stripe" && charge.amount !== order.total_cents) ||
       charge.currency !== order.currency
     )
       fail("Refund does not match a paid local order", 409);
     const session = await provider.session(order.provider_session_id);
     if (validateSession(session, order) !== paymentId)
       fail("Refund payment identity does not match session", 409);
+    if (charge.amount !== order.total_cents)
+      fail("Refund total does not match tax-inclusive amount", 409);
     const fullRefund = charge.refunded && charge.amount_refunded === charge.amount;
     if (commerce.applyReview) {
-      const result = await commerce.applyReview({
+      const review: VerifiedPaymentReview = {
         eventId: event.id,
         orderId: order.id,
         kind: isDispute ? "dispute" : fullRefund ? "full_refund" : "partial_refund",
@@ -226,13 +268,20 @@ export async function acceptSandboxWebhook(
         paymentId,
         amountCents: order.total_cents,
         currency: "usd",
-      });
+      };
+      if (config.taxMode === "stripe" && !commerce.applyTaxed)
+        fail("Tax settlement is unavailable", 503);
+      const result =
+        config.taxMode === "stripe"
+          ? await commerce.applyTaxed!(review, order.tax_cents!, true)
+          : await commerce.applyReview(review);
       return {
         received: true,
         applied: result.status === "refunded" ? ("refunded" as const) : ("review" as const),
       };
     }
-    if (isDispute || !fullRefund) fail("Payment review ledger is unavailable", 503);
+    if (config.taxMode === "stripe" || isDispute || !fullRefund)
+      fail("Payment review ledger is unavailable", 503);
     await commerce.apply({
       eventId: event.id,
       orderId: order.id,
@@ -248,12 +297,12 @@ export async function acceptSandboxWebhook(
   const supplied = event.data.object as Stripe.Checkout.Session;
   if (
     supplied.object !== "checkout.session" ||
-    supplied.livemode !== false ||
-    !supplied.id?.startsWith("cs_test_")
+    supplied.livemode !== live ||
+    !supplied.id?.startsWith(live ? "cs_live_" : "cs_test_")
   )
     fail("Invalid sandbox Checkout Session");
   const session = await provider.session(supplied.id);
-  if (session.id !== supplied.id || session.livemode !== false)
+  if (session.id !== supplied.id || session.livemode !== live)
     fail("Provider session identity or mode mismatch", 409);
   const order = await commerce.orderBySession(session.id);
   if (!order) fail("Checkout Session has no bound local order", 409);
@@ -262,6 +311,7 @@ export async function acceptSandboxWebhook(
     event.type === "checkout.session.async_payment_failed"
   ) {
     const expired = event.type === "checkout.session.expired";
+    const recordedTotal = order.total_cents;
     validateSession(session, order, true, expired ? "expired" : "complete");
     if (session.payment_status !== "unpaid") fail("Session outcome is not confirmed unpaid", 409);
     const paymentId = reference(session.payment_intent) || null;
@@ -272,7 +322,7 @@ export async function acceptSandboxWebhook(
       if (
         intent.id !== paymentId ||
         intent.object !== "payment_intent" ||
-        intent.livemode !== false ||
+        intent.livemode !== live ||
         intent.amount !== order.total_cents ||
         intent.currency !== order.currency ||
         intent.amount_received !== 0 ||
@@ -286,7 +336,7 @@ export async function acceptSandboxWebhook(
       kind: expired ? "expired" : "async_failed",
       sessionId: session.id,
       paymentId,
-      amountCents: order.total_cents,
+      amountCents: recordedTotal,
       currency: "usd",
     });
     return {
@@ -308,7 +358,7 @@ export async function acceptSandboxWebhook(
   if (
     intent.id !== paymentId ||
     intent.object !== "payment_intent" ||
-    intent.livemode !== false ||
+    intent.livemode !== live ||
     intent.status !== "succeeded" ||
     intent.amount !== order.total_cents ||
     intent.amount_received !== order.total_cents ||
@@ -320,7 +370,7 @@ export async function acceptSandboxWebhook(
     !charge ||
     typeof charge === "string" ||
     charge.object !== "charge" ||
-    charge.livemode !== false ||
+    charge.livemode !== live ||
     reference(charge.payment_intent) !== paymentId ||
     !charge.paid ||
     !charge.captured ||
@@ -332,7 +382,7 @@ export async function acceptSandboxWebhook(
     charge.currency !== order.currency
   )
     fail("Latest charge is not an undisputed, unrefunded full payment", 409);
-  await commerce.apply({
+  const payment: VerifiedPayment = {
     eventId: event.id,
     orderId: order.id,
     kind: "paid",
@@ -340,6 +390,10 @@ export async function acceptSandboxWebhook(
     paymentId,
     amountCents: order.total_cents,
     currency: "usd",
-  });
+  };
+  if (config.taxMode === "stripe") {
+    if (!commerce.applyTaxed) fail("Tax settlement is unavailable", 503);
+    await commerce.applyTaxed(payment, order.tax_cents!, false);
+  } else await commerce.apply(payment);
   return { received: true, applied: "paid" as const };
 }

@@ -47,6 +47,12 @@ const headers = {
 };
 
 export function customerDownloadsEnabled(setting: (name: string) => string) {
+  if (setting("CATALOG_ENV") === "production")
+    return (
+      setting("CATALOG_LIVE_DOWNLOADS_ENABLED") === "true" &&
+      setting("CATALOG_LIVE_RELEASE_ACCEPTED") === "true" &&
+      setting("CATALOG_LIVE_DELIVERY_ACCEPTED") === "true"
+    );
   return (
     setting("CATALOG_ENV") === "staging" &&
     setting("CATALOG_CUSTOMER_DOWNLOADS_ENABLED") === "true" &&

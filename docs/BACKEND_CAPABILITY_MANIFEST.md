@@ -114,5 +114,8 @@ Presence in this inventory does **not** mean a migration is applied to productio
 | `migrations/0018_payment_reviews.sql`                 | Adverse payment review ledger, conservative delivery hold and full-refund revocation.                                          |
 | `migrations/0019_checkout_rate_limits.sql`            | Atomic per-customer checkout/cancellation attempt limiter.                                                                     |
 | `migrations/0020_product_variants.sql`                | Owner-configurable gallery-download and print pricing, required print specifications; unsupported fulfillment remains closed.  |
+| `migrations/0021_taxed_payment_settlement.sql` | Separate live session binding and atomic verified tax/payment settlement; not deployed yet. |
+
+Live-path source addition: `commerce:offers` lists saved active digital prices only for authorized, published, purchasable galleries. `commerce:checkout` and `commerce:cancel-checkout` gain a separate customer-scoped production implementation, guarded by explicit live configuration; the sandbox path remains owner-only. This supersedes the sandbox-only API description above for source capability, not deployed availability. See [activation checklist](LIVE_SALES_IMPLEMENTATION.md).
 
 `scripts/backend-manifest.test.mjs` checks all migration paths, API route declarations and current catalog/commerce/sports operation literals. This is inventory coverage, not proof that documented authorization or provider behavior is correct.
