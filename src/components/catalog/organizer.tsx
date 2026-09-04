@@ -470,6 +470,20 @@ export function CatalogOrganizer() {
                           {new Date(j.updatedAt).toLocaleString()} · {j.bytes.toLocaleString()}{" "}
                           bytes
                         </p>
+                        {j.processingStage && (
+                          <div className="mt-3">
+                            <div className="mb-1 flex justify-between gap-3 text-xs text-muted-foreground">
+                              <span>Stage: {j.processingStage.replaceAll("_", " ")}</span>
+                              <span>{j.progressPercent}%</span>
+                            </div>
+                            <progress
+                              aria-label={`Processing progress for ${j.filename}`}
+                              className="h-2 w-full"
+                              max={100}
+                              value={j.progressPercent}
+                            />
+                          </div>
+                        )}
                         {j.error && <p className="mt-2 text-sm">{j.error}</p>}
                         <details className="mt-2 text-xs">
                           <summary>SHA-256</summary>
@@ -493,6 +507,22 @@ export function CatalogOrganizer() {
                             Retry processing
                           </Button>
                         )}
+                        {j.processingStatus &&
+                          ["queued", "retry", "processing"].includes(j.processingStatus) && (
+                            <Button
+                              className="mt-3 ml-2"
+                              variant="outline"
+                              disabled={busy}
+                              onClick={() =>
+                                void action(async () => {
+                                  await catalogFetch(`op=cancel-processing&id=${j.id}`, {});
+                                  setMessage(`Processing cancelled for ${j.filename}.`);
+                                })
+                              }
+                            >
+                              Cancel processing
+                            </Button>
+                          )}
                         {["reserved", "uploading", "failed"].includes(j.status) && (
                           <p className="mt-2 text-sm">
                             Choose the same file above to retry. Upload reservations expire after

@@ -15,6 +15,7 @@ import { createProofService } from "./proofs.ts";
 import {
   claimMediaJobForPhoto,
   cancelMediaJobForPhoto,
+  advanceMediaJobStage,
   enqueueMediaJob,
   failMediaJob,
 } from "./media-jobs.ts";
@@ -98,9 +99,7 @@ export type PhotoRow = {
 export interface CatalogMedia {
   putOriginal(key: string, bytes: Uint8Array, mime: string): Promise<void>;
   get(key: string): Promise<Uint8Array>;
-  process(
-    bytes: Uint8Array,
-  ): Promise<{
+  process(bytes: Uint8Array): Promise<{
     width: number;
     height: number;
     variants: Record<DerivativeVariantName, Uint8Array>;
@@ -258,6 +257,22 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
         parent_id: string | null;
         title: string;
       }>`select * from catalog_folders order by created_at,id`;
+      const mediaJobRows = await sql<{
+        photo_id: string;
+        status: string;
+        stage: string;
+        progress_percent: number;
+        error_message: string | null;
+        updated_at: Date | string;
+      }>`select photo_id,status,stage,progress_percent,error_message,updated_at
+          from catalog_media_jobs job
+          where transformation_version=(
+            select max(newer.transformation_version) from catalog_media_jobs newer
+            where newer.photo_id=job.photo_id and newer.kind=job.kind
+          )`;
+      const latestMediaJob = new Map<string, (typeof mediaJobRows)[number]>();
+      for (const job of mediaJobRows)
+        if (!latestMediaJob.has(job.photo_id)) latestMediaJob.set(job.photo_id, job);
       return {
         galleries: galleries.map(galleryView),
         photos: all
@@ -270,16 +285,22 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
             revision: p.revision,
           })),
         folders: folders.map((f) => ({ id: f.id, parentId: f.parent_id, title: f.title })),
-        jobs: all.map((p) => ({
-          id: p.id,
-          galleryId: p.gallery_id,
-          filename: p.filename,
-          status: p.status,
-          error: p.error,
-          checksum: p.checksum,
-          bytes: p.bytes,
-          updatedAt: new Date(p.updated_at).toISOString(),
-        })),
+        jobs: all.map((p) => {
+          const mediaJob = latestMediaJob.get(p.id);
+          return {
+            id: p.id,
+            galleryId: p.gallery_id,
+            filename: p.filename,
+            status: p.status,
+            processingStatus: mediaJob?.status ?? null,
+            processingStage: mediaJob?.stage ?? null,
+            progressPercent: mediaJob?.progress_percent ?? (p.status === "ready" ? 100 : 0),
+            error: mediaJob?.error_message ?? p.error,
+            checksum: p.checksum,
+            bytes: p.bytes,
+            updatedAt: new Date(mediaJob?.updated_at ?? p.updated_at).toISOString(),
+          };
+        }),
       };
     },
     async savePhoto(raw: PhotoInput, owner: string) {
@@ -424,7 +445,8 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
           throw new CatalogError("Upload session expired. Start a new upload.", 409);
         if (session.request_signature !== requestSignature)
           throw new CatalogError("This idempotency key belongs to a different upload.", 409);
-        const photos = await sql<PhotoRow>`select * from catalog_photos where id=${session.photo_id}`;
+        const photos =
+          await sql<PhotoRow>`select * from catalog_photos where id=${session.photo_id}`;
         if (!photos[0]) throw new CatalogError("Upload session is unavailable", 409);
         return photos[0];
       };
@@ -494,9 +516,19 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
         const original = await media.get(row.original_key);
         if (original.length !== row.bytes || (await digest(original)) !== row.checksum)
           throw new Error("Original verification failed");
+        if (!(await advanceMediaJobStage(sql, job.id, job.leaseToken, "metadata", 30)))
+          throw new CatalogError(
+            "A newer processing attempt has taken over. Reload its status.",
+            409,
+          );
         const output = await media.process(original);
+        if (!(await advanceMediaJobStage(sql, job.id, job.leaseToken, "derivatives", 50)))
+          throw new CatalogError(
+            "A newer processing attempt has taken over. Reload its status.",
+            409,
+          );
         const storedVariants = new Map<DerivativeVariantName, { key: string; bytes: Uint8Array }>();
-        for (const kind of DERIVATIVE_VARIANT_NAMES) {
+        for (const [variantIndex, kind] of DERIVATIVE_VARIANT_NAMES.entries()) {
           const bytes = output.variants[kind];
           if (!bytes?.length) throw new Error("Missing or empty derivative");
           const checksum = await digest(bytes);
@@ -513,6 +545,19 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
               object_key=excluded.object_key,mime=excluded.mime,bytes=excluded.bytes,checksum=excluded.checksum,
               width=excluded.width,height=excluded.height,updated_at=now()`;
           storedVariants.set(kind, { key, bytes });
+          if (
+            !(await advanceMediaJobStage(
+              sql,
+              job.id,
+              job.leaseToken,
+              "derivatives",
+              55 + Math.round(((variantIndex + 1) / DERIVATIVE_VARIANT_NAMES.length) * 35),
+            ))
+          )
+            throw new CatalogError(
+              "A newer processing attempt has taken over. Reload its status.",
+              409,
+            );
         }
         await sql`insert into catalog_media_variants(photo_id,name,transformation_version,object_key,mime,bytes,checksum,width,height)
           select ${id},'original',${DERIVATIVE_TRANSFORMATION_VERSION},${row.original_key},${row.mime},${row.bytes},${row.checksum},${output.width},${output.height}
@@ -542,6 +587,7 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
           returning id
         ) update catalog_media_jobs set
           status='completed',lease_token=null,worker_id=null,leased_until=null,
+          stage='ready',progress_percent=100,
           error_code=null,error_message=null,completed_at=now(),updated_at=now()
           where id=${job.id} and status='processing' and lease_token=${job.leaseToken}
             and exists(select 1 from completed_photo)

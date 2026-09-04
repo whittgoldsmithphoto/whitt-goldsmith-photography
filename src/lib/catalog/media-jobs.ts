@@ -10,6 +10,16 @@ export type MediaJob = {
   attempts: number;
   maxAttempts: number;
   leaseToken: string | null;
+  stage:
+    | "pending"
+    | "uploaded"
+    | "validating"
+    | "metadata"
+    | "derivatives"
+    | "ready"
+    | "failed"
+    | "cancelled";
+  progressPercent: number;
 };
 
 type MediaJobRow = {
@@ -22,6 +32,8 @@ type MediaJobRow = {
   attempts: number;
   max_attempts: number;
   lease_token: string | null;
+  stage: MediaJob["stage"];
+  progress_percent: number;
 };
 
 function view(row: MediaJobRow): MediaJob {
@@ -35,6 +47,8 @@ function view(row: MediaJobRow): MediaJob {
     attempts: row.attempts,
     maxAttempts: row.max_attempts,
     leaseToken: row.lease_token,
+    stage: row.stage,
+    progressPercent: row.progress_percent,
   };
 }
 
@@ -63,7 +77,9 @@ export async function enqueueMediaJob(
       available_at=case when catalog_media_jobs.status in ('failed','cancelled') then now() else catalog_media_jobs.available_at end,
       error_code=case when catalog_media_jobs.status in ('failed','cancelled') then null else catalog_media_jobs.error_code end,
       error_message=case when catalog_media_jobs.status in ('failed','cancelled') then null else catalog_media_jobs.error_message end,
-      completed_at=case when catalog_media_jobs.status in ('failed','cancelled') then null else catalog_media_jobs.completed_at end
+      completed_at=case when catalog_media_jobs.status in ('failed','cancelled') then null else catalog_media_jobs.completed_at end,
+      stage=case when catalog_media_jobs.status in ('failed','cancelled') then 'uploaded' else catalog_media_jobs.stage end,
+      progress_percent=case when catalog_media_jobs.status in ('failed','cancelled') then 0 else catalog_media_jobs.progress_percent end
     returning *`;
   return view(rows[0]);
 }
@@ -73,11 +89,34 @@ export async function loadMediaJob(sql: Sql, id: string) {
   return rows[0] ? view(rows[0]) : null;
 }
 
+type ProcessingStage = "validating" | "metadata" | "derivatives";
+
+export async function advanceMediaJobStage(
+  sql: Sql,
+  id: string,
+  leaseToken: string,
+  stage: ProcessingStage,
+  progressPercent: number,
+) {
+  if (!Number.isInteger(progressPercent) || progressPercent < 1 || progressPercent > 99)
+    throw new Error("Invalid media job progress");
+  const rows = await sql.query<{ id: string }>(
+    `update catalog_media_jobs set stage=$3,progress_percent=$4,updated_at=now()
+      where id=$1 and status='processing' and lease_token=$2 and progress_percent < $4
+        and (case stage when 'validating' then 1 when 'metadata' then 2 when 'derivatives' then 3 else 0 end)
+          <= (case $3 when 'validating' then 1 when 'metadata' then 2 when 'derivatives' then 3 else -1 end)
+      returning id`,
+    [id, leaseToken, stage, progressPercent],
+  );
+  return rows.length === 1;
+}
+
 export async function cancelMediaJobForPhoto(sql: Sql, photoId: string, ownerId: string) {
   const rows = await sql.query<{ id: string }>(
     `with cancelled as (
       update catalog_media_jobs set
         status='cancelled',lease_token=null,worker_id=null,leased_until=null,
+        stage='cancelled',
         error_code='cancelled_by_owner',error_message='Processing cancelled by owner.',updated_at=now()
       where photo_id=$1 and owner_id=$2 and status in ('queued','retry','processing')
       returning photo_id
@@ -124,7 +163,7 @@ export async function claimNextMediaJob(sql: Sql, workerId: string, leaseSeconds
       limit 1
     )
     update catalog_media_jobs j set
-      status='processing',attempts=j.attempts+1,lease_token=$1,worker_id=$2,
+      status='processing',stage='validating',progress_percent=10,attempts=j.attempts+1,lease_token=$1,worker_id=$2,
       leased_until=now()+($3::text || ' seconds')::interval,
       error_code=null,error_message=null,updated_at=now()
     from candidate where j.id=candidate.id
@@ -146,7 +185,7 @@ export async function claimMediaJobForPhoto(
   const leaseToken = crypto.randomUUID();
   const rows = await sql.query<MediaJobRow>(
     `update catalog_media_jobs set
-      status='processing',attempts=attempts+1,lease_token=$2,worker_id=$3,
+      status='processing',stage='validating',progress_percent=10,attempts=attempts+1,lease_token=$2,worker_id=$3,
       leased_until=now()+($4::text || ' seconds')::interval,
       error_code=null,error_message=null,updated_at=now()
     where photo_id=$1 and attempts < max_attempts and (
@@ -162,6 +201,7 @@ export async function claimMediaJobForPhoto(
 export async function completeMediaJob(sql: Sql, id: string, leaseToken: string) {
   const rows = await sql`update catalog_media_jobs set
     status='completed',lease_token=null,worker_id=null,leased_until=null,
+    stage='ready',progress_percent=100,
     error_code=null,error_message=null,completed_at=now(),updated_at=now()
     where id=${id} and status='processing' and lease_token=${leaseToken}
     returning id`;
@@ -181,6 +221,7 @@ export async function failMediaJob(
   const rows = await sql.query<{ id: string }>(
     `update catalog_media_jobs set
       status=case when attempts >= max_attempts then 'failed' else 'retry' end,
+      stage='failed',
       available_at=now()+($3::text || ' seconds')::interval,
       lease_token=null,worker_id=null,leased_until=null,
       error_code=$4,error_message=$5,updated_at=now()

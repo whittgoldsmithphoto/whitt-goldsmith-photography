@@ -36,14 +36,17 @@ async function fixture() {
     await readFile(new URL("../../../migrations/0023_media_jobs.sql", import.meta.url), "utf8"),
   );
   await db.exec(
+    await readFile(new URL("../../../migrations/0024_media_variants.sql", import.meta.url), "utf8"),
+  );
+  await db.exec(
     await readFile(
-      new URL("../../../migrations/0024_media_variants.sql", import.meta.url),
+      new URL("../../../migrations/0025_upload_sessions.sql", import.meta.url),
       "utf8",
     ),
   );
   await db.exec(
     await readFile(
-      new URL("../../../migrations/0025_upload_sessions.sql", import.meta.url),
+      new URL("../../../migrations/0026_media_job_progress.sql", import.meta.url),
       "utf8",
     ),
   );
@@ -574,7 +577,11 @@ test("expired processing attempts cannot overwrite a successful retry", async ()
     assert.equal((await f.catalog.process(r.id, "owner")).status, "ready");
     release();
     await oldResult;
-    assert.equal((await f.catalog.ownerIndex()).jobs[0].status, "ready");
+    const job = (await f.catalog.ownerIndex()).jobs[0];
+    assert.equal(job.status, "ready");
+    assert.equal(job.processingStatus, "completed");
+    assert.equal(job.processingStage, "ready");
+    assert.equal(job.progressPercent, 100);
   } finally {
     await f.db.close();
   }
@@ -705,9 +712,16 @@ test("an asynchronous upload stores the immutable original and job without publi
     const uploaded = await f.catalog.uploadOriginal(reservation.id, f.bytes, "owner");
     assert.equal(uploaded.status, "uploaded");
     assert.ok(uploaded.jobId);
-    assert.equal(f.objects.size, 1, "only the immutable original is durable before the worker runs");
+    assert.equal(
+      f.objects.size,
+      1,
+      "only the immutable original is durable before the worker runs",
+    );
     assert.equal((await f.catalog.ownerIndex()).photos.length, 0);
-    const jobs = await f.sql<{ status: string; attempts: number }>`select status,attempts from catalog_media_jobs`;
+    const jobs = await f.sql<{
+      status: string;
+      attempts: number;
+    }>`select status,attempts from catalog_media_jobs`;
     assert.deepEqual(jobs, [{ status: "queued", attempts: 0 }]);
     assert.equal((await f.catalog.process(reservation.id, "owner")).status, "ready");
   } finally {

@@ -49,6 +49,9 @@ export type OwnerCatalog = Omit<PublicCatalog, "photos"> & {
     galleryId: string;
     filename: string;
     status: string;
+    processingStatus: string | null;
+    processingStage: string | null;
+    progressPercent: number;
     error: string | null;
     updatedAt: string;
     checksum: string;
