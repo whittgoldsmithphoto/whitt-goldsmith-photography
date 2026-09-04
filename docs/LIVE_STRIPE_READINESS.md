@@ -1,6 +1,10 @@
 # Live Stripe readiness
 
-## Latest implementation and deployment
+## Latest actual-provider acceptance
+
+The deployed sandbox checkout → signed webhook → paid order → byte-identical private R2 download → full refund → server-denied download sequence passed on 2026-09-04 UTC. See [provider evidence and remaining cases](STRIPE_PROVIDER_ACCEPTANCE_2026-09-04.md). All five temporary acceptance switches have been returned to false. Real payment processing remains disabled; tax, production configuration and the remaining failure cases are not yet accepted.
+
+## Earlier implementation and deployment snapshot (before provider acceptance)
 
 - Source `38865c2` pushed to `backend/resource-foundation`; earlier branches remain intact.
 - 351 tests pass, typecheck passes, lint has zero errors and six existing warnings. All three local browser suites pass, including customer history, payment-status polling, synthetic original delivery and refund revocation. These are not actual Stripe/R2 purchase acceptance.

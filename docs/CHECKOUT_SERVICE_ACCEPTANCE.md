@@ -1,6 +1,6 @@
 # Sandbox checkout acceptance
 
-Status: **wired owner-only sandbox implementation, off by default; full live-provider acceptance outstanding**. This describes current source, not production activation. Public checkout remains unavailable.
+Status: **owner-only sandbox happy path, actual R2 download and full-refund revocation verified; test gates returned off**. See [deployed provider evidence](STRIPE_PROVIDER_ACCEPTANCE_2026-09-04.md). Other provider failure cases and all live-payment acceptance remain outstanding. Public checkout remains unavailable.
 
 ## Implemented boundaries
 
@@ -27,8 +27,8 @@ Service fixtures cover immutable retries, foreign customers, browser-total rejec
 
 ## Gates still outstanding
 
-1. Apply/read back new migrations in staging and deploy the exact reviewed revision before provider testing. Do not infer deployment from local tests.
-2. Run actual owner sandbox Checkout Session → signed webhook → exact local order/entitlement → authorized private R2 file → full refund → revoked delivery. Include duplicate events, provider timeouts and independent PostgreSQL connection contention.
+1. Staging migrations and source deployment are verified. Preserve separate production configuration and migration acceptance before live activation.
+2. Actual owner sandbox checkout, signed paid event, authorized private R2 download and full-refund revocation passed. Still verify duplicate-event readback/counts, declines/3DS, provider timeouts and independent PostgreSQL connection contention.
 3. Reconcile stale/unbound attempts and unsettled orders with a scheduled durable job; expire outstanding Stripe URLs when catalog access changes, and test cancellation/payment races against Stripe.
 4. Complete partial-refund allocation and dispute outcome resolution before claiming those workflows are fully supported; current policy is a conservative hold.
 5. Decide real products/prices, seller jurisdiction, tax treatment, license/refund rules, receipt requirements and download limits. Implement a real tax adapter; never reuse sandbox zero-tax gates for live charging.
