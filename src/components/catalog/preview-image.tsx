@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { CatalogPhoto } from "@/lib/catalog/types";
+import { ProtectedPhoto } from "./protected-photo";
 
 // The viewer always requests the authorized watermarked derivative, never an original.
 export function PreviewImage({ photo }: { photo: CatalogPhoto }) {
@@ -29,7 +30,7 @@ export function PreviewImage({ photo }: { photo: CatalogPhoto }) {
             </Button>
           </div>
         ) : (
-          <img
+          <ProtectedPhoto
             key={attempt}
             src={source}
             alt={photo.caption || photo.filename}

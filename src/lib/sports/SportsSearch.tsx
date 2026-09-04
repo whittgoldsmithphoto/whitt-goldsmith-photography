@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { ProtectedPhoto } from "@/components/catalog/protected-photo";
 import type { SportsSearchResult } from "./repository";
 
 export function SportsSearch() {
@@ -80,7 +81,7 @@ export function SportsSearch() {
             href={`/galleries/${encodeURIComponent(photo.galleryId)}`}
             className="space-y-1 rounded border border-border p-2"
           >
-            <img
+            <ProtectedPhoto
               loading="lazy"
               className="aspect-[4/3] w-full object-cover"
               src={photo.thumbSrc}

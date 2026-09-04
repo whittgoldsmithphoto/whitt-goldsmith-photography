@@ -97,6 +97,8 @@ try {
         body: JSON.stringify({ error: "Fixture storage unavailable. No files changed." }),
       });
     if (current === "network-error") return route.abort("failed");
+    if (current === "invalid-success")
+      return route.fulfill({ contentType: "application/json", body: "{}" });
     return route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -141,6 +143,13 @@ try {
   mode = "network-error";
   await check();
   await panel.getByRole("alert").waitFor();
+  assert.equal(await panel.getByText(/^VERIFIED:/).count(), 0);
+  mode = "invalid-success";
+  await check();
+  await panel
+    .getByRole("alert")
+    .getByText(/invalid integrity result/)
+    .waitFor();
   assert.equal(await panel.getByText(/^VERIFIED:/).count(), 0);
   mode = "verified";
   await check();

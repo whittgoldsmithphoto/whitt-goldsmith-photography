@@ -6,6 +6,7 @@ Recorded September 3, 2026 (EDT). Scope: review branch `audit/server-catalog`, i
 
 - Applied staging migrations 0008–0010 in one guarded transaction. The SQL required the known private staging photograph and expected migration baseline, and refused already-applied batches. Neon listed all ten migration records afterward.
 - Applied 0011–0012 in a second guarded transaction; Neon visibly listed all twelve migration names. This adds terminal session outcomes and gallery instructions/download policy, without enabling checkout or changing gallery publication.
+- Applied 0013 in a third guarded transaction. The final customer-download authorization function is installed, but the delivery and Stripe acceptance flags remain off.
 - Deployed initial combined Worker version `ae977d91-3609-4039-a8f1-0999d01a067c`. Final release information is recorded below when verified.
 - Owner signed in and opened the existing private, unpublished three-photo football gallery. All three photographs remained ready.
 - Downloaded the **actually served** three 480px thumbnails and one 2000×1333 preview through the signed-in browser's observed page assets. `sharp.metadata()` found no EXIF, XMP, IPTC or ICC in any of the four responses. Earlier local comparisons showed identical decoded pixels before/after filtering. This verifies delivery sanitization, not a rewrite of old R2 objects.
@@ -27,6 +28,8 @@ Recorded September 3, 2026 (EDT). Scope: review branch `audit/server-catalog`, i
 - Dependency advisory audit was attempted but npm's registry audit endpoint returned HTTP 400/retirement errors. No clean vulnerability-audit result is claimed, and dependencies were not blindly upgraded.
 
 ## Preserved files and release method
+
+Feature checkpoint `6aae6f7` was committed and successfully pushed to `origin/audit/server-catalog`. Before that push the combined release passed **205 script tests + 99 TypeScript tests (304 total)**, typechecking, lint (zero errors/six baseline warnings), Cloudflare build and isolated-staging guard. Additional anti-piracy UI work is tracked in a later commit, not silently included in this checkpoint.
 
 The working directory already had unrelated deleted tracked stock assets and `scripts/grok-pwa-shared.d.mts`. Those deletions are excluded from this change, not silently restored or committed. The release snapshot starts from tracked HEAD files and overlays authored additions/modifications, retaining baseline assets exactly as they remain in Git. That complete snapshot is what is built/deployed/tested; the incomplete working directory is not described as independently green.
 

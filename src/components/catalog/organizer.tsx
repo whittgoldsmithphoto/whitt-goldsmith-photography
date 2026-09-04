@@ -313,7 +313,9 @@ export function CatalogOrganizer() {
                   <a
                     className="inline-block underline"
                     href={`/api/catalog?op=media&id=${encodeURIComponent(photoDraft.id)}&kind=original&owner=1`}
-                    download
+                    download={
+                      photos.find((photo) => photo.id === photoDraft.id)?.filename || "original"
+                    }
                   >
                     Download private original (owner only)
                   </a>

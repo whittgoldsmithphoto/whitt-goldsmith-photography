@@ -9,19 +9,47 @@ export function IntegrityPanel({ photoId }: { photoId: string }) {
     setBusy(true);
     setError("");
     setResult(null);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 90_000);
     try {
       const response = await fetch("/api/catalog-integrity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ photoId }),
         cache: "no-store",
+        signal: controller.signal,
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Integrity check unavailable");
+      if (
+        !body ||
+        typeof body !== "object" ||
+        Array.isArray(body) ||
+        body.photoId !== photoId ||
+        !["verified", "mismatch", "missing"].includes(body.status) ||
+        typeof body.checkedAt !== "string" ||
+        !Number.isFinite(Date.parse(body.checkedAt)) ||
+        !Number.isInteger(body.expectedBytes) ||
+        body.expectedBytes < 1 ||
+        body.expectedBytes > 20 * 1024 * 1024 ||
+        typeof body.message !== "string" ||
+        body.message.length < 1 ||
+        body.message.length > 1000
+      )
+        throw new Error(
+          "The server returned an invalid integrity result. No verification was recorded; retry the check.",
+        );
       setResult(body);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Integrity check unavailable");
+      setError(
+        controller.signal.aborted
+          ? "Integrity check timed out. No verification was recorded; retry the check."
+          : err instanceof Error
+            ? err.message
+            : "Integrity check unavailable",
+      );
     } finally {
+      clearTimeout(timer);
       setBusy(false);
     }
   }

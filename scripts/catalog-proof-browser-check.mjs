@@ -241,6 +241,41 @@ try {
       `Inbox overflow at ${width}`,
     );
   }
+  async function checkPreviewDeterrent(image) {
+    assert.deepEqual(
+      await image.evaluate((element) => {
+        const context = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+        element.dispatchEvent(context);
+        const drag = new Event("dragstart", { bubbles: true, cancelable: true });
+        element.dispatchEvent(drag);
+        return {
+          context: context.defaultPrevented,
+          drag: drag.defaultPrevented,
+          draggable: element.draggable,
+          selection: getComputedStyle(element).userSelect,
+        };
+      }),
+      { context: true, drag: true, draggable: false, selection: "none" },
+    );
+    await firstPage
+      .getByText("Protected preview. Original downloads require permission.", { exact: true })
+      .last()
+      .waitFor();
+  }
+  await checkPreviewDeterrent(
+    firstPage.getByRole("button", { name: "Open synthetic.jpg", exact: true }).locator("img"),
+  );
+  assert.equal(
+    await firstPage
+      .getByRole("button", { name: "Copy gallery link", exact: true })
+      .evaluate((element) => {
+        const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+        element.dispatchEvent(event);
+        return event.defaultPrevented;
+      }),
+    false,
+    "Non-photo controls keep normal context menus",
+  );
   let simulatedPreviewFailure = false;
   await firstPage.route("**/api/catalog?op=media&**", async (route) => {
     if (route.request().url().includes("previewAttempt=0") && !simulatedPreviewFailure) {
@@ -252,6 +287,7 @@ try {
   await firstPage.getByRole("button", { name: "Retry preview", exact: true }).click();
   await firstPage.getByRole("button", { name: "Zoom preview", exact: true }).click();
   await firstPage.getByRole("button", { name: "Fit preview to screen", exact: true }).click();
+  await checkPreviewDeterrent(firstPage.getByRole("dialog").locator("img"));
   await firstPage
     .getByRole("dialog")
     .getByRole("button", { name: "Selected favorite", exact: true })
@@ -504,11 +540,9 @@ try {
   await quoteForm.getByLabel("Product", { exact: true }).selectOption(productId);
   await quoteForm.getByRole("button", { name: "Preview server quote", exact: true }).click();
   await quoteForm.getByText("Pre-tax preview: $25.00 USD", { exact: true }).waitFor();
-  const overrideForm = ownerPage
-    .locator("form")
-    .filter({
-      has: ownerPage.getByRole("heading", { name: "Gallery price override", exact: true }),
-    });
+  const overrideForm = ownerPage.locator("form").filter({
+    has: ownerPage.getByRole("heading", { name: "Gallery price override", exact: true }),
+  });
   await overrideForm.getByLabel("Gallery ID", { exact: true }).fill(gallery.id);
   await overrideForm.getByLabel("Price list", { exact: true }).selectOption(listId);
   await overrideForm.getByRole("button", { name: "Save gallery pricing", exact: true }).click();

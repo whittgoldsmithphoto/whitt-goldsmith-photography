@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { ProofPanel } from "./proof-selection";
 import { useProofSelection, type ProofController } from "@/lib/catalog/use-proof";
 import { PreviewImage } from "./preview-image";
+import { ProtectedPhoto } from "./protected-photo";
 
 export function CatalogStatus({
   loading,
@@ -38,7 +39,7 @@ function Card({ gallery, photos }: { gallery: CatalogGallery; photos: CatalogPho
       className="group overflow-hidden rounded-xl border border-border bg-card focus-visible:outline-2 focus-visible:outline-offset-4"
     >
       {cover && (
-        <img
+        <ProtectedPhoto
           src={cover.thumbSrc}
           alt=""
           loading="lazy"
@@ -110,7 +111,7 @@ export function CatalogIndex({
       </div>
       {home && photos[0] && (
         <Link to="/galleries/$galleryId" params={{ galleryId: photos[0].galleryId }}>
-          <img
+          <ProtectedPhoto
             src={photos[0].src}
             alt={photos[0].filename}
             className="mb-12 max-h-[70vh] w-full rounded-xl object-contain"
@@ -245,7 +246,7 @@ export function CatalogGalleryPage({ id }: { id: string }) {
               onClick={() => setOpen(i)}
               className="overflow-hidden rounded-md focus-visible:outline-2 focus-visible:outline-offset-4"
             >
-              <img
+              <ProtectedPhoto
                 src={p.thumbSrc}
                 alt={p.filename}
                 loading="lazy"

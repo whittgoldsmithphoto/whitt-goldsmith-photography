@@ -75,6 +75,7 @@ export async function catalogRequest(request: Request): Promise<Response> {
           "0010_folder_revisions.sql",
           "0011_commerce_session_outcomes.sql",
           "0012_gallery_customer_policy.sql",
+          "0013_customer_download_authorization.sql",
         ];
         return Response.json(
           {
