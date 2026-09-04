@@ -113,5 +113,6 @@ Presence in this inventory does **not** mean a migration is applied to productio
 | `migrations/0017_checkout_attempts.sql`               | Immutable sandbox provider request snapshots, session lifecycle and customer-history index; no production application implied. |
 | `migrations/0018_payment_reviews.sql`                 | Adverse payment review ledger, conservative delivery hold and full-refund revocation.                                          |
 | `migrations/0019_checkout_rate_limits.sql`            | Atomic per-customer checkout/cancellation attempt limiter.                                                                     |
+| `migrations/0020_product_variants.sql`                | Owner-configurable gallery-download and print pricing, required print specifications; unsupported fulfillment remains closed.  |
 
 `scripts/backend-manifest.test.mjs` checks all migration paths, API route declarations and current catalog/commerce/sports operation literals. This is inventory coverage, not proof that documented authorization or provider behavior is correct.

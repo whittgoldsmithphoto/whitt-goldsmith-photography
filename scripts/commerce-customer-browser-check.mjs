@@ -51,7 +51,7 @@ const server = await createServer({
     },
   ],
 });
-let browser;
+let browser, diagnosticPage;
 try {
   const runtime = await server.ssrLoadModule("/src/lib/runtime-env.server.ts");
   assert.equal(Boolean(runtime.databaseConnectionString()), false);
@@ -127,6 +127,7 @@ try {
   const denied = await other.request.get(`${origin}/api/commerce?op=order&id=${order.id}`);
   assert.notEqual(denied.status(), 200, "Other account cannot read order detail");
   const page = await customer.newPage();
+  page.setDefaultTimeout(30000);
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(`${origin}/purchases`);
@@ -179,10 +180,68 @@ try {
     data: { op: "issue", entitlementId: entitlement.id },
   });
   assert.notEqual(revoked.status(), 200, "Refund revokes future download authorization");
+  // Owner configuration uses real authenticated HTTP and the migrated database.
+  const owner = await browser.newContext();
+  process.env.OWNER_USER_IDS = await signup(owner);
+  const ownerPage = await owner.newPage();
+  diagnosticPage = ownerPage;
+  ownerPage.setDefaultTimeout(30000);
+  console.log("Checking owner pricing editor");
+  ownerPage.on("pageerror", (error) => errors.push(error.message));
+  await ownerPage.goto(`${origin}/sell`);
+  const productForm = ownerPage
+    .locator("form")
+    .filter({ has: ownerPage.getByRole("heading", { name: "2. Product details", exact: true }) });
+  await productForm.getByLabel("Product type", { exact: true }).selectOption("print");
+  await productForm.getByLabel("Product ID", { exact: true }).fill("browser-print");
+  await productForm.getByLabel("Name", { exact: true }).fill("8x10 browser print");
+  await productForm.getByLabel("License terms", { exact: true }).fill("Synthetic personal display");
+  await productForm.getByLabel("Width in inches").fill("8");
+  await productForm.getByLabel("Height in inches").fill("10");
+  await productForm.getByLabel("Paper / finish").fill("Lustre");
+  assert.equal(await productForm.getByLabel("Available for quote previews").isDisabled(), true);
+  await productForm.getByRole("button", { name: "Save product", exact: true }).click();
+  await ownerPage.getByText("browser-print · 8x10 browser print", { exact: false }).waitFor();
+  await productForm.getByLabel("Edit saved product").selectOption("browser-print");
+  assert.equal(Number(await productForm.getByLabel("Width in inches").inputValue()), 8);
+  await productForm.getByLabel("Paper / finish").fill("Matte");
+  await productForm.getByRole("button", { name: "Save product", exact: true }).click();
+  await ownerPage.getByText("in · Matte", { exact: false }).waitFor();
+  const priceForm = ownerPage.locator("form").filter({
+    has: ownerPage.getByRole("heading", { name: "3. Set a product price", exact: true }),
+  });
+  await priceForm.getByLabel("Price list", { exact: true }).selectOption("fixture-default");
+  await priceForm.getByLabel("Product", { exact: true }).selectOption("browser-print");
+  await priceForm.getByLabel("Price in cents").fill("1800");
+  await priceForm.getByRole("button", { name: "Save price", exact: true }).click();
+  await ownerPage
+    .getByRole("button", { name: "Edit price for 8x10 browser print in Fixture", exact: true })
+    .waitFor();
+  await ownerPage.reload();
+  await ownerPage
+    .getByRole("button", { name: "Edit price for 8x10 browser print in Fixture", exact: true })
+    .click();
+  assert.equal(await priceForm.getByLabel("Price in cents").inputValue(), "1800");
+  const [persistedPrint] = await sql.query(
+    "SELECT finish,active FROM commerce_products WHERE id='browser-print'",
+  );
+  assert.deepEqual(persistedPrint, { finish: "Matte", active: false });
+  const forbiddenPrice = await other.request.post(`${origin}/api/commerce?op=price`, {
+    headers: { Origin: origin },
+    data: { priceListId: "fixture-default", productId: "browser-print", unitCents: 1 },
+  });
+  assert.equal(forbiddenPrice.status(), 403);
+  console.log(
+    "PASS: owner product/print specification editing, saved price loading after reload, persistence and non-owner price-mutation denial.",
+  );
   assert.deepEqual(errors, []);
   console.log(
     "PASS: real local auth/order isolation, history/detail, bounded pending polling to paid, cancellation does not mutate payment, actual UI synthetic-byte download through integrity/authorization, attempt counting, other-account token denial, and refund UI/server revocation. Provider event inputs and R2 binding are fixtures, NOT Stripe/R2 live acceptance.",
   );
+} catch (error) {
+  console.error(error);
+  if (diagnosticPage) console.error(await diagnosticPage.locator("body").innerText());
+  throw error;
 } finally {
   await browser?.close();
   await server.close();

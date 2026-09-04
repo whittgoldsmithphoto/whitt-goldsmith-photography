@@ -2,7 +2,17 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { apiFetch } from "@/lib/auth/api-fetch";
 import type { Quote } from "@/lib/catalog-commerce/service";
 
-type Product = { id: string; name: string; license: string; active: boolean };
+type Product = {
+  id: string;
+  name: string;
+  license: string;
+  active: boolean;
+  kind: "digital_photo" | "gallery_download" | "print";
+  width_inches?: string;
+  height_inches?: string;
+  finish?: string;
+  minimum_dpi?: number;
+};
 type PriceList = { id: string; name: string; is_default: boolean };
 type Pricing = {
   products: Product[];
@@ -52,6 +62,10 @@ export function CommercePricing() {
   const [quote, setQuote] = useState<Quote>();
   const [sandboxAvailable, setSandboxAvailable] = useState(false);
   const [section, setSection] = useState<SellingSection>("pricing");
+  const [editingProduct, setEditingProduct] = useState<Product>();
+  const [productKind, setProductKind] = useState<Product["kind"]>("digital_photo");
+  const [priceListId, setPriceListId] = useState("");
+  const [pricedProductId, setPricedProductId] = useState("");
   const reload = useCallback(async () => {
     setError("");
     try {
@@ -224,17 +238,61 @@ export function CommercePricing() {
                 </button>
               </form>
               <form
+                key={editingProduct?.id || "new-product"}
                 className={panelClass}
                 onSubmit={(e) =>
                   void save(e, "product", (f) => ({
                     id: String(f.get("id")),
                     name: String(f.get("name")),
                     license: String(f.get("license")),
-                    active: f.get("active") === "on",
+                    active: productKind === "digital_photo" && f.get("active") === "on",
+                    kind: productKind,
+                    ...(productKind === "print"
+                      ? {
+                          widthInches: Number(f.get("width")),
+                          heightInches: Number(f.get("height")),
+                          finish: String(f.get("finish")),
+                          minimumDpi: Number(f.get("dpi")),
+                        }
+                      : {}),
                   }))
                 }
               >
-                <h2 className="text-lg font-semibold">2. Create or update a digital product</h2>
+                <h2 className="text-lg font-semibold">2. Product details</h2>
+                <label className="block">
+                  Edit saved product
+                  <select
+                    aria-label="Edit saved product"
+                    className={fieldClass}
+                    value={editingProduct?.id || ""}
+                    onChange={(event) => {
+                      const product = data.products.find((item) => item.id === event.target.value);
+                      setEditingProduct(product);
+                      setProductKind(product?.kind || "digital_photo");
+                    }}
+                  >
+                    <option value="">Create a new product</option>
+                    {data.products.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  Product type
+                  <select
+                    aria-label="Product type"
+                    className={fieldClass}
+                    value={productKind}
+                    disabled={Boolean(editingProduct)}
+                    onChange={(event) => setProductKind(event.target.value as Product["kind"])}
+                  >
+                    <option value="digital_photo">Individual digital download</option>
+                    <option value="gallery_download">Whole gallery / album download</option>
+                    <option value="print">Physical print</option>
+                  </select>
+                </label>
                 <label className="block">
                   Product ID
                   <input
@@ -242,6 +300,8 @@ export function CommercePricing() {
                     name="id"
                     maxLength={150}
                     placeholder="personal-digital"
+                    defaultValue={editingProduct?.id}
+                    readOnly={Boolean(editingProduct)}
                     className={fieldClass}
                   />
                 </label>
@@ -252,6 +312,7 @@ export function CommercePricing() {
                     name="name"
                     maxLength={160}
                     placeholder="Full-resolution personal download"
+                    defaultValue={editingProduct?.name}
                     className={fieldClass}
                   />
                 </label>
@@ -261,13 +322,83 @@ export function CommercePricing() {
                     aria-label="License terms"
                     required
                     name="license"
+                    defaultValue={editingProduct?.license}
                     maxLength={4000}
                     rows={3}
                     className={fieldClass}
                   />
                 </label>
+                {productKind === "print" && (
+                  <fieldset className="space-y-3">
+                    <legend>Print specifications — one product per size and finish</legend>
+                    <label className="block">
+                      Width in inches
+                      <input
+                        className={fieldClass}
+                        required
+                        name="width"
+                        type="number"
+                        min="0.01"
+                        max="9999.99"
+                        step="0.01"
+                        defaultValue={editingProduct?.width_inches}
+                      />
+                    </label>
+                    <label className="block">
+                      Height in inches
+                      <input
+                        className={fieldClass}
+                        required
+                        name="height"
+                        type="number"
+                        min="0.01"
+                        max="9999.99"
+                        step="0.01"
+                        defaultValue={editingProduct?.height_inches}
+                      />
+                    </label>
+                    <label className="block">
+                      Paper / finish
+                      <input
+                        className={fieldClass}
+                        required
+                        name="finish"
+                        maxLength={80}
+                        placeholder="Lustre"
+                        defaultValue={editingProduct?.finish || ""}
+                      />
+                    </label>
+                    <label className="block">
+                      Minimum DPI
+                      <input
+                        className={fieldClass}
+                        required
+                        name="dpi"
+                        type="number"
+                        min="72"
+                        max="600"
+                        step="1"
+                        defaultValue={editingProduct?.minimum_dpi || 150}
+                      />
+                    </label>
+                  </fieldset>
+                )}
+                {productKind !== "digital_photo" && (
+                  <p role="status" className="text-sm text-muted-foreground">
+                    You can save this product and its prices now. Sales remain disabled until{" "}
+                    {productKind === "print"
+                      ? "print fulfillment and shipping"
+                      : "gallery packaging and delivery"}{" "}
+                    are connected.
+                  </p>
+                )}
                 <label className="flex gap-2">
-                  <input type="checkbox" name="active" />
+                  <input
+                    type="checkbox"
+                    name="active"
+                    defaultChecked={editingProduct?.active}
+                    disabled={productKind !== "digital_photo"}
+                  />
                   Available for quote previews
                 </label>
                 <button disabled={busy} className={buttonClass}>
@@ -287,7 +418,14 @@ export function CommercePricing() {
                 <h2 className="text-lg font-semibold">3. Set a product price</h2>
                 <label className="block">
                   Price list
-                  <select aria-label="Price list" required name="list" className={fieldClass}>
+                  <select
+                    aria-label="Price list"
+                    required
+                    name="list"
+                    className={fieldClass}
+                    value={priceListId}
+                    onChange={(event) => setPriceListId(event.target.value)}
+                  >
                     <option value="">Choose a list</option>
                     {data.priceLists.map((p) => (
                       <option key={p.id} value={p.id}>
@@ -298,7 +436,14 @@ export function CommercePricing() {
                 </label>
                 <label className="block">
                   Product
-                  <select aria-label="Product" required name="product" className={fieldClass}>
+                  <select
+                    aria-label="Product"
+                    required
+                    name="product"
+                    className={fieldClass}
+                    value={pricedProductId}
+                    onChange={(event) => setPricedProductId(event.target.value)}
+                  >
                     <option value="">Choose a product</option>
                     {data.products.map((p) => (
                       <option key={p.id} value={p.id}>
@@ -312,6 +457,14 @@ export function CommercePricing() {
                   <input
                     required
                     name="cents"
+                    key={`${priceListId}:${pricedProductId}:${data.prices.find((price) => price.price_list_id === priceListId && price.product_id === pricedProductId)?.unit_cents}`}
+                    defaultValue={
+                      data.prices.find(
+                        (price) =>
+                          price.price_list_id === priceListId &&
+                          price.product_id === pricedProductId,
+                      )?.unit_cents ?? ""
+                    }
                     type="number"
                     min="1"
                     max="10000000"
@@ -376,6 +529,17 @@ export function CommercePricing() {
                           {data.products.find((product) => product.id === p.product_id)?.name ||
                             p.product_id}
                           : ${(p.unit_cents / 100).toFixed(2)}
+                          <button
+                            type="button"
+                            className="ml-3 underline underline-offset-4"
+                            onClick={() => {
+                              setPriceListId(list.id);
+                              setPricedProductId(p.product_id);
+                            }}
+                            aria-label={`Edit price for ${data.products.find((product) => product.id === p.product_id)?.name || p.product_id} in ${list.name}`}
+                          >
+                            Edit price
+                          </button>
                         </p>
                       ))}
                   </div>
@@ -384,7 +548,10 @@ export function CommercePricing() {
                 {data.products.length ? (
                   data.products.map((p) => (
                     <p key={p.id} className="break-all text-sm">
-                      {p.id} · {p.name} · {p.active ? "quotable" : "inactive"}
+                      {p.id} · {p.name} · {p.kind.replaceAll("_", " ")} ·{" "}
+                      {p.active ? "quotable" : "inactive"}
+                      {p.kind === "print" &&
+                        ` · ${p.width_inches} × ${p.height_inches} in · ${p.finish || "finish needs configuration"}`}
                     </p>
                   ))
                 ) : (
@@ -527,7 +694,7 @@ export function CommercePricing() {
                 <select aria-label="Product" required name="product" className={fieldClass}>
                   <option value="">Choose a product</option>
                   {data.products
-                    .filter((p) => p.active)
+                    .filter((p) => p.active && p.kind === "digital_photo")
                     .map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.name}

@@ -7,6 +7,104 @@ import { createCommerce, type VerifiedPayment } from "./service.ts";
 import { createCommerceHandler } from "./http.ts";
 import { consumeCheckoutAttempt, sandboxCheckoutSettings } from "./checkout-settings.ts";
 
+test("owner variant pricing persists but unsupported fulfillment stays closed", async () => {
+  const f = await fixture();
+  try {
+    await f.db.exec(
+      await readFile(
+        new URL("../../../migrations/0020_product_variants.sql", import.meta.url),
+        "utf8",
+      ),
+    );
+    const print = {
+      id: "print-8x10-lustre",
+      name: "8x10 Lustre",
+      kind: "print",
+      license: "Personal display",
+      active: false,
+      widthInches: 8,
+      heightInches: 10,
+      finish: "Lustre",
+      minimumDpi: 200,
+    };
+    await f.commerce.configureProduct(print);
+    await f.commerce.configurePrice({
+      priceListId: "default",
+      productId: print.id,
+      unitCents: 1800,
+    });
+    await f.commerce.configureProduct({
+      ...print,
+      name: "8x10 archival lustre",
+      finish: "Archival lustre",
+    });
+    const rows = await f.sql.query<{ finish: string; unit_cents: number; active: boolean }>(
+      "SELECT p.finish,p.active,r.unit_cents FROM commerce_products p JOIN commerce_prices r ON r.product_id=p.id WHERE p.id=$1",
+      [print.id],
+    );
+    assert.deepEqual(rows, [{ finish: "Archival lustre", active: false, unit_cents: 1800 }]);
+    await f.commerce.configureProduct({
+      id: "album",
+      name: "Whole album",
+      kind: "gallery_download",
+      license: "Personal use",
+      active: false,
+    });
+    await f.commerce.configurePrice({
+      priceListId: "default",
+      productId: "album",
+      unitCents: 5000,
+    });
+    await assert.rejects(f.commerce.configureProduct({ ...print, active: true }), /fulfillment/);
+    await assert.rejects(f.commerce.configureProduct({ ...print, finish: undefined }), /required/);
+    await assert.rejects(f.commerce.configureProduct({ ...print, widthInches: 8.001 }), /decimal/);
+    await assert.rejects(f.commerce.configureProduct({ ...print, id: "digital" }), /kind cannot/);
+    await assert.rejects(
+      f.commerce.configureProduct({
+        id: "album",
+        name: "Album",
+        kind: "gallery_download",
+        license: "Personal use",
+        active: true,
+      }),
+      /fulfillment/,
+    );
+    await assert.rejects(
+      f.db.exec(
+        "INSERT INTO commerce_products(id,name,kind,license) VALUES('bad','Incomplete print','print','Personal')",
+      ),
+    );
+    // Even bypassing the owner API cannot make the existing checkout sell these.
+    await f.db.exec(
+      "UPDATE commerce_products SET active=true WHERE id IN ('album','print-8x10-lustre')",
+    );
+    for (const productId of ["album", print.id])
+      await assert.rejects(
+        f.commerce.quote("customer", {
+          galleryId: "gallery",
+          items: [{ productId, photoId: "photo", quantity: 1 }],
+        }),
+        /not enabled/,
+      );
+    const before = await f.commerce.quote("customer", f.request);
+    await f.commerce.configurePrice({
+      priceListId: "default",
+      productId: "digital",
+      unitCents: 3500,
+    });
+    const after = await f.commerce.quote("customer", f.request);
+    assert.equal(before.total_cents, 2500);
+    assert.equal(after.total_cents, 3500);
+    const stored = await f.sql.query<{ total_cents: number }>(
+      "SELECT total_cents FROM commerce_quotes WHERE id=$1",
+      [before.id],
+    );
+    assert.equal(stored[0].total_cents, 2500);
+  } finally {
+    await f.db.close();
+  }
+});
+
 async function fixture() {
   const db = new PGlite();
   for (const name of ["0005_catalog.sql", "0006_photo_management.sql", "0008_commerce.sql"])

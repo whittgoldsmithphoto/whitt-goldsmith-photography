@@ -87,21 +87,62 @@ export function createCommerce(sql: Sql, authorizeGallery: (galleryId: string) =
       return row;
     },
     async configureProduct(input: unknown) {
-      // Prints can be modeled in SQL but may not be enabled through this API yet.
+      // Configuration does not enable fulfillment. SQL quote checks remain closed
+      // for gallery downloads and prints until their delivery adapters are ready.
       const data = z
         .object({
           id,
           name: z.string().trim().min(1).max(160),
           license: z.string().trim().min(1).max(4000),
           active: z.boolean(),
+          kind: z.enum(["digital_photo", "gallery_download", "print"]).default("digital_photo"),
+          widthInches: z.number().positive().max(9999.99).optional(),
+          heightInches: z.number().positive().max(9999.99).optional(),
+          finish: z.string().trim().min(1).max(80).optional(),
+          minimumDpi: z.number().int().min(72).max(600).optional(),
         })
         .strict()
         .parse(input);
+      if (data.kind !== "digital_photo" && data.active)
+        throw new Error("Print and gallery-download fulfillment is not enabled; save as inactive");
+      if (data.kind === "print") {
+        if (!data.widthInches || !data.heightInches || !data.finish || !data.minimumDpi)
+          throw new Error("Print size, finish and minimum DPI are required");
+        for (const dimension of [data.widthInches, data.heightInches])
+          if (Math.abs(dimension * 100 - Math.round(dimension * 100)) > 0.000001)
+            throw new Error("Print dimensions support at most two decimal places");
+        const [row] = await sql.query(
+          `INSERT INTO commerce_products(id,name,kind,license,active,width_inches,height_inches,finish,minimum_dpi)
+           VALUES($1,$2,'print',$3,false,$4,$5,$6,$7)
+           ON CONFLICT(id) DO UPDATE SET name=excluded.name,license=excluded.license,active=false,
+             width_inches=excluded.width_inches,height_inches=excluded.height_inches,
+             finish=excluded.finish,minimum_dpi=excluded.minimum_dpi
+           WHERE commerce_products.kind='print' RETURNING *`,
+          [
+            data.id,
+            data.name,
+            data.license,
+            data.widthInches,
+            data.heightInches,
+            data.finish,
+            data.minimumDpi,
+          ],
+        );
+        if (!row) throw new Error("Product kind cannot be changed");
+        return row;
+      }
+      if (
+        data.widthInches !== undefined ||
+        data.heightInches !== undefined ||
+        data.finish !== undefined ||
+        data.minimumDpi !== undefined
+      )
+        throw new Error("Print specifications are only valid for prints");
       const [row] = await sql.query(
-        `INSERT INTO commerce_products(id,name,kind,license,active) VALUES($1,$2,'digital_photo',$3,$4)
+        `INSERT INTO commerce_products(id,name,kind,license,active) VALUES($1,$2,$5,$3,$4)
         ON CONFLICT(id) DO UPDATE SET name=excluded.name,license=excluded.license,active=excluded.active
-        WHERE commerce_products.kind='digital_photo' RETURNING *`,
-        [data.id, data.name, data.license, data.active],
+        WHERE commerce_products.kind=excluded.kind RETURNING *`,
+        [data.id, data.name, data.license, data.active, data.kind],
       );
       if (!row) throw new Error("Product kind cannot be changed");
       return row;
