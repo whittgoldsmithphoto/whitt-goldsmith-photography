@@ -3,6 +3,7 @@ import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getR2Secrets, r2ClientFrom } from "../secrets.server";
 import type { CatalogMedia } from "./repository";
 import { digest } from "./repository";
+import { bindingStorage, type CatalogR2Binding } from "./r2-binding";
 
 type ImageChain = {
   transform(options: Record<string, unknown>): ImageChain;
@@ -17,13 +18,37 @@ export function runtimeSetting(name: string) {
   const value = (env as unknown as Record<string, unknown>)[name] ?? process.env[name];
   return typeof value === "string" ? value.trim() : "";
 }
+export async function catalogConfiguration() {
+  const { databaseConnectionString } = await import("../runtime-env.server");
+  const environment = runtimeSetting("CATALOG_ENV");
+  const bound = Boolean((env as unknown as { CATALOG_BUCKET?: CatalogR2Binding }).CATALOG_BUCKET);
+  return {
+    environment: ["staging", "production"].includes(environment) ? environment : "unspecified",
+    database: databaseConnectionString() ? "shared-postgres" : "ephemeral-local-pglite",
+    r2Configured: bound || (environment !== "staging" && Boolean(await getR2Secrets())),
+    storageMode: bound
+      ? "worker-binding"
+      : environment === "staging"
+        ? "missing-staging-binding"
+        : "s3-credentials",
+    imagesConfigured: Boolean((env as unknown as { IMAGES?: unknown }).IMAGES),
+    watermarkConfigured: Boolean(runtimeSetting("CATALOG_WATERMARK_KEY")),
+    verification: "configuration-only",
+    checkedAt: new Date().toISOString(),
+  };
+}
 export function catalogMedia(): CatalogMedia {
+  const bucket = (env as unknown as { CATALOG_BUCKET?: CatalogR2Binding }).CATALOG_BUCKET;
+  const bound = bucket ? bindingStorage(bucket) : undefined;
   async function connection() {
+    if (runtimeSetting("CATALOG_ENV") === "staging")
+      throw new Error("Staging requires its own CATALOG_BUCKET binding");
     const secrets = await getR2Secrets();
     if (!secrets) throw new Error("R2 is not configured");
     return { s3: r2ClientFrom(secrets), bucket: secrets.bucket };
   }
   async function get(key: string) {
+    if (bound) return bound.get(key);
     const { s3, bucket } = await connection();
     const result = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
     if (!result.Body) throw new Error("Object missing");
@@ -32,6 +57,7 @@ export function catalogMedia(): CatalogMedia {
   return {
     get,
     async putOriginal(key, bytes, mime) {
+      if (bound) return bound.putOriginal(key, bytes, mime);
       const { s3, bucket } = await connection();
       try {
         await s3.send(
@@ -50,6 +76,7 @@ export function catalogMedia(): CatalogMedia {
       }
     },
     async putDerivative(key, bytes) {
+      if (bound) return bound.putDerivative(key, bytes);
       const { s3, bucket } = await connection();
       await s3.send(
         new PutObjectCommand({ Bucket: bucket, Key: key, Body: bytes, ContentType: "image/jpeg" }),

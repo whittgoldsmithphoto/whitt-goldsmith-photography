@@ -72,3 +72,24 @@ export type ReservationInput = {
   bytes: number;
   checksum: string;
 };
+export type ProofSelection = {
+  id: string | null;
+  galleryId: string;
+  photoIds: string[];
+  note: string;
+  revision: number;
+  updatedAt: string | null;
+  unavailableCount: number;
+};
+export type ProofInput = {
+  galleryId: string;
+  photoIds: string[];
+  note: string;
+  revision: number;
+};
+export type OwnerProof = ProofSelection & {
+  id: string;
+  galleryTitle: string;
+  reviewedRevision: number;
+  photos: { id: string; filename: string; thumbSrc: string; unavailable: boolean }[];
+};

@@ -203,6 +203,26 @@ async function createSql(): Promise<Sql> {
  * both backends — define tables there, never inline in server functions.
  */
 export function getSql(): Promise<Sql> {
+  if (runningOnCloudflareWorkers()) {
+    // Hyperdrive pools upstream connections. Never retain request-bound sockets
+    // in isolate globals; each query owns and closes its client.
+    return import("pg").then(({ Client, types }) => {
+      types.setTypeParser(OID_INT8, Number);
+      types.setTypeParser(OID_DATE, identity);
+      types.setTypeParser(OID_INTERVAL, identity);
+      return toSql(async <T>(text: string, params: unknown[]) => {
+        const connectionString = databaseConnectionString();
+        if (!connectionString) throw new Error("Worker database connection is required");
+        const client = new Client({ connectionString, connectionTimeoutMillis: 10000 });
+        try {
+          await client.connect();
+          return (await client.query(text, params)).rows as T[];
+        } finally {
+          await client.end();
+        }
+      });
+    });
+  }
   sqlPromise ??= createSql().catch((err) => {
     sqlPromise = null; // don't memoize failures — let the next call retry
     throw err;

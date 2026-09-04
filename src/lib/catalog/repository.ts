@@ -10,13 +10,9 @@ import type {
   PhotoInput,
 } from "./types.ts";
 
-export class CatalogError extends Error {
-  status: number;
-  constructor(message: string, status = 400) {
-    super(message);
-    this.status = status;
-  }
-}
+import { CatalogError } from "./errors.ts";
+import { createProofService } from "./proofs.ts";
+export { CatalogError } from "./errors.ts";
 const idSchema = z.string().uuid();
 const gallerySchema = z
   .object({
@@ -170,6 +166,7 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
           where p.status='ready' and p.hidden=false and p.archived=false and g.published=true and g.visibility='public' and g.password_hash is null order by p.display_order,p.created_at,p.id`;
   }
   return {
+    ...createProofService(sql, authorized),
     async publicIndex(): Promise<PublicCatalog> {
       const rows =
         await sql<GalleryRow>`select * from catalog_galleries where published=true and visibility='public' and password_hash is null order by updated_at desc,id`;

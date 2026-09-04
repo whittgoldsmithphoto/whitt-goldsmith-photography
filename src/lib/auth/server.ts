@@ -147,7 +147,7 @@ function createAuth() {
   // schema from `migrations/auth/0001_auth.sql`, copied into `migrations/` when
   // the app turns sign-in on.
   const database = databaseUrl
-    ? new Pool({ connectionString: databaseUrl })
+    ? new Pool({ connectionString: databaseUrl, max: 5, connectionTimeoutMillis: 10000 })
     : { dialect: pgliteDialect(() => getPglite()), type: "postgres" as const };
 
   // Built separately so the `betterAuth({...})` call stays easy to edit without
@@ -260,7 +260,10 @@ function createAuth() {
 let currentAuth: ReturnType<typeof createAuth> | undefined;
 export const auth = new Proxy({} as ReturnType<typeof createAuth>, {
   get(_target, key) {
-    const instance = (currentAuth ??= createAuth());
+    // Workers sockets belong to the current request. Only Node/local runtimes
+    // may retain the auth instance and its database pool across requests.
+    const worker = typeof navigator !== "undefined" && navigator.userAgent.includes("Cloudflare-Workers");
+    const instance = worker ? createAuth() : (currentAuth ??= createAuth());
     const value = Reflect.get(instance, key);
     return typeof value === "function" ? value.bind(instance) : value;
   },

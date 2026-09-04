@@ -9,6 +9,7 @@ import { toast } from "sonner";
 
 const searchSchema = z.object({
   setup: z.coerce.string().optional(),
+  gallery: z.string().uuid().optional().catch(undefined),
 });
 
 export const Route = createFileRoute("/login")({
@@ -17,7 +18,8 @@ export const Route = createFileRoute("/login")({
 });
 
 function Login() {
-  const { setup } = Route.useSearch();
+  const { setup, gallery } = Route.useSearch();
+  const destination = gallery ? `/galleries/${gallery}` : "/organize";
   const firstRun = setup === "1";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,13 +30,17 @@ function Login() {
     setBusy(true);
     try {
       if (firstRun) {
-        const res = await authClient.signUp.email({ email, password, name: "Whitt Goldsmith" });
+        const res = await authClient.signUp.email({
+          email,
+          password,
+          name: gallery ? "Photography customer" : "Studio account",
+        });
         if (res.error) throw new Error(res.error.message || "Could not create the account");
       } else {
         const res = await authClient.signIn.email({ email, password });
         if (res.error) throw new Error(res.error.message || "Could not sign in");
       }
-      window.location.assign("/organize");
+      window.location.assign(destination);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Sign-in failed");
     } finally {
@@ -44,12 +50,24 @@ function Login() {
 
   return (
     <div className="mx-auto flex min-h-[70svh] max-w-sm flex-col justify-center px-4 py-16">
-      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Studio</p>
-      <h1 className="font-display mt-2 text-4xl tracking-tight">{firstRun ? "Set up" : "Owner"}</h1>
+      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+        Studio
+      </p>
+      <h1 className="font-display mt-2 text-4xl tracking-tight">
+        {gallery
+          ? firstRun
+            ? "Create account"
+            : "Customer sign in"
+          : firstRun
+            ? "Set up"
+            : "Owner"}
+      </h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        {firstRun
-          ? "Create your account. Studio access must then be granted to its account ID in OWNER_USER_IDS."
-          : "Sign in with an account that has been granted studio access."}
+        {gallery
+          ? "Save photo selections and notes to your account. Signing in does not unlock password-protected galleries."
+          : firstRun
+            ? "Create your account. Studio access must then be granted to its account ID in OWNER_USER_IDS."
+            : "Sign in with an account that has been granted studio access."}
       </p>
       {authEnabled ? (
         <div className="mt-8 grid gap-3">
@@ -58,16 +76,24 @@ function Login() {
               key={p.providerId}
               type="button"
               variant="outline"
-              onClick={() => signIn(p.providerId, { callbackURL: "/organize" })}
+              onClick={() => signIn(p.providerId, { callbackURL: destination })}
             >
               Continue with {p.label}
             </Button>
           ))}
-          <p className="pt-4 text-center text-xs uppercase tracking-[0.16em] text-muted-foreground">or email</p>
+          <p className="pt-4 text-center text-xs uppercase tracking-[0.16em] text-muted-foreground">
+            or email
+          </p>
           <form className="grid gap-3" onSubmit={(e) => void onEmail(e)}>
             <div className="grid gap-1.5">
               <Label htmlFor="em">Email</Label>
-              <Input id="em" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <Input
+                id="em"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="pw">Password</Label>
@@ -81,7 +107,15 @@ function Login() {
               />
             </div>
             <Button type="submit" disabled={busy}>
-              {busy ? "Working…" : firstRun ? "Create owner account" : "Enter studio"}
+              {busy
+                ? "Working…"
+                : gallery
+                  ? firstRun
+                    ? "Create customer account"
+                    : "Return to gallery"
+                  : firstRun
+                    ? "Create owner account"
+                    : "Enter studio"}
             </Button>
           </form>
         </div>

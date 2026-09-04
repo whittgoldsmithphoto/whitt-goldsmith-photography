@@ -11,4 +11,17 @@
   "vars": {
     "VITE_AUTH_ENABLED": "true",
   },
+  "env": {
+    "staging": {
+      "name": "wgp-catalog-staging",
+      "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "c9d803e0e964401298a952b85dd05af4" }],
+      "r2_buckets": [{ "binding": "CATALOG_BUCKET", "bucket_name": "wgp-catalog-staging" }],
+      "images": { "binding": "IMAGES" },
+      "vars": {
+        "VITE_AUTH_ENABLED": "true",
+        "CATALOG_ENV": "staging",
+        "BETTER_AUTH_URL": "https://wgp-catalog-staging.whittgoldsmithmedia.workers.dev"
+      }
+    }
+  }
 }

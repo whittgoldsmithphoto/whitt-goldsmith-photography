@@ -34,7 +34,6 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const overlay = pathname === "/";
   const legacyPage = [
-    "/favorites",
     "/keywords",
     "/sell",
     "/migrate",

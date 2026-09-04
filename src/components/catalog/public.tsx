@@ -5,6 +5,8 @@ import type { CatalogGallery, CatalogPhoto, PublicCatalog } from "@/lib/catalog/
 import { defaultStudio } from "@/lib/seed";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ProofPanel } from "./proof-selection";
+import { useProofSelection, type ProofController } from "@/lib/catalog/use-proof";
 
 export function CatalogStatus({
   loading,
@@ -143,6 +145,7 @@ export function CatalogIndex({
   );
 }
 export function CatalogGalleryPage({ id }: { id: string }) {
+  const proof = useProofSelection(id);
   const state = useCatalog<{ gallery: CatalogGallery; photos: CatalogPhoto[] }>(
     `op=detail&id=${encodeURIComponent(id)}`,
   );
@@ -214,22 +217,36 @@ export function CatalogGalleryPage({ id }: { id: string }) {
       >
         Copy gallery link
       </Button>
+      <ProofPanel proof={proof} galleryId={id} />
       <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
         {photos.map((p, i) => (
-          <button
-            type="button"
-            key={p.id}
-            aria-label={`Open ${p.filename}`}
-            onClick={() => setOpen(i)}
-            className="overflow-hidden rounded-md focus-visible:outline-2 focus-visible:outline-offset-4"
-          >
-            <img
-              src={p.thumbSrc}
-              alt={p.filename}
-              loading="lazy"
-              className="aspect-[4/3] w-full object-cover"
-            />
-          </button>
+          <div key={p.id}>
+            <button
+              type="button"
+              key={p.id}
+              aria-label={`Open ${p.filename}`}
+              onClick={() => setOpen(i)}
+              className="overflow-hidden rounded-md focus-visible:outline-2 focus-visible:outline-offset-4"
+            >
+              <img
+                src={p.thumbSrc}
+                alt={p.filename}
+                loading="lazy"
+                className="aspect-[4/3] w-full object-cover"
+              />
+            </button>
+            {proof.selection && (
+              <Button
+                className="mt-2 w-full"
+                variant="outline"
+                disabled={proof.busy}
+                aria-pressed={proof.selection.photoIds.includes(p.id)}
+                onClick={() => proof.toggle(p.id)}
+              >
+                {proof.selection.photoIds.includes(p.id) ? "Selected" : "Select favorite"}
+              </Button>
+            )}
+          </div>
         ))}
       </div>
       {!photos.length && <p>No photographs are available in this gallery.</p>}
@@ -239,6 +256,7 @@ export function CatalogGalleryPage({ id }: { id: string }) {
           index={open}
           onIndex={setOpen}
           onClose={() => setOpen(null)}
+          proof={proof}
         />
       )}
     </div>
@@ -249,11 +267,13 @@ function CatalogLightbox({
   index,
   onIndex,
   onClose,
+  proof,
 }: {
   photos: CatalogPhoto[];
   index: number;
   onIndex: (i: number) => void;
   onClose: () => void;
+  proof: ProofController;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -297,6 +317,17 @@ function CatalogLightbox({
         className="max-h-[75svh] w-full object-contain"
       />
       {photo.caption && <p className="mt-3 text-center">{photo.caption}</p>}
+      {proof.selection && (
+        <Button
+          className="mt-3"
+          variant="outline"
+          disabled={proof.busy}
+          aria-pressed={proof.selection.photoIds.includes(photo.id)}
+          onClick={() => proof.toggle(photo.id)}
+        >
+          {proof.selection.photoIds.includes(photo.id) ? "Selected favorite" : "Select favorite"}
+        </Button>
+      )}
       <div className="mt-3 flex justify-between">
         <Button variant="outline" onClick={() => step(-1)}>
           Previous

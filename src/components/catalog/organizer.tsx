@@ -6,6 +6,7 @@ import { CatalogStatus } from "./public";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { CatalogDiagnostics } from "./diagnostics";
 
 export function CatalogOrganizer() {
   const state = useCatalog<OwnerCatalog>("op=owner");
@@ -99,10 +100,7 @@ export function CatalogOrganizer() {
       </div>
       <details className="my-6 rounded-lg border border-border p-4 text-sm">
         <summary>Owner diagnostics</summary>
-        <p className="mt-3">
-          Source: shared server database. Originals: private R2. Upload statuses below come from the
-          server.
-        </p>
+        <CatalogDiagnostics />
         <p>
           JPEG/PNG: up to 20 MB. Images binding and a watermark object are required before previews
           can become ready.

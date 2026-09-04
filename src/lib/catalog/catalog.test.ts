@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { createCatalog, digest, type CatalogMedia } from "./repository.ts";
 import { assertCatalogOwner } from "./owner.ts";
+import { bindingStorage } from "./r2-binding.ts";
 import type { Sql } from "../db.ts";
 import type { GalleryInput } from "./types.ts";
 
@@ -15,6 +16,12 @@ async function fixture() {
   await db.exec(
     await readFile(
       new URL("../../../migrations/0006_photo_management.sql", import.meta.url),
+      "utf8",
+    ),
+  );
+  await db.exec(
+    await readFile(
+      new URL("../../../migrations/0007_proof_selections.sql", import.meta.url),
       "utf8",
     ),
   );
@@ -98,6 +105,169 @@ async function fixture() {
     },
   };
 }
+test("native R2 binding keeps originals immutable and reports storage failure", async () => {
+  const objects = new Map<string, Uint8Array>();
+  let fail = false,
+    disconnectAfterWrite = false;
+  const storage = bindingStorage({
+    async get(key) {
+      const bytes = objects.get(key);
+      return bytes ? { arrayBuffer: async () => new Uint8Array(bytes).buffer } : null;
+    },
+    async put(key, bytes, options) {
+      if (fail) throw new Error("Unavailable");
+      assert.equal(options.sha256, await digest(bytes));
+      if (options.onlyIf) {
+        assert.equal(options.onlyIf.get("If-None-Match"), "*");
+        if (objects.has(key)) return null;
+      }
+      objects.set(key, new Uint8Array(bytes));
+      if (disconnectAfterWrite) throw new Error("Response lost");
+      return { key };
+    },
+  });
+  const bytes = new Uint8Array([1, 2, 3]);
+  await storage.putOriginal("original", bytes, "image/jpeg");
+  await storage.putOriginal("original", bytes, "image/jpeg");
+  await assert.rejects(
+    () => storage.putOriginal("original", new Uint8Array([4]), "image/jpeg"),
+    /already exists/,
+  );
+  assert.deepEqual(await storage.get("original"), bytes);
+  disconnectAfterWrite = true;
+  await storage.putOriginal("response-lost", bytes, "image/jpeg");
+  disconnectAfterWrite = false;
+  fail = true;
+  await assert.rejects(() => storage.putOriginal("new-failed", bytes, "image/jpeg"));
+  await assert.rejects(() => storage.putDerivative("thumb", bytes), /Unavailable/);
+  assert.equal(objects.has("new-failed"), false);
+});
+test("proof selections survive another device, isolate customers and notify the owner", async () => {
+  const f = await fixture();
+  try {
+    const g = await f.create();
+    const r = await f.reserve(g.id);
+    await f.catalog.upload(r.id, f.bytes, "owner");
+    await f.catalog.saveGallery(
+      { ...f.input, id: g.id, revision: g.revision, published: true, visibility: "public" },
+      "owner",
+    );
+    const input = {
+      galleryId: g.id,
+      photoIds: [r.id],
+      note: "Please review this photograph.",
+      revision: 0,
+    };
+    const saved = await f.catalog.saveProof(input, "customer-a");
+    assert.ok(saved.id);
+    assert.equal(saved.revision, 1);
+    const otherDevice = createCatalog(f.sql, f.media);
+    assert.deepEqual(await otherDevice.readProof(g.id, "customer-a"), saved);
+    assert.equal((await otherDevice.readProof(g.id, "customer-b")).id, null);
+    const inbox = await otherDevice.ownerProofs();
+    assert.equal(inbox[0].note, input.note);
+    assert.equal(inbox[0].photos[0].id, r.id);
+    assert.equal(inbox[0].reviewedRevision, 0);
+    await otherDevice.reviewProof({ id: saved.id!, revision: 1 }, "owner");
+    assert.equal((await otherDevice.ownerProofs())[0].reviewedRevision, 1);
+    await assert.rejects(() => f.catalog.saveProof(input, "customer-a"), /Reload/);
+    const changed = await f.catalog.saveProof(
+      { ...input, revision: 1, photoIds: [], note: "Changed my selection" },
+      "customer-a",
+    );
+    assert.equal(changed.photoIds.length, 0);
+    assert.equal(changed.revision, 2);
+    assert.equal((await otherDevice.ownerProofs())[0].reviewedRevision, 1);
+    await assert.rejects(
+      () => otherDevice.reviewProof({ id: saved.id!, revision: 1 }, "owner"),
+      /Reload/,
+    );
+    await assert.rejects(() => f.catalog.saveProof(input, "dev-user"), /Sign in/);
+    await assert.rejects(() => f.catalog.readProof(g.id, ""), /Sign in/);
+    const events = await f.sql`select * from catalog_audit where action='proof.updated'`;
+    assert.equal(events.length, 2);
+  } finally {
+    await f.db.close();
+  }
+});
+
+test("proof saves reject hidden, foreign and invalid photos and honor revoked gallery access", async () => {
+  const f = await fixture();
+  try {
+    const g = await f.create();
+    const r = await f.reserve(g.id);
+    await f.catalog.upload(r.id, f.bytes, "owner");
+    const input = { galleryId: g.id, photoIds: [r.id], note: "Private proof note", revision: 0 };
+    await assert.rejects(() => f.catalog.saveProof(input, "customer"), /unavailable/);
+    let gallery = await f.catalog.saveGallery(
+      {
+        ...f.input,
+        id: g.id,
+        revision: g.revision,
+        published: true,
+        visibility: "unlisted",
+        password: "a long test password",
+      },
+      "owner",
+    );
+    await assert.rejects(() => f.catalog.saveProof(input, "customer"), /password/);
+    const grant = await f.catalog.unlock(g.id, "a long test password");
+    const saved = await f.catalog.saveProof(input, "customer", grant);
+    await assert.rejects(
+      () =>
+        f.catalog.saveProof({ ...input, revision: 1, photoIds: [r.id, r.id] }, "customer", grant),
+      /Duplicate/,
+    );
+    await assert.rejects(
+      () =>
+        f.catalog.saveProof(
+          { ...input, revision: 1, photoIds: [crypto.randomUUID()] },
+          "customer",
+          grant,
+        ),
+      /Reload/,
+    );
+    const second = await f.create();
+    const foreign = await f.reserve(second.id);
+    await f.catalog.upload(foreign.id, f.bytes, "owner");
+    await assert.rejects(
+      () =>
+        f.catalog.saveProof({ ...input, revision: 1, photoIds: [foreign.id] }, "customer", grant),
+      /Reload/,
+    );
+    await f.catalog.savePhoto(
+      { id: r.id, revision: 1, caption: "", hidden: true, archived: false, displayOrder: 0 },
+      "owner",
+    );
+    const filtered = await f.catalog.readProof(g.id, "customer", grant);
+    assert.equal(filtered.photoIds.length, 0);
+    assert.equal(filtered.unavailableCount, 1);
+    assert.equal(JSON.stringify(filtered).includes(r.id), false);
+    await assert.rejects(
+      () => f.catalog.saveProof({ ...input, revision: 1 }, "customer", grant),
+      /Reload/,
+    );
+    assert.equal((await f.catalog.ownerProofs())[0].photos[0].unavailable, true);
+    gallery = await f.catalog.saveGallery(
+      { ...f.input, id: g.id, revision: gallery.revision, published: false, visibility: "private" },
+      "owner",
+    );
+    assert.equal(gallery.visibility, "private");
+    await assert.rejects(() => f.catalog.readProof(g.id, "customer", grant), /unavailable/);
+    await assert.rejects(
+      () =>
+        f.catalog.saveProof(
+          { ...input, revision: saved.revision, photoIds: [] },
+          "customer",
+          grant,
+        ),
+      /unavailable/,
+    );
+  } finally {
+    await f.db.close();
+  }
+});
+
 test("photo edits persist, protect hidden media, restore originals, and reject stale saves", async () => {
   const f = await fixture();
   try {

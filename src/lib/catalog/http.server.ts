@@ -1,7 +1,7 @@
 import { ZodError } from "zod";
 import { getSql } from "../db";
 import { createCatalog, CatalogError } from "./repository";
-import { catalogMedia, runtimeSetting } from "./media.server";
+import { catalogMedia, catalogConfiguration, runtimeSetting } from "./media.server";
 import { assertCatalogOwner } from "./owner";
 
 const headers = {
@@ -22,6 +22,13 @@ async function owner() {
   const { getSessionUser } = await import("../auth/verify.server");
   const user = await getSessionUser();
   return assertCatalogOwner(user?.id, runtimeSetting("OWNER_USER_IDS"));
+}
+async function customer() {
+  const { getSessionUser } = await import("../auth/verify.server");
+  const user = await getSessionUser();
+  if (!user || user.id === "dev-user")
+    throw new CatalogError("Sign in to save your selection", 401);
+  return user.id;
 }
 export async function readLimited(request: Request, max: number) {
   const reader = request.body?.getReader();
@@ -53,6 +60,33 @@ export async function catalogRequest(request: Request): Promise<Response> {
     const id = url.searchParams.get("id") || "";
     const catalog = createCatalog(await getSql(), catalogMedia());
     if (request.method === "GET") {
+      if (op === "diagnostics") {
+        await owner();
+        const sql = await getSql();
+        const migrations = await sql<{ name: string }>`select name from _migrations order by name`;
+        const required = [
+          "0005_catalog.sql",
+          "0006_photo_management.sql",
+          "0007_proof_selections.sql",
+        ];
+        return Response.json(
+          {
+            ...(await catalogConfiguration()),
+            missingMigrations: required.filter(
+              (name) => !migrations.some((row) => row.name === name),
+            ),
+          },
+          { headers },
+        );
+      }
+      if (op === "proof")
+        return Response.json(await catalog.readProof(id, await customer(), token(request, id)), {
+          headers,
+        });
+      if (op === "owner-proofs") {
+        await owner();
+        return Response.json(await catalog.ownerProofs(), { headers });
+      }
       if (op === "index") return Response.json(await catalog.publicIndex(), { headers });
       if (op === "owner") {
         await owner();
@@ -86,6 +120,11 @@ export async function catalogRequest(request: Request): Promise<Response> {
         );
       }
       const data = JSON.parse(new TextDecoder().decode(await readLimited(request, 32768)));
+      if (op === "proof")
+        return Response.json(
+          await catalog.saveProof(data, await customer(), token(request, data.galleryId)),
+          { headers },
+        );
       if (op === "unlock") {
         const access = await catalog.unlock(id, data.password);
         return Response.json(
@@ -99,6 +138,8 @@ export async function catalogRequest(request: Request): Promise<Response> {
         );
       }
       const actor = await owner();
+      if (op === "proof-review")
+        return Response.json(await catalog.reviewProof(data, actor), { headers });
       if (op === "photo") return Response.json(await catalog.savePhoto(data, actor), { headers });
       if (op === "gallery")
         return Response.json(await catalog.saveGallery(data, actor), { headers });
