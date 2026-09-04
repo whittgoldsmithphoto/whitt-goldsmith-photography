@@ -41,6 +41,12 @@ async function fixture() {
       "utf8",
     ),
   );
+  await db.exec(
+    await readFile(
+      new URL("../../../migrations/0025_upload_sessions.sql", import.meta.url),
+      "utf8",
+    ),
+  );
   const sql = (async (strings: TemplateStringsArray, ...values: unknown[]) => {
     let query = strings[0];
     for (let i = 0; i < values.length; i++) query += `$${i + 1}${strings[i + 1]}`;
@@ -231,6 +237,36 @@ test("ready photos publish a complete versioned media variant manifest", async (
         .filter((variant) => variant.name !== "original")
         .every((variant) => variant.object_key.includes("/v1/")),
     );
+  } finally {
+    await f.db.close();
+  }
+});
+
+test("upload idempotency replays the exact reservation and rejects mismatched or stale keys", async () => {
+  const f = await fixture();
+  try {
+    const gallery = await f.create();
+    const idempotencyKey = "00000000-0000-4000-8000-000000000099";
+    const input = {
+      galleryId: gallery.id,
+      filename: "replay.jpg",
+      mime: "image/jpeg" as const,
+      bytes: f.bytes.length,
+      checksum: await digest(f.bytes),
+      idempotencyKey,
+    };
+    const first = await f.catalog.reserve(input, "owner");
+    const replay = await f.catalog.reserve(input, "owner");
+    assert.equal(replay.id, first.id);
+    assert.equal(replay.duplicate, true);
+    await assert.rejects(() => f.catalog.reserve(input, "attacker"), /unavailable/);
+    await assert.rejects(
+      () => f.catalog.reserve({ ...input, filename: "different.jpg" }, "owner"),
+      /different upload/,
+    );
+    await f.sql`update catalog_upload_sessions set expires_at=now()-interval '1 second'
+      where idempotency_key=${idempotencyKey}`;
+    await assert.rejects(() => f.catalog.reserve(input, "owner"), /expired/);
   } finally {
     await f.db.close();
   }

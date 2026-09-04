@@ -56,6 +56,7 @@ const reservationSchema = z
       .positive()
       .max(20 * 1024 * 1024),
     checksum: z.string().regex(/^[a-f0-9]{64}$/),
+    idempotencyKey: idSchema.optional(),
   })
   .strict();
 export type GalleryRow = {
@@ -401,21 +402,60 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
     async reserve(raw: ReservationInput, owner: string) {
       const data = reservationSchema.parse(raw);
       await gallery(data.galleryId);
+      const requestSignature = await digest(
+        new TextEncoder().encode(
+          [data.galleryId, data.filename, data.mime, data.bytes, data.checksum].join("\u0000"),
+        ),
+      );
+      const replay = async () => {
+        if (!data.idempotencyKey) return null;
+        const sessions = await sql<{
+          photo_id: string;
+          owner_id: string;
+          request_signature: string;
+          expires_at: string | Date;
+        }>`select photo_id,owner_id,request_signature,expires_at from catalog_upload_sessions
+          where idempotency_key=${data.idempotencyKey}`;
+        const session = sessions[0];
+        if (!session) return null;
+        if (session.owner_id !== owner)
+          throw new CatalogError("Upload session is unavailable", 409);
+        if (new Date(session.expires_at).getTime() <= Date.now())
+          throw new CatalogError("Upload session expired. Start a new upload.", 409);
+        if (session.request_signature !== requestSignature)
+          throw new CatalogError("This idempotency key belongs to a different upload.", 409);
+        const photos = await sql<PhotoRow>`select * from catalog_photos where id=${session.photo_id}`;
+        if (!photos[0]) throw new CatalogError("Upload session is unavailable", 409);
+        return photos[0];
+      };
+      const prior = await replay();
+      if (prior) return { id: prior.id, status: prior.status, duplicate: true };
       const id = crypto.randomUUID();
       const rows =
         await sql<PhotoRow>`insert into catalog_photos(id,gallery_id,owner_id,filename,mime,bytes,checksum,original_key)
         values(${id},${data.galleryId},${owner},${data.filename},${data.mime},${data.bytes},${data.checksum},${`catalog/originals/${id}`})
         on conflict(gallery_id,checksum) do nothing returning *`;
-      if (!rows.length) {
+      let selected = rows[0];
+      if (!selected) {
         const old =
           await sql<PhotoRow>`select * from catalog_photos where gallery_id=${data.galleryId} and checksum=${data.checksum}`;
-        if (old[0].owner_id === owner && ["reserved", "failed"].includes(old[0].status)) {
+        if (!old[0] || old[0].owner_id !== owner)
+          throw new CatalogError("Upload reservation is unavailable", 409);
+        if (["reserved", "failed"].includes(old[0].status)) {
           await sql`update catalog_photos set reserved_until=now()+interval '1 hour' where id=${old[0].id}`;
         }
-        return { id: old[0].id, status: old[0].status, duplicate: true };
+        selected = old[0];
       }
-      await audit(owner, "upload.reserved", id);
-      return { id, status: "reserved", duplicate: false };
+      if (data.idempotencyKey) {
+        await sql`insert into catalog_upload_sessions(idempotency_key,photo_id,owner_id,request_signature)
+          values(${data.idempotencyKey},${selected.id},${owner},${requestSignature})
+          on conflict(idempotency_key) do nothing`;
+        const persisted = await replay();
+        if (!persisted || persisted.id !== selected.id)
+          throw new CatalogError("This idempotency key belongs to a different upload.", 409);
+      }
+      if (rows.length) await audit(owner, "upload.reserved", id);
+      return { id: selected.id, status: selected.status, duplicate: !rows.length };
     },
     uploadOriginal,
     async cancelProcessing(id: string, owner: string) {

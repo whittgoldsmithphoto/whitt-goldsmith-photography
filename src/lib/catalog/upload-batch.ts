@@ -99,13 +99,22 @@ export async function uploadBatch(options: {
       const checksum = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)))
         .map((b) => b.toString(16).padStart(2, "0"))
         .join("");
-      const reservation = (await transport("op=reserve", {
+      const reservationBody = {
         galleryId,
         filename: file.name,
         mime: file.type,
         bytes: file.size,
         checksum,
-      })) as Reservation;
+        idempotencyKey: crypto.randomUUID(),
+      };
+      let reservation: Reservation;
+      try {
+        reservation = (await transport("op=reserve", reservationBody)) as Reservation;
+      } catch {
+        // The first response may have been lost after the server committed.
+        // One replay with the same key recovers that exact reservation.
+        reservation = (await transport("op=reserve", reservationBody)) as Reservation;
+      }
       if (!reservation.id || typeof reservation.status !== "string")
         throw new Error("Invalid reservation response. Retry this file.");
       photoId = reservation.id;

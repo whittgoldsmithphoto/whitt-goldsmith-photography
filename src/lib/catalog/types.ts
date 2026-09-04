@@ -75,6 +75,7 @@ export type ReservationInput = {
   mime: string;
   bytes: number;
   checksum: string;
+  idempotencyKey?: string;
 };
 export type ProofSelection = {
   id: string | null;

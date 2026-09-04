@@ -119,6 +119,7 @@ Presence in this inventory does **not** mean a migration is applied to productio
 | `migrations/0022_payment_recovery.sql` | Durable recovery stream checkpoints, fenced leases and retry/review event inbox. |
 | `migrations/0023_media_jobs.sql` | Durable, idempotent media-processing jobs with bounded attempts, retry scheduling and fenced worker leases. Source queue wiring is present; application/deployment is not implied. |
 | `migrations/0024_media_variants.sql` | Versioned manifest for placeholder, thumbnail, thumbnail-2x, small, small-2x, display and immutable original renditions. Application/deployment is not implied. |
+| `migrations/0025_upload_sessions.sql` | Owner-scoped expiring idempotency ledger for exact upload-reservation replay. This does not claim multipart transfer support. |
 
 Live-path source addition: `commerce:offers` lists saved active digital prices only for authorized, published, purchasable galleries. `commerce:checkout` and `commerce:cancel-checkout` gain a separate customer-scoped production implementation, guarded by explicit live configuration; the sandbox path remains owner-only. This supersedes the sandbox-only API description above for source capability, not deployed availability. See [activation checklist](LIVE_SALES_IMPLEMENTATION.md).
 

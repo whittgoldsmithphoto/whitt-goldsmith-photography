@@ -132,6 +132,28 @@ test("reservation contains actual SHA-256, gallery, length and MIME; failed rese
     )
       .map((b) => b.toString(16).padStart(2, "0"))
       .join(""),
+    idempotencyKey: (input as { idempotencyKey: string }).idempotencyKey,
   });
+  assert.match((input as { idempotencyKey: string }).idempotencyKey, /^[0-9a-f-]{36}$/);
   assert.equal(results[0].state, "review");
+});
+
+test("a lost reservation response replays once with the identical idempotency key", async () => {
+  const bodies: unknown[] = [];
+  const results = await uploadBatch({
+    galleryId: "gallery",
+    files: [file()],
+    onItem: () => {},
+    transport: async (query, body) => {
+      if (query === "op=reserve") {
+        bodies.push(body);
+        if (bodies.length === 1) throw new Error("Response lost");
+        return { id: "saved", status: "ready", duplicate: true };
+      }
+      throw new Error("Original must not be retransmitted");
+    },
+  });
+  assert.equal(results[0].state, "duplicate");
+  assert.equal(bodies.length, 2);
+  assert.deepEqual(bodies[1], bodies[0]);
 });
