@@ -37,3 +37,8 @@ Migration 0020 was applied transactionally to WGP Catalog Staging only, guarded 
 the known staging fixture and migration 0019. Readback confirmed one migration row,
 four retained photographs and one retained product. No existing product price or
 live tax setting was changed.
+
+Source `b713f92` deployed to staging Worker version
+`2242cb90-5079-4bce-a059-dd6329d2c97b`. Signed-in browser readback confirmed all
+three product choices, saved-price editing, print dimension/finish/DPI controls,
+and disabled activation for prints. Public checkout remains disabled.
