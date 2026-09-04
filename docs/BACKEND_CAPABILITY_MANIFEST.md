@@ -123,6 +123,7 @@ Presence in this inventory does **not** mean a migration is applied to productio
 | `migrations/0025_upload_sessions.sql`                 | Owner-scoped expiring idempotency ledger for exact upload-reservation replay. This does not claim multipart transfer support.                                                      |
 | `migrations/0026_media_job_progress.sql`              | Lease-fenced ingest stages and monotonic progress from uploaded through validation, metadata, derivatives and ready.                                                               |
 | `migrations/0027_multipart_uploads.sql`               | Owner-scoped multipart session and exact part-manifest persistence for the staging R2 transfer route; live interruption acceptance remains to be run with real credentials.                                |
+| `migrations/0028_multipart_catalog_link.sql`          | Adds the idempotent catalog-photo link for completed multipart objects and enforces the native 20 MiB processor boundary.                              |
 
 Live-path source addition: `commerce:offers` lists saved active digital prices only for authorized, published, purchasable galleries. `commerce:checkout` and `commerce:cancel-checkout` gain a separate customer-scoped production implementation, guarded by explicit live configuration; the sandbox path remains owner-only. This supersedes the sandbox-only API description above for source capability, not deployed availability. See [activation checklist](LIVE_SALES_IMPLEMENTATION.md).
 
