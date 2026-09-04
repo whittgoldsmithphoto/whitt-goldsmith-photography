@@ -30,6 +30,17 @@ The owner explicitly selected upgrading `whitt-goldsmith-photography`, not creat
 
 ## Remaining connection steps
 
+### Production storage and local acceptance follow-up
+
+- Deployed version `6bce5713-bd2a-49b6-bad1-114c3d8af4e4` configures the approved transparent logo at private R2 key `branding/watermark-2026-09-04.png` via `CATALOG_WATERMARK_KEY`. Original file and independent production R2 readback SHA-256: `6600c907eef6d3c925b180309aeb7fc249d7b7a3ec545b0e3217bb6484c2c780`.
+- Production bucket public r2.dev access is disabled, with no connected custom domains. No customer photos have been published or copied into the production catalog.
+- Post-deploy public index is empty; unsigned webhook POST returns 400; anonymous diagnostics returns 401; checkout remains unavailable and quote-only. Webhook processing remains enabled.
+- Complete release snapshot passes 361 tests. The local commerce browser suite passes owner pricing persistence, non-owner mutation denial, customer order isolation, pending-to-paid UI, byte download/attempt counting, other-account denial and refund revocation. Stripe transitions and R2 bytes in that suite are synthetic, not provider acceptance.
+- Opened the production `/login?setup=1` form for the owner to choose credentials privately. Owner binding, actual photo ingestion/derivative acceptance, and a real provider checkout/delivery/refund test remain pending. No owner was auto-promoted and no real charge was made.
+- Cloudflare again refused direct secret edits because an uploaded version was not active. A known production build was deployed with the non-secret watermark setting instead; unknown uploaded code was not activated.
+
+### Required next inputs and checks
+
 - Verify a real Stripe-delivered event and complete end-to-end checkout, payment-ledger and delivery acceptance. The signed diagnostic is not a substitute for these checks.
 - Create/sign into the first production owner account and bind its verified ID to `OWNER_USER_IDS`. Staging account records were deliberately not copied.
 - Configure the actual production watermark, prices, photos, Stripe Tax classification/registration, receipt/policies, recovery credentials and delivery acceptance. Checkout/download flags remain false; webhook processing is enabled.
