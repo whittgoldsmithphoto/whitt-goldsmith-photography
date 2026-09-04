@@ -1,6 +1,23 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { uploadBatch, type UploadFile, type UploadItem } from "./upload-batch.ts";
+import {
+  uploadBatch,
+  reconcileProcessing,
+  type UploadFile,
+  type UploadItem,
+} from "./upload-batch.ts";
+
+test("processing recovery updates the exact photo without matching duplicate filenames", () => {
+  const items: UploadItem[] = [
+    { index: 0, filename: "same.jpg", photoId: "a", state: "review" },
+    { index: 1, filename: "same.jpg", photoId: "b", state: "failed", error: "Retry" },
+  ];
+  const updated = reconcileProcessing(items, { id: "a", status: "ready" });
+  assert.equal(updated[0].state, "ready");
+  assert.equal(updated[1], items[1]);
+  assert.equal(reconcileProcessing(items, { id: "a", status: "unknown" }), items);
+  assert.equal(reconcileProcessing(items, { id: "a", status: "needs_review" })[0].state, "review");
+});
 
 function file(name = "photo.jpg", type = "image/jpeg"): UploadFile {
   const bytes = new Uint8Array([255, 216, 255, 1]);

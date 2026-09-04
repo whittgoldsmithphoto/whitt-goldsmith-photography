@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { uploadBatch, type UploadItem } from "@/lib/catalog/upload-batch";
+import { uploadBatch, reconcileProcessing, type UploadItem } from "@/lib/catalog/upload-batch";
 import { Link } from "@tanstack/react-router";
 import { catalogFetch, useCatalog } from "@/lib/catalog/client";
 import type { CatalogGallery, GalleryInput, OwnerCatalog, PhotoInput } from "@/lib/catalog/types";
@@ -481,7 +481,13 @@ export function CatalogOrganizer() {
                             variant="outline"
                             disabled={busy}
                             onClick={() =>
-                              void action(() => catalogFetch(`op=retry&id=${j.id}`, {}))
+                              void action(async () => {
+                                const result = await catalogFetch<{ id: string; status: string }>(
+                                  `op=retry&id=${j.id}`,
+                                  {},
+                                );
+                                setBatchItems((items) => reconcileProcessing(items, result));
+                              })
                             }
                           >
                             Retry processing

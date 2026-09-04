@@ -2,7 +2,21 @@ import { apiFetch } from "../auth/api-fetch.ts";
 export type UploadFile = Pick<File, "name" | "size" | "type" | "arrayBuffer">;
 export type UploadState =
   "queued" | "hashing" | "uploading" | "ready" | "review" | "duplicate" | "failed" | "cancelled";
-export type UploadItem = { index: number; filename: string; state: UploadState; error?: string };
+export type UploadItem = {
+  index: number;
+  filename: string;
+  state: UploadState;
+  error?: string;
+  photoId?: string;
+};
+export function reconcileProcessing(items: UploadItem[], result: { id: string; status: string }) {
+  if (!["ready", "needs_review"].includes(result.status)) return items;
+  return items.map((item): UploadItem =>
+    item.photoId === result.id
+      ? { ...item, state: result.status === "ready" ? "ready" : "review", error: undefined }
+      : item,
+  );
+}
 type Reservation = { id: string; status: string; duplicate: boolean };
 type Transport = (query: string, body: unknown, raw?: boolean) => Promise<unknown>;
 
@@ -57,8 +71,15 @@ export async function uploadBatch(options: {
   const results: UploadItem[] = [];
   for (let index = 0; index < files.length; index++) {
     const file = files[index];
+    let photoId: string | undefined;
     const emit = (state: UploadState, error?: string) => {
-      const item = { index, filename: file.name, state, ...(error ? { error } : {}) };
+      const item = {
+        index,
+        filename: file.name,
+        state,
+        ...(photoId ? { photoId } : {}),
+        ...(error ? { error } : {}),
+      };
       results[index] = item;
       onItem(item);
     };
@@ -87,6 +108,7 @@ export async function uploadBatch(options: {
       })) as Reservation;
       if (!reservation.id || typeof reservation.status !== "string")
         throw new Error("Invalid reservation response. Retry this file.");
+      photoId = reservation.id;
       if (reservation.status === "ready") {
         emit("duplicate");
         continue;

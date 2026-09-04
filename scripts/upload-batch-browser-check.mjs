@@ -129,6 +129,23 @@ try {
   await batch.getByText("unstarted-second.jpg — ready", { exact: true }).waitFor();
   assert.equal(transfers.filter((name) => name === "slow-first.jpg").length, 1);
   assert.equal(transfers.filter((name) => name === "unstarted-second.jpg").length, 1);
+  // Simulate a saved original needing processing, then recover through the real UI.
+  await sql`update catalog_photos set status='needs_review' where filename='healthy.jpg'`;
+  await page.reload();
+  await page.getByRole("button", { name: /SYNTHETIC BATCH TEST/ }).click();
+  await input.setInputFiles([jpeg("healthy.jpg", 3)]);
+  await batch.getByText("healthy.jpg — review", { exact: true }).waitFor();
+  await page.route("**/api/catalog?op=retry&**", async (route) => {
+    const id = new URL(route.request().url()).searchParams.get("id");
+    await sql`update catalog_photos set status='ready' where id=${id}`;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ id, status: "ready" }),
+    });
+  });
+  await page.getByText("Upload history", { exact: true }).click();
+  await page.getByRole("button", { name: "Retry processing", exact: true }).click();
+  await batch.getByText("healthy.jpg — ready", { exact: true }).waitFor();
   assert.deepEqual(errors, []);
   console.log(
     "PASS: real local owner authentication/catalog reservations and mounted batch UI; invalid file does not stop good file, duplicate never transfers again, original filename preserved, unconfirmed completion fails then safely re-reserves, retry selects failed/unstarted only, stop waits for current file then skips remaining files. Upload completion/image processing explicitly simulated; not live-provider acceptance.",
