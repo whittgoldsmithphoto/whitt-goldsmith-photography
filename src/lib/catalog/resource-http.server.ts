@@ -5,12 +5,15 @@ import { assertCatalogOwner } from "./owner";
 import { createGalleryService } from "./gallery-service";
 import { errorResponse, privateHeaders } from "../api/errors";
 import { catalogRequest, readLimited } from "./http.server";
+import { multipartRequest } from "../ingest/multipart-http.server";
 export async function catalogResourceRequest(request: Request): Promise<Response> {
   // TanStack splats also match an empty suffix. Preserve the exact legacy root.
   if (new URL(request.url).pathname === "/api/catalog") return catalogRequest(request);
   try {
     const url = new URL(request.url),
       path = url.pathname.slice("/api/catalog/".length).split("/");
+    if (path[0] === "multipart")
+      return multipartRequest(request, path[1]);
     const coverWrite =
       request.method === "POST" &&
       path.length === 3 &&
