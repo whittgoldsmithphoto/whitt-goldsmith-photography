@@ -3,6 +3,8 @@ import { getSql } from "../db";
 import { createCatalog, CatalogError } from "./repository";
 import { catalogMedia, catalogConfiguration, runtimeSetting } from "./media.server";
 import { assertCatalogOwner } from "./owner";
+import { proofQuerySchema } from "./proof-query";
+import { createFolderService } from "./folders";
 
 const headers = {
   "Cache-Control": "private, no-store",
@@ -68,6 +70,11 @@ export async function catalogRequest(request: Request): Promise<Response> {
           "0005_catalog.sql",
           "0006_photo_management.sql",
           "0007_proof_selections.sql",
+          "0008_commerce.sql",
+          "0009_sports_metadata.sql",
+          "0010_folder_revisions.sql",
+          "0011_commerce_session_outcomes.sql",
+          "0012_gallery_customer_policy.sql",
         ];
         return Response.json(
           {
@@ -87,10 +94,28 @@ export async function catalogRequest(request: Request): Promise<Response> {
         await owner();
         return Response.json(await catalog.ownerProofs(), { headers });
       }
+      if (op === "owner-proof-page") {
+        await owner();
+        return Response.json(
+          await catalog.ownerProofPage(
+            proofQuerySchema.parse({
+              q: url.searchParams.get("q") ?? undefined,
+              status: url.searchParams.get("status") ?? undefined,
+              cursor: url.searchParams.get("cursor") ?? undefined,
+              limit: url.searchParams.get("limit") ?? undefined,
+            }),
+          ),
+          { headers },
+        );
+      }
       if (op === "index") return Response.json(await catalog.publicIndex(), { headers });
       if (op === "owner") {
         await owner();
         return Response.json(await catalog.ownerIndex(), { headers });
+      }
+      if (op === "folder-tree") {
+        await owner();
+        return Response.json(await createFolderService(await getSql()).folderTree(), { headers });
       }
       if (op === "detail")
         return Response.json(await catalog.detail(id, token(request, id)), { headers });
@@ -143,8 +168,10 @@ export async function catalogRequest(request: Request): Promise<Response> {
       if (op === "photo") return Response.json(await catalog.savePhoto(data, actor), { headers });
       if (op === "gallery")
         return Response.json(await catalog.saveGallery(data, actor), { headers });
-      if (op === "folder")
-        return Response.json(await catalog.createFolder(data, actor), { headers });
+      if (op === "folder" || op === "folder-save")
+        return Response.json(await createFolderService(await getSql()).saveFolder(data, actor), {
+          headers,
+        });
       if (op === "reserve") return Response.json(await catalog.reserve(data, actor), { headers });
       if (op === "retry") return Response.json(await catalog.process(id, actor), { headers });
     }

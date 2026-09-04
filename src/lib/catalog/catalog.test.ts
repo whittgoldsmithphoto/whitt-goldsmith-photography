@@ -25,6 +25,12 @@ async function fixture() {
       "utf8",
     ),
   );
+  await db.exec(
+    await readFile(
+      new URL("../../../migrations/0012_gallery_customer_policy.sql", import.meta.url),
+      "utf8",
+    ),
+  );
   const sql = (async (strings: TemplateStringsArray, ...values: unknown[]) => {
     let query = strings[0];
     for (let i = 0; i < values.length; i++) query += `$${i + 1}${strings[i + 1]}`;
@@ -105,6 +111,83 @@ async function fixture() {
     },
   };
 }
+test("gallery customer instructions and restrictive download policies persist without granting originals", async () => {
+  const f = await fixture();
+  try {
+    const g = await f.create();
+    assert.equal(g.customerInstructions, "");
+    assert.equal(g.downloadPolicy, "none");
+    const updated = await f.catalog.saveGallery(
+      {
+        ...f.input,
+        id: g.id,
+        revision: g.revision,
+        customerInstructions: "Select favorites, then save a note.",
+        downloadPolicy: "purchased_only",
+      },
+      "owner",
+    );
+    assert.equal(
+      (await f.catalog.ownerIndex()).galleries[0].customerInstructions,
+      "Select favorites, then save a note.",
+    );
+    assert.equal(
+      (await f.catalog.publicIndex()).galleries.length,
+      0,
+      "Private instructions are not public",
+    );
+    await assert.rejects(
+      f.catalog.saveGallery(
+        { ...f.input, id: g.id, revision: g.revision, downloadPolicy: "none" },
+        "owner",
+      ),
+      /changed/,
+    );
+    const invalid = { ...f.input, downloadPolicy: "public_originals" } as unknown as GalleryInput;
+    await assert.rejects(f.catalog.saveGallery(invalid, "owner"));
+    await assert.rejects(
+      f.catalog.saveGallery({ ...f.input, customerInstructions: "x".repeat(4001) }, "owner"),
+    );
+    const photo = await f.reserve(g.id);
+    await f.catalog.upload(photo.id, f.bytes, "owner");
+    const published = await f.catalog.saveGallery(
+      { ...f.input, id: g.id, revision: updated.revision, visibility: "public", published: true },
+      "owner",
+    );
+    assert.equal(
+      published.downloadPolicy,
+      "purchased_only",
+      "Legacy clients preserve omitted policy fields",
+    );
+    assert.equal(
+      (await f.catalog.detail(g.id)).gallery.customerInstructions,
+      updated.customerInstructions,
+    );
+    await assert.rejects(f.catalog.media(photo.id, "original"), /unavailable/);
+    await f.catalog.saveGallery(
+      {
+        ...f.input,
+        id: g.id,
+        revision: published.revision,
+        visibility: "public",
+        published: true,
+        downloadPolicy: "none",
+        customerInstructions: "",
+      },
+      "owner",
+    );
+    assert.equal((await f.catalog.detail(g.id)).gallery.downloadPolicy, "none");
+    assert.equal((await f.catalog.detail(g.id)).gallery.customerInstructions, "");
+    await assert.rejects(f.catalog.media(photo.id, "original"), /unavailable/);
+    assert.deepEqual(
+      (await f.catalog.media(photo.id, "original", undefined, true)).bytes,
+      f.bytes,
+      "Owner access is unchanged",
+    );
+  } finally {
+    await f.db.close();
+  }
+});
 test("native R2 binding keeps originals immutable and reports storage failure", async () => {
   const objects = new Map<string, Uint8Array>();
   let fail = false,

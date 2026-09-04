@@ -20,6 +20,8 @@ const gallerySchema = z
     revision: z.number().int().positive().optional(),
     title: z.string().trim().min(1).max(180),
     description: z.string().trim().max(4000),
+    customerInstructions: z.string().trim().max(4000).optional(),
+    downloadPolicy: z.enum(["none", "purchased_only"]).optional(),
     category: z.string().trim().min(1).max(100),
     folderId: idSchema.nullable(),
     visibility: z.enum(["private", "public", "unlisted"]),
@@ -46,6 +48,8 @@ type GalleryRow = {
   folder_id: string | null;
   title: string;
   description: string;
+  customer_instructions: string;
+  download_policy: CatalogGallery["downloadPolicy"];
   category: string;
   visibility: CatalogGallery["visibility"];
   published: boolean;
@@ -113,6 +117,8 @@ function galleryView(row: GalleryRow): CatalogGallery {
     folderId: row.folder_id,
     title: row.title,
     description: row.description,
+    customerInstructions: row.customer_instructions ?? "",
+    downloadPolicy: row.download_policy ?? "none",
     category: row.category,
     visibility: row.visibility,
     published: row.published,
@@ -280,6 +286,7 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
         const changed =
           await sql`update catalog_galleries set title=${data.title}, description=${data.description}, category=${data.category},
           folder_id=${data.folderId},visibility=${data.visibility},published=${data.published},password_hash=${hash === undefined ? current.password_hash : hash},
+          customer_instructions=${data.customerInstructions ?? current.customer_instructions},download_policy=${data.downloadPolicy ?? current.download_policy},
           access_version=access_version+${invalidate ? 1 : 0},revision=revision+1,updated_at=now() where id=${id} and revision=${data.revision || 0} returning id`;
         if (!changed.length)
           throw new CatalogError(
@@ -287,8 +294,8 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
             409,
           );
       } else {
-        await sql`insert into catalog_galleries(id,folder_id,title,description,category,visibility,published,password_hash)
-          values(${id},${data.folderId},${data.title},${data.description},${data.category},${data.visibility},false,${hash || null})`;
+        await sql`insert into catalog_galleries(id,folder_id,title,description,category,visibility,published,password_hash,customer_instructions,download_policy)
+          values(${id},${data.folderId},${data.title},${data.description},${data.category},${data.visibility},false,${hash || null},${data.customerInstructions ?? ""},${data.downloadPolicy ?? "none"})`;
       }
       await audit(owner, "gallery.saved", id);
       return galleryView(await gallery(id));

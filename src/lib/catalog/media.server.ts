@@ -4,6 +4,7 @@ import { getR2Secrets, r2ClientFrom } from "../secrets.server";
 import type { CatalogMedia } from "./repository";
 import { digest } from "./repository";
 import { bindingStorage, type CatalogR2Binding } from "./r2-binding";
+import { privateMetadataFreeJpeg } from "./jpeg-privacy";
 
 type ImageChain = {
   transform(options: Record<string, unknown>): ImageChain;
@@ -55,7 +56,12 @@ export function catalogMedia(): CatalogMedia {
     return result.Body.transformToByteArray();
   }
   return {
-    get,
+    // Defense in depth for derivatives created before metadata filtering was fixed.
+    // Original reads stay byte-for-byte unchanged.
+    async get(key) {
+      const bytes = await get(key);
+      return key.startsWith("catalog/derivatives/") ? privateMetadataFreeJpeg(bytes) : bytes;
+    },
     async putOriginal(key, bytes, mime) {
       if (bound) return bound.putOriginal(key, bytes, mime);
       const { s3, bucket } = await connection();
@@ -95,17 +101,17 @@ export function catalogMedia(): CatalogMedia {
         const response = (
           await images!
             .input(stream(bytes))
-            .transform({ width: edge, height: edge, fit: "scale-down" })
+            .transform({ width: edge, height: edge, fit: "scale-down", metadata: "none" })
             .draw(
               images!
                 .input(stream(watermark))
                 .transform({ width: Math.round(edge * 0.5), fit: "scale-down" }),
               { opacity: 0.5 },
             )
-            .output({ format: "image/jpeg", quality: 85, metadata: "none" })
+            .output({ format: "image/jpeg", quality: 85 })
         ).response();
         if (!response.ok) throw new Error("Image rendering failed");
-        return new Uint8Array(await response.arrayBuffer());
+        return privateMetadataFreeJpeg(new Uint8Array(await response.arrayBuffer()));
       }
       return {
         width: info.width,

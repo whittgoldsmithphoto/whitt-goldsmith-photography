@@ -1,5 +1,7 @@
 # Response to the Grok audit — shared catalog foundation
 
+> Historical first-increment record. Current implementation and live evidence are in [PHASE_ABCD_REMAINING.md](PHASE_ABCD_REMAINING.md) and [PHASE_ABCD_ACCEPTANCE.md](PHASE_ABCD_ACCEPTANCE.md). Later work adds proofing, commerce foundations and verified private Cloudflare photo delivery; it does not certify a full launch.
+
 September 3, 2026. Branch: `audit/server-catalog`.
 
 ## Assessment and scope
@@ -61,19 +63,19 @@ revisions, validation and atomic audit recording.
 
 All operations use `/api/catalog`. Mutations require a matching Origin header. JSON responses and images are not publicly cached.
 
-| Request | Access | Purpose |
-| --- | --- | --- |
-| GET `?op=index` | Public | Published, unrestricted public gallery read model |
-| GET `?op=detail&id=…` | Gallery policy | Gallery and ready photograph metadata |
-| GET `?op=media&id=…&kind=preview` or `thumb` | Gallery policy | Watermarked bytes only |
-| GET media with `owner=1` | Owner | Owner preview or original delivery |
-| GET `?op=owner` | Owner | Folders, galleries, ready photos and upload statuses |
-| POST `?op=gallery` / `folder` | Owner | Validated catalog writes; gallery revisions prevent stale saves |
-| POST `?op=photo` | Owner | Caption, display order, hide, archive/restore; photo revision required |
-| POST `?op=reserve` | Owner | Immutable original reservation and duplicate detection |
-| POST `?op=upload&id=…` | Reserving owner | Bounded binary upload, byte verification and processing |
-| POST `?op=retry&id=…` | Reserving owner | Retry processing an existing stored original |
-| POST `?op=unlock&id=…` | Rate limited | Password validation and scoped access cookie |
+| Request                                      | Access          | Purpose                                                                |
+| -------------------------------------------- | --------------- | ---------------------------------------------------------------------- |
+| GET `?op=index`                              | Public          | Published, unrestricted public gallery read model                      |
+| GET `?op=detail&id=…`                        | Gallery policy  | Gallery and ready photograph metadata                                  |
+| GET `?op=media&id=…&kind=preview` or `thumb` | Gallery policy  | Watermarked bytes only                                                 |
+| GET media with `owner=1`                     | Owner           | Owner preview or original delivery                                     |
+| GET `?op=owner`                              | Owner           | Folders, galleries, ready photos and upload statuses                   |
+| POST `?op=gallery` / `folder`                | Owner           | Validated catalog writes; gallery revisions prevent stale saves        |
+| POST `?op=photo`                             | Owner           | Caption, display order, hide, archive/restore; photo revision required |
+| POST `?op=reserve`                           | Owner           | Immutable original reservation and duplicate detection                 |
+| POST `?op=upload&id=…`                       | Reserving owner | Bounded binary upload, byte verification and processing                |
+| POST `?op=retry&id=…`                        | Reserving owner | Retry processing an existing stored original                           |
+| POST `?op=unlock&id=…`                       | Rate limited    | Password validation and scoped access cookie                           |
 
 ## Staging deployment prerequisites
 

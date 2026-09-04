@@ -1,0 +1,277 @@
+import Stripe from "stripe";
+import type { VerifiedPayment } from "./service.ts";
+import type { VerifiedSessionOutcome } from "./session-outcomes.ts";
+
+export class CommerceWebhookError extends Error {
+  status: number;
+  constructor(message: string, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+export interface SandboxOrder {
+  id: string;
+  quote_id: string;
+  provider_session_id: string | null;
+  provider_payment_id: string | null;
+  total_cents: number;
+  currency: string;
+}
+export interface SandboxProvider {
+  accountId(): Promise<string>;
+  session(id: string): Promise<Stripe.Checkout.Session>;
+  paymentIntent(id: string): Promise<Stripe.PaymentIntent>;
+  charge(id: string): Promise<Stripe.Charge>;
+}
+export interface SandboxCommerce {
+  orderBySession(sessionId: string): Promise<SandboxOrder | undefined>;
+  orderByPayment(paymentId: string): Promise<SandboxOrder | undefined>;
+  apply(payment: VerifiedPayment): Promise<unknown>;
+  applySessionOutcome(event: VerifiedSessionOutcome): Promise<{ status: string }>;
+}
+export interface SandboxWebhookConfig {
+  webhookSecret: string;
+  expectedAccountId: string;
+  expectedLivemode: false;
+  environment: "staging";
+}
+function fail(message: string, status = 400): never {
+  throw new CommerceWebhookError(message, status);
+}
+function reference(value: string | { id: string } | null | undefined) {
+  return typeof value === "string" ? value : value?.id;
+}
+
+/** SANDBOX ONLY. The Stripe SDK verifies the exact raw bytes using WebCrypto.
+ * Provider readback is required after signature verification: event metadata alone
+ * never authorizes fulfillment. No checkout/session-creation capability exists.
+ */
+export async function acceptSandboxWebhook(
+  rawBody: string,
+  signature: string,
+  config: SandboxWebhookConfig,
+  provider: SandboxProvider,
+  commerce: SandboxCommerce,
+) {
+  if (
+    config.expectedLivemode !== false ||
+    config.environment !== "staging" ||
+    !/^acct_[A-Za-z0-9]+$/.test(config.expectedAccountId) ||
+    !config.webhookSecret.startsWith("whsec_")
+  )
+    fail("Sandbox webhook is not configured", 503);
+  // This key is never sent anywhere; SDK webhooks do not make network requests.
+  const verifier = new Stripe("sk_test_local_signature_verifier_only");
+  let event: Stripe.Event;
+  try {
+    event = await verifier.webhooks.constructEventAsync(
+      rawBody,
+      signature,
+      config.webhookSecret,
+      300,
+      Stripe.createSubtleCryptoProvider(),
+    );
+  } catch {
+    fail("Invalid webhook signature", 400);
+  }
+  // Stripe SDK enforces maximum age but not a timestamp far in the future.
+  // Bound both directions without changing its HMAC/raw-body verification.
+  const timestamps = signature
+    .split(",")
+    .filter((part) => part.startsWith("t="))
+    .map((part) => Number(part.slice(2)));
+  if (
+    timestamps.length !== 1 ||
+    !Number.isSafeInteger(timestamps[0]) ||
+    timestamps[0] > Math.floor(Date.now() / 1000) + 300
+  )
+    fail("Invalid webhook signature timestamp", 400);
+  if (event.livemode !== false) fail("Live-mode events are forbidden on this sandbox endpoint");
+  if (!event.id?.startsWith("evt_")) fail("Invalid event identity");
+  // This adapter is for a direct account, not Connect or organization destinations.
+  if (event.account || (event as Stripe.Event & { context?: string }).context)
+    fail("Connected-account and organization events are unsupported", 422);
+  const supported = [
+    "checkout.session.completed",
+    "checkout.session.async_payment_succeeded",
+    "charge.refunded",
+    "checkout.session.expired",
+    "checkout.session.async_payment_failed",
+  ];
+  if (!supported.includes(event.type))
+    fail("Event type is not implemented; no order state was changed", 422);
+  if ((await provider.accountId()) !== config.expectedAccountId)
+    fail("Stripe account does not match sandbox configuration", 409);
+
+  function validateSession(
+    session: Stripe.Checkout.Session,
+    order: SandboxOrder,
+    allowPending = false,
+    expectedStatus: "complete" | "expired" = "complete",
+  ) {
+    if (
+      session.object !== "checkout.session" ||
+      session.livemode !== false ||
+      session.mode !== "payment" ||
+      session.id !== order.provider_session_id ||
+      session.status !== expectedStatus ||
+      (!allowPending && session.payment_status !== "paid") ||
+      session.client_reference_id !== order.id ||
+      session.metadata?.wgp_order_id !== order.id ||
+      session.metadata?.wgp_quote_id !== order.quote_id ||
+      session.metadata?.wgp_environment !== "staging" ||
+      session.amount_total !== order.total_cents ||
+      session.currency !== order.currency ||
+      order.currency !== "usd"
+    )
+      fail("Verified Checkout Session does not match the local order", 409);
+    const paymentId = reference(session.payment_intent);
+    if (
+      (!allowPending && !paymentId?.startsWith("pi_")) ||
+      (order.provider_payment_id && order.provider_payment_id !== paymentId)
+    )
+      fail("Verified Checkout Session payment identity does not match", 409);
+    return paymentId;
+  }
+
+  if (event.type === "charge.refunded") {
+    const supplied = event.data.object as Stripe.Charge;
+    if (
+      supplied.object !== "charge" ||
+      supplied.livemode !== false ||
+      !supplied.id?.startsWith("ch_")
+    )
+      fail("Invalid refund object");
+    const charge = await provider.charge(supplied.id);
+    if (
+      charge.id !== supplied.id ||
+      charge.object !== "charge" ||
+      charge.livemode !== false ||
+      !charge.paid ||
+      !charge.refunded ||
+      charge.amount_refunded !== charge.amount
+    )
+      fail("Only confirmed full refunds are implemented", 422);
+    const paymentId = reference(charge.payment_intent);
+    if (!paymentId) fail("Refund payment identity is missing", 409);
+    const order = await commerce.orderByPayment(paymentId);
+    if (
+      !order?.provider_session_id ||
+      order.provider_payment_id !== paymentId ||
+      charge.amount !== order.total_cents ||
+      charge.currency !== order.currency
+    )
+      fail("Refund does not match a paid local order", 409);
+    const session = await provider.session(order.provider_session_id);
+    if (validateSession(session, order) !== paymentId)
+      fail("Refund payment identity does not match session", 409);
+    await commerce.apply({
+      eventId: event.id,
+      orderId: order.id,
+      kind: "refunded",
+      sessionId: session.id,
+      paymentId,
+      amountCents: order.total_cents,
+      currency: "usd",
+    });
+    return { received: true, applied: "refunded" as const };
+  }
+
+  const supplied = event.data.object as Stripe.Checkout.Session;
+  if (
+    supplied.object !== "checkout.session" ||
+    supplied.livemode !== false ||
+    !supplied.id?.startsWith("cs_test_")
+  )
+    fail("Invalid sandbox Checkout Session");
+  const session = await provider.session(supplied.id);
+  if (session.id !== supplied.id || session.livemode !== false)
+    fail("Provider session identity or mode mismatch", 409);
+  const order = await commerce.orderBySession(session.id);
+  if (!order) fail("Checkout Session has no bound local order", 409);
+  if (
+    event.type === "checkout.session.expired" ||
+    event.type === "checkout.session.async_payment_failed"
+  ) {
+    const expired = event.type === "checkout.session.expired";
+    validateSession(session, order, true, expired ? "expired" : "complete");
+    if (session.payment_status !== "unpaid") fail("Session outcome is not confirmed unpaid", 409);
+    const paymentId = reference(session.payment_intent) || null;
+    if (!expired && !paymentId)
+      fail("Failed asynchronous payment has no verifiable PaymentIntent", 422);
+    if (paymentId) {
+      const intent = await provider.paymentIntent(paymentId);
+      if (
+        intent.id !== paymentId ||
+        intent.object !== "payment_intent" ||
+        intent.livemode !== false ||
+        intent.amount !== order.total_cents ||
+        intent.currency !== order.currency ||
+        intent.amount_received !== 0 ||
+        !["requires_payment_method", "canceled"].includes(intent.status)
+      )
+        fail("PaymentIntent is not a confirmed unpaid terminal failure", 409);
+    }
+    const result = await commerce.applySessionOutcome({
+      eventId: event.id,
+      orderId: order.id,
+      kind: expired ? "expired" : "async_failed",
+      sessionId: session.id,
+      paymentId,
+      amountCents: order.total_cents,
+      currency: "usd",
+    });
+    return {
+      received: true,
+      applied: result.status === "failed" ? ("failed" as const) : ("none" as const),
+    };
+  }
+  if (event.type === "checkout.session.completed" && session.payment_status === "unpaid") {
+    validateSession(session, order, true);
+    // A delayed payment completion is acknowledged as pending, never fulfilled.
+    // The later async success event must pass all checks before any grant exists.
+    return { received: true, applied: "none" as const, reason: "Payment is still pending" };
+  }
+  const paymentId = validateSession(session, order);
+  if (!paymentId) fail("Payment identity missing", 409);
+  // A Checkout Session stays 'paid' after a refund. Reconcile the PaymentIntent
+  // and its expanded latest charge before any delayed success can grant access.
+  const intent = await provider.paymentIntent(paymentId);
+  if (
+    intent.id !== paymentId ||
+    intent.object !== "payment_intent" ||
+    intent.livemode !== false ||
+    intent.status !== "succeeded" ||
+    intent.amount !== order.total_cents ||
+    intent.amount_received !== order.total_cents ||
+    intent.currency !== order.currency
+  )
+    fail("PaymentIntent does not confirm the local paid amount", 409);
+  const charge = intent.latest_charge;
+  if (
+    !charge ||
+    typeof charge === "string" ||
+    charge.object !== "charge" ||
+    charge.livemode !== false ||
+    reference(charge.payment_intent) !== paymentId ||
+    !charge.paid ||
+    !charge.captured ||
+    charge.refunded ||
+    charge.amount_refunded !== 0 ||
+    charge.disputed ||
+    charge.amount !== order.total_cents ||
+    charge.amount_captured !== order.total_cents ||
+    charge.currency !== order.currency
+  )
+    fail("Latest charge is not an undisputed, unrefunded full payment", 409);
+  await commerce.apply({
+    eventId: event.id,
+    orderId: order.id,
+    kind: "paid",
+    sessionId: session.id,
+    paymentId,
+    amountCents: order.total_cents,
+    currency: "usd",
+  });
+  return { received: true, applied: "paid" as const };
+}

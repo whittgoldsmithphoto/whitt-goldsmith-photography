@@ -2,6 +2,12 @@ import { z } from "zod";
 import type { Sql } from "../db.ts";
 import { CatalogError } from "./errors.ts";
 import type { ProofInput, ProofSelection, OwnerProof } from "./types.ts";
+import {
+  proofQuerySchema,
+  decodeProofCursor,
+  type OwnerProofPage,
+  type OwnerProofQuery,
+} from "./proof-query.ts";
 
 type ProofRow = {
   id: string;
@@ -105,13 +111,31 @@ export function createProofService(sql: Sql, access: Access) {
       return readProof(data.galleryId, customerId, token);
     },
     async ownerProofs(): Promise<OwnerProof[]> {
-      // Bounded inbox; pagination is explicit, not an unbounded dashboard query.
+      return (await this.ownerProofPage({ limit: 50 })).items;
+    },
+    async ownerProofPage(raw: OwnerProofQuery = {}): Promise<OwnerProofPage> {
+      const query = proofQuerySchema.parse(raw);
+      let cursor: ReturnType<typeof decodeProofCursor>;
+      try {
+        cursor = decodeProofCursor(query.cursor);
+      } catch {
+        throw new CatalogError("Invalid proof inbox cursor");
+      }
+      // Keyset pagination preserves database timestamp precision and never scans an OFFSET.
+      // Search is literal, not a user-controlled LIKE pattern, and includes private notes only here.
       const rows = await sql<
-        ProofRow & { gallery_title: string }
-      >`select p.*,g.title as gallery_title
+        ProofRow & { gallery_title: string; cursor_time: string }
+      >`select p.*,g.title as gallery_title,p.updated_at::text as cursor_time
         from catalog_proofs p join catalog_galleries g on g.id=p.gallery_id
-        order by p.updated_at desc,p.id limit 100`;
-      const ids = JSON.stringify(rows.map((p) => p.id));
+        where (${query.q}='' or strpos(lower(g.title),lower(${query.q}))>0
+          or strpos(lower(p.note),lower(${query.q}))>0 or strpos(lower(p.id),lower(${query.q}))>0)
+        and (${query.status}='all' or (${query.status}='unreviewed' and p.reviewed_revision<p.revision)
+          or (${query.status}='reviewed' and p.reviewed_revision=p.revision))
+        and (${cursor?.time ?? null}::timestamptz is null or p.updated_at<${cursor?.time ?? null}::timestamptz
+          or (p.updated_at=${cursor?.time ?? null}::timestamptz and p.id>${cursor?.id ?? ""}))
+        order by p.updated_at desc,p.id limit ${query.limit + 1}`;
+      const page = rows.slice(0, query.limit);
+      const ids = JSON.stringify(page.map((p) => p.id));
       const items = await sql<{
         proof_id: string;
         id: string;
@@ -121,7 +145,7 @@ export function createProofService(sql: Sql, access: Access) {
         select i.proof_id,p.id,p.filename,(p.hidden or p.archived or p.status<>'ready') as unavailable
         from catalog_proof_items i join catalog_photos p on p.id=i.photo_id
         where i.proof_id in (select jsonb_array_elements_text(${ids}::jsonb)) order by p.display_order,p.created_at,p.id`;
-      return rows.map((p) => {
+      const result = page.map((p) => {
         const photos = items
           .filter((i) => i.proof_id === p.id)
           .map((i) => ({
@@ -143,6 +167,14 @@ export function createProofService(sql: Sql, access: Access) {
           photos,
         };
       });
+      const last = page.at(-1);
+      return {
+        items: result,
+        nextCursor:
+          rows.length > query.limit && last
+            ? JSON.stringify({ time: last.cursor_time, id: last.id })
+            : null,
+      };
     },
     async reviewProof(raw: { id: string; revision: number }, owner: string) {
       const data = z
@@ -150,11 +182,14 @@ export function createProofService(sql: Sql, access: Access) {
         .strict()
         .parse(raw);
       const changed = await sql`with changed as (
-        update catalog_proofs set reviewed_revision=${data.revision} where id=${data.id} and revision=${data.revision} returning id
+        update catalog_proofs set reviewed_revision=${data.revision}
+          where id=${data.id} and revision=${data.revision} and reviewed_revision<${data.revision} returning id
       ), logged as (
         insert into catalog_audit(id,actor_id,action,target_id)
         select ${crypto.randomUUID()},${owner},'proof.reviewed',id from changed returning id
-      ) select changed.id from changed cross join logged`;
+      ) select id from logged
+        union all select id from catalog_proofs where id=${data.id} and revision=${data.revision}
+          and reviewed_revision=${data.revision}`;
       if (!changed.length)
         throw new CatalogError("Selection changed. Reload before marking reviewed.", 409);
       return { ok: true };

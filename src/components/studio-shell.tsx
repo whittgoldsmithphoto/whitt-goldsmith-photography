@@ -35,7 +35,6 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
   const overlay = pathname === "/";
   const legacyPage = [
     "/keywords",
-    "/sell",
     "/migrate",
     "/settings",
     "/publish",

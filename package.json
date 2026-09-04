@@ -19,7 +19,7 @@
     "preview:stop": "node scripts/preview.mjs stop",
     "typecheck": "tsc --noEmit",
     "check:auth": "node scripts/check-auth-invariant.mjs",
-    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/auth/gate-identity.test.ts src/lib/catalog/catalog.test.ts",
+    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/auth/gate-identity.test.ts src/lib/catalog/catalog.test.ts src/lib/catalog/upload-batch.test.ts src/lib/catalog/jpeg-privacy.test.ts src/lib/catalog-commerce/commerce.test.ts src/lib/catalog-commerce/stripe-adapter.test.ts src/lib/catalog-commerce/session-outcomes.test.ts src/lib/catalog-commerce/customer-download.test.ts src/lib/catalog-integrity/integrity.test.ts src/lib/sports/sports.test.ts",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

@@ -3,6 +3,8 @@ export type CatalogGallery = {
   folderId: string | null;
   title: string;
   description: string;
+  customerInstructions: string;
+  downloadPolicy: "none" | "purchased_only";
   category: string;
   visibility: "private" | "public" | "unlisted";
   published: boolean;
@@ -58,6 +60,8 @@ export type GalleryInput = {
   revision?: number;
   title: string;
   description: string;
+  customerInstructions?: string;
+  downloadPolicy?: CatalogGallery["downloadPolicy"];
   category: string;
   folderId: string | null;
   visibility: CatalogGallery["visibility"];

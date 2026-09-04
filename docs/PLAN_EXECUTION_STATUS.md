@@ -1,5 +1,7 @@
 # Photography platform execution status
 
+> Historical increment record. For the newer A–D implementation, current limits and live verification, read [PHASE_ABCD_REMAINING.md](PHASE_ABCD_REMAINING.md) and [PHASE_ABCD_ACCEPTANCE.md](PHASE_ABCD_ACCEPTANCE.md). Statements below about unimplemented pagination, pricing and metadata predate that work.
+
 September 3, 2026. Review branch: `audit/server-catalog`. Do not merge to production yet.
 
 ## Completed in code in this increment
@@ -65,7 +67,7 @@ missing-icon test failures.
 ## Cloudflare work verified during this increment
 
 - Production Worker still serves the older `Read integration secrets from
-  Cloudflare Worker env` deployment on `main`; new code is live only on staging.
+Cloudflare Worker env` deployment on `main`; new code is live only on staging.
 - Existing `whitt-goldsmith-photos` bucket was empty and public access disabled.
 - Created separate **`wgp-catalog-staging`** bucket in the existing account:
   Standard storage, automatic Eastern North America location, empty and public
@@ -166,12 +168,12 @@ Worker requests. Hyperdrive retains upstream pooling. This follows
 Staging build, config guard and all 11 catalog tests passed. Deployed repair:
 `88e493b9-28e6-4d7a-b788-3536ba580d18`. This does not complete live photo acceptance.
 
-| Phase | Outstanding acceptance/work |
-| --- | --- |
-| A | Live owner-to-public upload path; real Images/R2 verification; RAW/TIFF development; large multipart/resumable ingestion; durable batch queue; folder moves; explicit legacy-data import; pagination, retention and recovery checks. |
-| B | Live proof acceptance; inbox pagination/search and richer comments; gallery-specific instructions/policy; entitlement-backed single/whole-gallery downloads and buy actions. No download is granted by selecting a favorite. |
-| C | Database prices/products/inheritance; authoritative quotes; crop/DPI/shipping/tax rules; coupon accounting; local orders; verified Stripe sandbox payment/replay/refund; hashed expiring entitlements; manual print fulfillment; accurate customer order pages. Stripe remains paused per the user's earlier instruction. |
-| D | Approved sports metadata/search; Lightroom/watched-folder publishing; reviewed and reversible AI suggestions; provenance/export protection; QR event access; selected-image sharing and licensing inquiries. These follow core acceptance and need provider/workflow choices. |
+| Phase | Outstanding acceptance/work                                                                                                                                                                                                                                                                                               |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A     | Live owner-to-public upload path; real Images/R2 verification; RAW/TIFF development; large multipart/resumable ingestion; durable batch queue; folder moves; explicit legacy-data import; pagination, retention and recovery checks.                                                                                      |
+| B     | Live proof acceptance; inbox pagination/search and richer comments; gallery-specific instructions/policy; entitlement-backed single/whole-gallery downloads and buy actions. No download is granted by selecting a favorite.                                                                                              |
+| C     | Database prices/products/inheritance; authoritative quotes; crop/DPI/shipping/tax rules; coupon accounting; local orders; verified Stripe sandbox payment/replay/refund; hashed expiring entitlements; manual print fulfillment; accurate customer order pages. Stripe remains paused per the user's earlier instruction. |
+| D     | Approved sports metadata/search; Lightroom/watched-folder publishing; reviewed and reversible AI suggestions; provenance/export protection; QR event access; selected-image sharing and licensing inquiries. These follow core acceptance and need provider/workflow choices.                                             |
 
 This is ongoing implementation, not a completed roadmap, production launch, or
 proof that live payment/storage services work.

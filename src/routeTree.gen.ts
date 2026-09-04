@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as CheckoutRouteImport } from './routes/checkout'
+import { Route as CommerceRouteImport } from './routes/commerce'
 import { Route as FavoritesRouteImport } from './routes/favorites'
 import { Route as GalleriesRouteImport } from './routes/galleries'
 import { Route as KeywordsRouteImport } from './routes/keywords'
@@ -25,6 +26,11 @@ import { Route as SellRouteImport } from './routes/sell'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as UploadRouteImport } from './routes/upload'
 import { Route as ApiCatalogRouteImport } from './routes/api/catalog'
+import { Route as ApiCatalogIntegrityRouteImport } from './routes/api/catalog-integrity'
+import { Route as ApiCommerceRouteImport } from './routes/api/commerce'
+import { Route as ApiCommerceDownloadRouteImport } from './routes/api/commerce-download'
+import { Route as ApiCommerceWebhookRouteImport } from './routes/api/commerce-webhook'
+import { Route as ApiSportsRouteImport } from './routes/api/sports'
 import { Route as CheckoutThanksRouteImport } from './routes/checkout.thanks'
 import { Route as FoldersFolderIdRouteImport } from './routes/folders.$folderId'
 import { Route as GalleriesIndexRouteImport } from './routes/galleries.index'
@@ -54,6 +60,11 @@ const CartRoute = CartRouteImport.update({
 const CheckoutRoute = CheckoutRouteImport.update({
   id: '/checkout',
   path: '/checkout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommerceRoute = CommerceRouteImport.update({
+  id: '/commerce',
+  path: '/commerce',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FavoritesRoute = FavoritesRouteImport.update({
@@ -116,6 +127,31 @@ const ApiCatalogRoute = ApiCatalogRouteImport.update({
   path: '/api/catalog',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCatalogIntegrityRoute = ApiCatalogIntegrityRouteImport.update({
+  id: '/api/catalog-integrity',
+  path: '/api/catalog-integrity',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCommerceRoute = ApiCommerceRouteImport.update({
+  id: '/api/commerce',
+  path: '/api/commerce',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCommerceDownloadRoute = ApiCommerceDownloadRouteImport.update({
+  id: '/api/commerce-download',
+  path: '/api/commerce-download',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCommerceWebhookRoute = ApiCommerceWebhookRouteImport.update({
+  id: '/api/commerce-webhook',
+  path: '/api/commerce-webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSportsRoute = ApiSportsRouteImport.update({
+  id: '/api/sports',
+  path: '/api/sports',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CheckoutThanksRoute = CheckoutThanksRouteImport.update({
   id: '/thanks',
   path: '/thanks',
@@ -172,6 +208,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRouteWithChildren
+  '/commerce': typeof CommerceRoute
   '/favorites': typeof FavoritesRoute
   '/galleries': typeof GalleriesRouteWithChildren
   '/keywords': typeof KeywordsRouteWithChildren
@@ -184,6 +221,11 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/upload': typeof UploadRoute
   '/api/catalog': typeof ApiCatalogRoute
+  '/api/catalog-integrity': typeof ApiCatalogIntegrityRoute
+  '/api/commerce': typeof ApiCommerceRoute
+  '/api/commerce-download': typeof ApiCommerceDownloadRoute
+  '/api/commerce-webhook': typeof ApiCommerceWebhookRoute
+  '/api/sports': typeof ApiSportsRoute
   '/checkout/thanks': typeof CheckoutThanksRoute
   '/folders/$folderId': typeof FoldersFolderIdRoute
   '/galleries/$galleryId': typeof GalleriesGalleryIdRoute
@@ -200,6 +242,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRouteWithChildren
+  '/commerce': typeof CommerceRoute
   '/favorites': typeof FavoritesRoute
   '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
@@ -210,6 +253,11 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/upload': typeof UploadRoute
   '/api/catalog': typeof ApiCatalogRoute
+  '/api/catalog-integrity': typeof ApiCatalogIntegrityRoute
+  '/api/commerce': typeof ApiCommerceRoute
+  '/api/commerce-download': typeof ApiCommerceDownloadRoute
+  '/api/commerce-webhook': typeof ApiCommerceWebhookRoute
+  '/api/sports': typeof ApiSportsRoute
   '/checkout/thanks': typeof CheckoutThanksRoute
   '/folders/$folderId': typeof FoldersFolderIdRoute
   '/galleries/$galleryId': typeof GalleriesGalleryIdRoute
@@ -227,6 +275,7 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRouteWithChildren
+  '/commerce': typeof CommerceRoute
   '/favorites': typeof FavoritesRoute
   '/galleries': typeof GalleriesRouteWithChildren
   '/keywords': typeof KeywordsRouteWithChildren
@@ -239,6 +288,11 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/upload': typeof UploadRoute
   '/api/catalog': typeof ApiCatalogRoute
+  '/api/catalog-integrity': typeof ApiCatalogIntegrityRoute
+  '/api/commerce': typeof ApiCommerceRoute
+  '/api/commerce-download': typeof ApiCommerceDownloadRoute
+  '/api/commerce-webhook': typeof ApiCommerceWebhookRoute
+  '/api/sports': typeof ApiSportsRoute
   '/checkout/thanks': typeof CheckoutThanksRoute
   '/folders/$folderId': typeof FoldersFolderIdRoute
   '/galleries/$galleryId': typeof GalleriesGalleryIdRoute
@@ -257,6 +311,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/cart'
     | '/checkout'
+    | '/commerce'
     | '/favorites'
     | '/galleries'
     | '/keywords'
@@ -269,6 +324,11 @@ export interface FileRouteTypes {
     | '/settings'
     | '/upload'
     | '/api/catalog'
+    | '/api/catalog-integrity'
+    | '/api/commerce'
+    | '/api/commerce-download'
+    | '/api/commerce-webhook'
+    | '/api/sports'
     | '/checkout/thanks'
     | '/folders/$folderId'
     | '/galleries/$galleryId'
@@ -285,6 +345,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/cart'
     | '/checkout'
+    | '/commerce'
     | '/favorites'
     | '/library'
     | '/login'
@@ -295,6 +356,11 @@ export interface FileRouteTypes {
     | '/settings'
     | '/upload'
     | '/api/catalog'
+    | '/api/catalog-integrity'
+    | '/api/commerce'
+    | '/api/commerce-download'
+    | '/api/commerce-webhook'
+    | '/api/sports'
     | '/checkout/thanks'
     | '/folders/$folderId'
     | '/galleries/$galleryId'
@@ -311,6 +377,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/cart'
     | '/checkout'
+    | '/commerce'
     | '/favorites'
     | '/galleries'
     | '/keywords'
@@ -323,6 +390,11 @@ export interface FileRouteTypes {
     | '/settings'
     | '/upload'
     | '/api/catalog'
+    | '/api/catalog-integrity'
+    | '/api/commerce'
+    | '/api/commerce-download'
+    | '/api/commerce-webhook'
+    | '/api/sports'
     | '/checkout/thanks'
     | '/folders/$folderId'
     | '/galleries/$galleryId'
@@ -340,6 +412,7 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   CartRoute: typeof CartRoute
   CheckoutRoute: typeof CheckoutRouteWithChildren
+  CommerceRoute: typeof CommerceRoute
   FavoritesRoute: typeof FavoritesRoute
   GalleriesRoute: typeof GalleriesRouteWithChildren
   KeywordsRoute: typeof KeywordsRouteWithChildren
@@ -352,6 +425,11 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   UploadRoute: typeof UploadRoute
   ApiCatalogRoute: typeof ApiCatalogRoute
+  ApiCatalogIntegrityRoute: typeof ApiCatalogIntegrityRoute
+  ApiCommerceRoute: typeof ApiCommerceRoute
+  ApiCommerceDownloadRoute: typeof ApiCommerceDownloadRoute
+  ApiCommerceWebhookRoute: typeof ApiCommerceWebhookRoute
+  ApiSportsRoute: typeof ApiSportsRoute
   FoldersFolderIdRoute: typeof FoldersFolderIdRoute
   OrdersOrderIdRoute: typeof OrdersOrderIdRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -387,6 +465,13 @@ declare module '@tanstack/react-router' {
       path: '/checkout'
       fullPath: '/checkout'
       preLoaderRoute: typeof CheckoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/commerce': {
+      id: '/commerce'
+      path: '/commerce'
+      fullPath: '/commerce'
+      preLoaderRoute: typeof CommerceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/favorites': {
@@ -471,6 +556,41 @@ declare module '@tanstack/react-router' {
       path: '/api/catalog'
       fullPath: '/api/catalog'
       preLoaderRoute: typeof ApiCatalogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/catalog-integrity': {
+      id: '/api/catalog-integrity'
+      path: '/api/catalog-integrity'
+      fullPath: '/api/catalog-integrity'
+      preLoaderRoute: typeof ApiCatalogIntegrityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/commerce': {
+      id: '/api/commerce'
+      path: '/api/commerce'
+      fullPath: '/api/commerce'
+      preLoaderRoute: typeof ApiCommerceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/commerce-download': {
+      id: '/api/commerce-download'
+      path: '/api/commerce-download'
+      fullPath: '/api/commerce-download'
+      preLoaderRoute: typeof ApiCommerceDownloadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/commerce-webhook': {
+      id: '/api/commerce-webhook'
+      path: '/api/commerce-webhook'
+      fullPath: '/api/commerce-webhook'
+      preLoaderRoute: typeof ApiCommerceWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/sports': {
+      id: '/api/sports'
+      path: '/api/sports'
+      fullPath: '/api/sports'
+      preLoaderRoute: typeof ApiSportsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/checkout/thanks': {
@@ -591,6 +711,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   CartRoute: CartRoute,
   CheckoutRoute: CheckoutRouteWithChildren,
+  CommerceRoute: CommerceRoute,
   FavoritesRoute: FavoritesRoute,
   GalleriesRoute: GalleriesRouteWithChildren,
   KeywordsRoute: KeywordsRouteWithChildren,
@@ -603,6 +724,11 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   UploadRoute: UploadRoute,
   ApiCatalogRoute: ApiCatalogRoute,
+  ApiCatalogIntegrityRoute: ApiCatalogIntegrityRoute,
+  ApiCommerceRoute: ApiCommerceRoute,
+  ApiCommerceDownloadRoute: ApiCommerceDownloadRoute,
+  ApiCommerceWebhookRoute: ApiCommerceWebhookRoute,
+  ApiSportsRoute: ApiSportsRoute,
   FoldersFolderIdRoute: FoldersFolderIdRoute,
   OrdersOrderIdRoute: OrdersOrderIdRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,

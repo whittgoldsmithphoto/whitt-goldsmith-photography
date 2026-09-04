@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { uploadBatch, type UploadItem } from "@/lib/catalog/upload-batch";
 import { Link } from "@tanstack/react-router";
 import { catalogFetch, useCatalog } from "@/lib/catalog/client";
 import type { CatalogGallery, GalleryInput, OwnerCatalog, PhotoInput } from "@/lib/catalog/types";
@@ -7,6 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { CatalogDiagnostics } from "./diagnostics";
+import { SportsMetadataEditor } from "@/lib/sports/SportsMetadataEditor";
+import { IntegrityPanel } from "@/lib/catalog-integrity/IntegrityPanel";
+import { FolderManager } from "./folder-manager";
 
 export function CatalogOrganizer() {
   const state = useCatalog<OwnerCatalog>("op=owner");
@@ -16,6 +20,11 @@ export function CatalogOrganizer() {
   const [draft, setDraft] = useState<GalleryInput | null>(null);
   const [folderName, setFolderName] = useState("");
   const [photoDraft, setPhotoDraft] = useState<PhotoInput | null>(null);
+  const [batchItems, setBatchItems] = useState<UploadItem[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [stopRequested, setStopRequested] = useState(false);
+  const stopBatch = useRef(false);
+  const retryBatch = useRef<{ galleryId: string; files: File[] } | null>(null);
   if (!state.data) return <CatalogStatus {...state} />;
   const { galleries, folders, photos, jobs } = state.data;
   const active = galleries.find((g) => g.id === selected);
@@ -27,6 +36,8 @@ export function CatalogOrganizer() {
             revision: g.revision,
             title: g.title,
             description: g.description,
+            customerInstructions: g.customerInstructions,
+            downloadPolicy: g.downloadPolicy,
             category: g.category,
             folderId: g.folderId,
             visibility: g.visibility,
@@ -35,6 +46,8 @@ export function CatalogOrganizer() {
         : {
             title: "",
             description: "",
+            customerInstructions: "",
+            downloadPolicy: "none",
             category: "Sports and events",
             folderId: null,
             visibility: "private",
@@ -53,42 +66,32 @@ export function CatalogOrganizer() {
       setBusy(false);
     }
   }
-  async function upload(files: File[]) {
-    if (!active) return;
-    let complete = 0,
-      review = 0,
-      duplicates = 0;
-    for (const file of files) {
-      if (!["image/jpeg", "image/png"].includes(file.type) || file.size > 20 * 1024 * 1024)
-        throw new Error(
-          `${file.name}: use JPEG or PNG up to 20 MB. RAW/TIFF processing is not available yet.`,
-        );
-      const bytes = await file.arrayBuffer();
-      const checksum = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)))
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
-      const reservation = await catalogFetch<{ id: string; status: string; duplicate: boolean }>(
-        "op=reserve",
-        { galleryId: active.id, filename: file.name, mime: file.type, bytes: file.size, checksum },
-      );
-      if (
-        reservation.duplicate &&
-        !["reserved", "failed", "uploading"].includes(reservation.status)
-      ) {
-        duplicates++;
-        continue;
-      }
-      const response = await fetch(`/api/catalog?op=upload&id=${reservation.id}`, {
-        method: "POST",
-        headers: { "Content-Type": file.type },
-        body: bytes,
+  async function upload(files: File[], galleryId = active?.id) {
+    if (!galleryId || !files.length) return;
+    stopBatch.current = false;
+    setStopRequested(false);
+    setUploading(true);
+    setBatchItems(files.map((file, index) => ({ index, filename: file.name, state: "queued" })));
+    try {
+      const results = await uploadBatch({
+        galleryId,
+        files,
+        shouldStop: () => stopBatch.current,
+        onItem: (item) =>
+          setBatchItems((items) => items.map((old, index) => (index === item.index ? item : old))),
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Upload failed");
-      if (result.status === "ready") complete++;
-      else review++;
+      retryBatch.current = {
+        galleryId,
+        files: files.filter((_, index) => ["failed", "cancelled"].includes(results[index].state)),
+      };
+      const count = (status: UploadItem["state"]) =>
+        results.filter((item) => item.state === status).length;
+      setMessage(
+        `${count("ready")} ready · ${count("review")} awaiting processing · ${count("duplicate")} already stored · ${count("failed")} failed · ${count("cancelled")} not started`,
+      );
+    } finally {
+      setUploading(false);
     }
-    setMessage(`${complete} ready · ${review} awaiting processing · ${duplicates} already stored`);
   }
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-10 sm:px-6">
@@ -137,6 +140,14 @@ export function CatalogOrganizer() {
           Create folder
         </Button>
       </form>
+      {!busy && (
+        <FolderManager
+          onSaved={() => {
+            setMessage("Folder saved to the shared catalog.");
+            state.reload();
+          }}
+        />
+      )}
       <div className="grid gap-8 md:grid-cols-[260px_minmax(0,1fr)]">
         <aside className="space-y-2">
           {galleries.length === 0 && <p>No saved galleries yet.</p>}
@@ -144,6 +155,7 @@ export function CatalogOrganizer() {
             <button
               key={g.id}
               type="button"
+              disabled={busy}
               onClick={() => {
                 setSelected(g.id);
                 setPhotoDraft(null);
@@ -191,6 +203,63 @@ export function CatalogOrganizer() {
                   }}
                 />
               </label>
+              {batchItems.length > 0 && (
+                <section
+                  aria-label="Current upload batch"
+                  className="mb-6 rounded border border-border p-4"
+                >
+                  <h3 className="font-display text-2xl">Current upload batch</h3>
+                  <p className="my-2 text-sm" role="status">
+                    {
+                      batchItems.filter(
+                        (item) => !["queued", "hashing", "uploading"].includes(item.state),
+                      ).length
+                    }{" "}
+                    of {batchItems.length} checked
+                    {stopRequested && uploading ? " · Stopping after the current file" : ""}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Keep this page open during transfer. Originals and completed jobs are saved on
+                    the server. After a reload, choose the same files to safely resume;
+                    already-stored files are not uploaded again.
+                  </p>
+                  {uploading ? (
+                    <Button
+                      className="my-3"
+                      variant="outline"
+                      disabled={stopRequested}
+                      onClick={() => {
+                        stopBatch.current = true;
+                        setStopRequested(true);
+                      }}
+                    >
+                      Stop after current file
+                    </Button>
+                  ) : (
+                    Boolean(retryBatch.current?.files.length) && (
+                      <Button
+                        className="my-3"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => {
+                          const retry = retryBatch.current;
+                          if (retry) void action(() => upload(retry.files, retry.galleryId));
+                        }}
+                      >
+                        Retry failed or unstarted files
+                      </Button>
+                    )
+                  )}
+                  <ul className="mt-3 max-h-64 space-y-2 overflow-auto text-sm">
+                    {batchItems.map((item) => (
+                      <li key={item.index} className="break-all">
+                        {item.filename} — {item.state}
+                        {item.error && <p className="text-destructive">{item.error}</p>}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
               <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
                 {photos
                   .filter((p) => p.galleryId === active.id)
@@ -236,6 +305,18 @@ export function CatalogOrganizer() {
                   }}
                 >
                   <h3 className="font-display text-2xl">Edit photograph</h3>
+                  <img
+                    src={`/api/catalog?op=media&id=${encodeURIComponent(photoDraft.id)}&kind=preview&owner=1`}
+                    alt="Owner preview of the selected photograph"
+                    className="max-h-[65vh] w-full rounded object-contain"
+                  />
+                  <a
+                    className="inline-block underline"
+                    href={`/api/catalog?op=media&id=${encodeURIComponent(photoDraft.id)}&kind=original&owner=1`}
+                    download
+                  >
+                    Download private original (owner only)
+                  </a>
                   <label className="block">
                     Customer-visible caption
                     <Textarea
@@ -291,6 +372,12 @@ export function CatalogOrganizer() {
                     </Button>
                   </div>
                 </form>
+              )}
+              {photoDraft && (
+                <SportsMetadataEditor key={`sports-${photoDraft.id}`} photoId={photoDraft.id} />
+              )}
+              {photoDraft && (
+                <IntegrityPanel key={`integrity-${photoDraft.id}`} photoId={photoDraft.id} />
               )}
               <h3 className="font-display mt-8 text-2xl">Upload history</h3>
               <ul className="mt-4 space-y-3">
@@ -368,6 +455,39 @@ export function CatalogOrganizer() {
               maxLength={4000}
             />
           </label>
+          <label className="block">
+            Instructions for customers
+            <Textarea
+              aria-label="Instructions for customers"
+              maxLength={4000}
+              value={draft.customerInstructions ?? ""}
+              onChange={(event) => setDraft({ ...draft, customerInstructions: event.target.value })}
+              placeholder="Explain how to select favorites, provide notes, or contact you."
+            />
+          </label>
+          <label className="block">
+            Customer download policy
+            <select
+              aria-label="Customer download policy"
+              className="mt-1 block w-full rounded bg-secondary p-2"
+              value={draft.downloadPolicy ?? "none"}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  downloadPolicy: event.target.value as CatalogGallery["downloadPolicy"],
+                })
+              }
+            >
+              <option value="none">No customer downloads</option>
+              <option value="purchased_only">
+                Purchased files only — future entitlement service required
+              </option>
+            </select>
+          </label>
+          <p className="text-sm text-muted-foreground">
+            Saving this policy never opens access to originals. Customer downloads remain
+            unavailable until the payment and entitlement delivery flow is verified.
+          </p>
           <label className="block">
             Category
             <Input

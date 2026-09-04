@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useBlocker } from "@tanstack/react-router";
 import { catalogFetch, useCatalog } from "./client";
 import type { ProofSelection } from "./types";
 
@@ -8,6 +9,7 @@ export function useProofSelection(galleryId: string) {
   const [saved, setSaved] = useState<ProofSelection | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const saving = useRef(false);
   const base =
     saved?.galleryId === galleryId
       ? saved
@@ -16,6 +18,13 @@ export function useProofSelection(galleryId: string) {
         : undefined;
   const currentDraft = draft?.galleryId === galleryId ? draft : null;
   const selection = currentDraft || base;
+  useBlocker({
+    disabled: !currentDraft,
+    enableBeforeUnload: Boolean(currentDraft),
+    shouldBlockFn: ({ current, next }) =>
+      current.pathname !== next.pathname &&
+      !window.confirm("Your proof selection has unsaved changes. Leave without saving?"),
+  });
   const reload = () => {
     setDraft(null);
     setSaved(null);
@@ -31,7 +40,7 @@ export function useProofSelection(galleryId: string) {
     dirty: Boolean(currentDraft),
     reload,
     toggle(id: string) {
-      if (!selection || busy) return;
+      if (!selection || saving.current) return;
       const photoIds = selection.photoIds.includes(id)
         ? selection.photoIds.filter((p) => p !== id)
         : [...selection.photoIds, id];
@@ -43,13 +52,14 @@ export function useProofSelection(galleryId: string) {
       setMessage("");
     },
     note(note: string) {
-      if (selection && !busy) {
+      if (selection && !saving.current) {
         setDraft({ ...selection, note });
         setMessage("");
       }
     },
     async save() {
-      if (!selection || busy) return;
+      if (!selection || saving.current) return;
+      saving.current = true;
       setBusy(true);
       setMessage("");
       try {
@@ -65,10 +75,11 @@ export function useProofSelection(galleryId: string) {
       } catch (error) {
         setMessage(
           error instanceof Error
-            ? error.message
+            ? `${error.message} Your draft is still here; retry saving, or reload the saved version if it changed.`
             : "Could not save. Your unsaved draft remains here.",
         );
       } finally {
+        saving.current = false;
         setBusy(false);
       }
     },

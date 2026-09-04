@@ -24,6 +24,9 @@ function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  // Email/password is the configured deployment path. Do not offer broker
+  // buttons until an operator has explicitly configured and verified them.
+  const socialEnabled = import.meta.env.VITE_SOCIAL_AUTH_ENABLED === "true";
 
   async function onEmail(e: FormEvent) {
     e.preventDefault();
@@ -71,25 +74,29 @@ function Login() {
       </p>
       {authEnabled ? (
         <div className="mt-8 grid gap-3">
-          {GROK_PROVIDERS.map((p) => (
-            <Button
-              key={p.providerId}
-              type="button"
-              variant="outline"
-              onClick={() => signIn(p.providerId, { callbackURL: destination })}
-            >
-              Continue with {p.label}
-            </Button>
-          ))}
-          <p className="pt-4 text-center text-xs uppercase tracking-[0.16em] text-muted-foreground">
-            or email
-          </p>
+          {socialEnabled &&
+            GROK_PROVIDERS.map((p) => (
+              <Button
+                key={p.providerId}
+                type="button"
+                variant="outline"
+                onClick={() => signIn(p.providerId, { callbackURL: destination })}
+              >
+                Continue with {p.label}
+              </Button>
+            ))}
+          {socialEnabled && (
+            <p className="pt-4 text-center text-xs uppercase tracking-[0.16em] text-muted-foreground">
+              or email
+            </p>
+          )}
           <form className="grid gap-3" onSubmit={(e) => void onEmail(e)}>
             <div className="grid gap-1.5">
               <Label htmlFor="em">Email</Label>
               <Input
                 id="em"
                 type="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -100,6 +107,7 @@ function Login() {
               <Input
                 id="pw"
                 type="password"
+                autoComplete={firstRun ? "new-password" : "current-password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 minLength={8}

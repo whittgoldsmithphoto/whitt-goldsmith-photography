@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ProofPanel } from "./proof-selection";
 import { useProofSelection, type ProofController } from "@/lib/catalog/use-proof";
+import { PreviewImage } from "./preview-image";
 
 export function CatalogStatus({
   loading,
@@ -204,6 +205,22 @@ export function CatalogGalleryPage({ id }: { id: string }) {
       </p>
       <h1 className="font-display mt-2 text-4xl sm:text-5xl">{gallery.title}</h1>
       <p className="my-5 max-w-2xl text-muted-foreground">{gallery.description}</p>
+      <section
+        aria-label="Gallery instructions and download policy"
+        className="my-5 max-w-3xl space-y-3 rounded border border-border p-4"
+      >
+        {gallery.customerInstructions && (
+          <>
+            <h2 className="font-display text-xl">Gallery instructions</h2>
+            <p className="whitespace-pre-wrap break-words">{gallery.customerInstructions}</p>
+          </>
+        )}
+        <p className="text-sm text-muted-foreground">
+          {gallery.downloadPolicy === "purchased_only"
+            ? "Download policy: purchased files only. Customer downloads are not available yet; a confirmed purchase and valid download entitlement will be required."
+            : "Download policy: no customer downloads. You can view protected previews and save a proof selection."}
+        </p>
+      </section>
       <Button
         variant="outline"
         className="mb-8"
@@ -278,8 +295,12 @@ function CatalogLightbox({
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = ref.current;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     dialog?.showModal();
-    return () => dialog?.close();
+    return () => {
+      dialog?.close();
+      previous?.focus();
+    };
   }, []);
   const photo = photos[index];
   const step = (amount: number) => onIndex((index + amount + photos.length) % photos.length);
@@ -287,12 +308,17 @@ function CatalogLightbox({
     <dialog
       ref={ref}
       aria-label="Photograph viewer"
-      className="fixed inset-0 m-auto max-h-svh w-full max-w-6xl bg-background p-4 text-foreground backdrop:bg-black/90"
+      className="fixed inset-0 m-auto max-h-svh w-full max-w-6xl overflow-y-auto bg-background p-4 text-foreground backdrop:bg-black/90"
       onCancel={(e) => {
         e.preventDefault();
         onClose();
       }}
       onKeyDown={(e) => {
+        if (
+          e.target instanceof HTMLElement &&
+          (e.target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName))
+        )
+          return;
         if (e.key === "ArrowRight") {
           e.preventDefault();
           step(1);
@@ -301,21 +327,25 @@ function CatalogLightbox({
           e.preventDefault();
           step(-1);
         }
+        if (e.key === "Home") {
+          e.preventDefault();
+          onIndex(0);
+        }
+        if (e.key === "End") {
+          e.preventDefault();
+          onIndex(photos.length - 1);
+        }
       }}
     >
       <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="min-w-0 truncate">
+        <p className="min-w-0 truncate" aria-live="polite" aria-atomic="true">
           {photo.filename} · {index + 1}/{photos.length}
         </p>
         <Button autoFocus variant="outline" onClick={onClose}>
           Close
         </Button>
       </div>
-      <img
-        src={photo.src}
-        alt={photo.caption || photo.filename}
-        className="max-h-[75svh] w-full object-contain"
-      />
+      <PreviewImage key={photo.id} photo={photo} />
       {photo.caption && <p className="mt-3 text-center">{photo.caption}</p>}
       {proof.selection && (
         <Button
@@ -336,6 +366,10 @@ function CatalogLightbox({
           Next
         </Button>
       </div>
+      <p className="mt-2 text-center text-xs text-muted-foreground">
+        Arrow keys move between photographs. Home / End jump to the first / last. Escape closes the
+        viewer.
+      </p>
     </dialog>
   );
 }
