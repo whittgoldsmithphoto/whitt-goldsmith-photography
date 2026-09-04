@@ -119,6 +119,38 @@ export async function acceptConfiguredWebhook(
     timestamps[0] > Math.floor(Date.now() / 1000) + 300
   )
     fail("Invalid webhook signature timestamp", 400);
+  return acceptProviderEvent(event, config, provider, commerce);
+}
+
+/** Server-only recovery path: retrieve by ID using the configured account key.
+ * Never expose an HTTP operation accepting a caller-supplied event object.
+ */
+export async function recoverStripeEvent(
+  eventId: string,
+  config: SandboxWebhookConfig | LiveWebhookConfig,
+  provider: SandboxProvider & { event(id: string): Promise<Stripe.Event> },
+  commerce: SandboxCommerce,
+) {
+  if (!/^evt_[A-Za-z0-9]+$/.test(eventId)) fail("Invalid event identity");
+  const event = await provider.event(eventId);
+  if (event.id !== eventId) fail("Recovered event identity mismatch", 409);
+  return acceptProviderEvent(event, config, provider, commerce);
+}
+
+async function acceptProviderEvent(
+  event: Stripe.Event,
+  config: SandboxWebhookConfig | LiveWebhookConfig,
+  provider: SandboxProvider,
+  commerce: SandboxCommerce,
+) {
+  const live = config.environment === "production";
+  if (
+    !["staging", "production"].includes(config.environment) ||
+    config.expectedLivemode !== live ||
+    (live && config.taxMode !== "stripe") ||
+    !/^acct_[A-Za-z0-9]+$/.test(config.expectedAccountId)
+  )
+    fail("Payment event configuration is invalid", 503);
   if (event.livemode !== live)
     fail(
       live

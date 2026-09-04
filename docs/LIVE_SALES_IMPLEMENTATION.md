@@ -28,10 +28,10 @@ The new destination is the verified production catalog origin plus `/api/commerc
 
 Validation: the release snapshot passes 357 tests, TypeScript checking, staging build and lint (zero errors, six pre-existing warnings). It restores HEAD-tracked files only inside a temporary verification snapshot; unrelated user deletions in the working tree are untouched. Focused tests include live/test credential gates, saved-price offers, signed tax arithmetic, transactional rollback, replay and refund revocation. No new live browser/provider acceptance is claimed.
 
-1. Apply migration 0021 to isolated staging, deploy this revision, then exercise the new tax-enabled path with actual Stripe sandbox/R2 and browser evidence. Local simulated events are not provider acceptance.
-2. Complete missed-webhook scheduled reconciliation, abandoned/expired session recovery and revocation races. Existing signed-event processing and explicit cancellation are not a scheduler.
+1. Migrations 0021/0022 are now applied to isolated staging and the storefront revision is deployed. Exercise the new tax-enabled path with actual Stripe sandbox/R2 and browser evidence. Local simulated events are not provider acceptance.
+2. The separate [scheduled recovery Worker](PAYMENT_RECOVERY.md) now exists and is deployed disabled. Its sandbox API secret still needs provisioning and actual scheduled recovery needs acceptance. Finish ambiguous/unbound session recovery, proactive expiry and revocation races.
 3. Verify real tax registration/classification, receipt configuration, production keys/signing destination, owner authentication, private storage and database isolation on the actual production catalog target. Do not copy staging acceptance flags as proof.
 4. Finish successful 3DS, real replay counts, tax-inclusive payment/refund and recovery acceptance. Confirm payout destination and owner-controlled price/license/refund policy before activation. An explicitly authorized live acceptance purchase remains separate from sandbox tests.
 5. Gallery/album archive downloads and physical prints still have draft pricing only. Archive delivery needs packaging/entitlements; prints need a selected provider, shipping and fulfillment integration. These products remain unsellable rather than accepting undeliverable orders.
 
-No custom-domain cutover, real charge, provider setting change or production migration was performed by this source revision. Existing Git history and unrelated local deletions remain preserved.
+No custom-domain cutover, real charge or production migration was performed. Existing Git history and unrelated local deletions remain preserved.

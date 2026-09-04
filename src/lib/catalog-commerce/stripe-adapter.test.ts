@@ -10,6 +10,7 @@ import { applyVerifiedPaymentReview, type VerifiedPaymentReview } from "./paymen
 import {
   acceptSandboxWebhook,
   acceptConfiguredWebhook,
+  recoverStripeEvent,
   type SandboxOrder,
   type SandboxProvider,
   type SandboxCommerce,
@@ -27,6 +28,45 @@ const config: SandboxWebhookConfig = {
   expectedLivemode: false,
   environment: "staging",
 };
+
+test("recovery retrieves the exact event and retains account, mode and amount verification", async () => {
+  const f = fixture();
+  const event = JSON.parse(envelope(f.session).raw) as Stripe.Event;
+  const provider = {
+    ...f.provider,
+    event: async (id: string) => {
+      assert.equal(id, "evt_fixture");
+      return event;
+    },
+  };
+  await recoverStripeEvent("evt_fixture", config, provider, f.commerce);
+  assert.equal(f.applied.length, 1);
+  await assert.rejects(
+    recoverStripeEvent("evt_wrong", config, { ...provider, event: async () => event }, f.commerce),
+    /identity mismatch/,
+  );
+  await assert.rejects(
+    recoverStripeEvent(
+      "evt_fixture",
+      config,
+      { ...provider, accountId: async () => "acct_other" },
+      f.commerce,
+    ),
+    /account/,
+  );
+  await assert.rejects(
+    recoverStripeEvent(
+      "evt_fixture",
+      config,
+      { ...provider, event: async () => ({ ...event, livemode: true }) },
+      f.commerce,
+    ),
+    /Live-mode/,
+  );
+  f.intent.amount_received = 1;
+  await assert.rejects(recoverStripeEvent("evt_fixture", config, provider, f.commerce));
+  assert.equal(f.applied.length, 1);
+});
 function envelope(
   object: unknown,
   type = "checkout.session.completed",
