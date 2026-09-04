@@ -58,11 +58,12 @@ export async function enqueueMediaJob(
       ${crypto.randomUUID()},${input.photoId},${input.ownerId},${input.transformationVersion},${maxAttempts}
     ) on conflict(photo_id,kind,transformation_version) do update set
       owner_id=excluded.owner_id,
-      status=case when catalog_media_jobs.status='failed' then 'queued' else catalog_media_jobs.status end,
-      attempts=case when catalog_media_jobs.status='failed' then 0 else catalog_media_jobs.attempts end,
-      available_at=case when catalog_media_jobs.status='failed' then now() else catalog_media_jobs.available_at end,
-      error_code=case when catalog_media_jobs.status='failed' then null else catalog_media_jobs.error_code end,
-      error_message=case when catalog_media_jobs.status='failed' then null else catalog_media_jobs.error_message end
+      status=case when catalog_media_jobs.status in ('failed','cancelled') then 'queued' else catalog_media_jobs.status end,
+      attempts=case when catalog_media_jobs.status in ('failed','cancelled') then 0 else catalog_media_jobs.attempts end,
+      available_at=case when catalog_media_jobs.status in ('failed','cancelled') then now() else catalog_media_jobs.available_at end,
+      error_code=case when catalog_media_jobs.status in ('failed','cancelled') then null else catalog_media_jobs.error_code end,
+      error_message=case when catalog_media_jobs.status in ('failed','cancelled') then null else catalog_media_jobs.error_message end,
+      completed_at=case when catalog_media_jobs.status in ('failed','cancelled') then null else catalog_media_jobs.completed_at end
     returning *`;
   return view(rows[0]);
 }
@@ -70,6 +71,24 @@ export async function enqueueMediaJob(
 export async function loadMediaJob(sql: Sql, id: string) {
   const rows = await sql<MediaJobRow>`select * from catalog_media_jobs where id=${id}`;
   return rows[0] ? view(rows[0]) : null;
+}
+
+export async function cancelMediaJobForPhoto(sql: Sql, photoId: string, ownerId: string) {
+  const rows = await sql.query<{ id: string }>(
+    `with cancelled as (
+      update catalog_media_jobs set
+        status='cancelled',lease_token=null,worker_id=null,leased_until=null,
+        error_code='cancelled_by_owner',error_message='Processing cancelled by owner.',updated_at=now()
+      where photo_id=$1 and owner_id=$2 and status in ('queued','retry','processing')
+      returning photo_id
+    )
+    update catalog_photos set
+      status='needs_review',operation_token=null,error='Processing cancelled. Resume when ready.',updated_at=now()
+    where id=$1 and owner_id=$2 and exists(select 1 from cancelled where photo_id=catalog_photos.id)
+    returning id`,
+    [photoId, ownerId],
+  );
+  return rows.length === 1;
 }
 
 export async function listDispatchableMediaJobs(sql: Sql, limit: number) {

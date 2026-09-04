@@ -208,6 +208,8 @@ export async function catalogRequest(request: Request): Promise<Response> {
         });
       if (op === "reserve") return Response.json(await catalog.reserve(data, actor), { headers });
       if (op === "retry") return Response.json(await catalog.process(id, actor), { headers });
+      if (op === "cancel-processing")
+        return Response.json(await catalog.cancelProcessing(id, actor), { headers });
     }
     throw new CatalogError("Not found", 404);
   } catch (error) {

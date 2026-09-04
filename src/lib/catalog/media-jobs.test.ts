@@ -6,6 +6,7 @@ import type { Sql } from "../db.ts";
 import {
   claimNextMediaJob,
   claimMediaJobForPhoto,
+  cancelMediaJobForPhoto,
   completeMediaJob,
   enqueueMediaJob,
   failMediaJob,
@@ -140,6 +141,37 @@ test("the outbox sweep returns only bounded runnable or stale jobs", async () =>
       "the sweep is ordered and bounded",
     );
     await assert.rejects(() => listDispatchableMediaJobs(f.sql, 0), /Invalid dispatch limit/);
+  } finally {
+    await f.db.close();
+  }
+});
+
+test("owner cancellation fences active work, leaves review state, and can be explicitly resumed", async () => {
+  const f = await fixture();
+  try {
+    const job = await enqueueMediaJob(f.sql, {
+      photoId: "00000000-0000-4000-8000-000000000002",
+      ownerId: "owner",
+      transformationVersion: 20,
+    });
+    const claimed = await claimMediaJobForPhoto(f.sql, job.photoId, "worker", 300);
+    assert.ok(claimed?.leaseToken);
+    assert.equal(await cancelMediaJobForPhoto(f.sql, job.photoId, "attacker"), false);
+    assert.equal(await cancelMediaJobForPhoto(f.sql, job.photoId, "owner"), true);
+    assert.equal((await loadMediaJob(f.sql, job.id))?.status, "cancelled");
+    assert.equal(await completeMediaJob(f.sql, job.id, claimed!.leaseToken!), false);
+    assert.deepEqual(await listDispatchableMediaJobs(f.sql, 10), []);
+    const photo = await f.sql<{ status: string; operation_token: string | null }>`select status,operation_token from catalog_photos where id=${job.photoId}`;
+    assert.deepEqual(photo[0], { status: "needs_review", operation_token: null });
+
+    const resumed = await enqueueMediaJob(f.sql, {
+      photoId: job.photoId,
+      ownerId: "owner",
+      transformationVersion: 20,
+    });
+    assert.equal(resumed.id, job.id);
+    assert.equal(resumed.status, "queued");
+    assert.equal(resumed.attempts, 0);
   } finally {
     await f.db.close();
   }

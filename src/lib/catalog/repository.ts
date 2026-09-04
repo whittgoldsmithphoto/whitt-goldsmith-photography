@@ -14,6 +14,7 @@ import { CatalogError } from "./errors.ts";
 import { createProofService } from "./proofs.ts";
 import {
   claimMediaJobForPhoto,
+  cancelMediaJobForPhoto,
   enqueueMediaJob,
   failMediaJob,
 } from "./media-jobs.ts";
@@ -417,6 +418,12 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
       return { id, status: "reserved", duplicate: false };
     },
     uploadOriginal,
+    async cancelProcessing(id: string, owner: string) {
+      if (!idSchema.safeParse(id).success || !(await cancelMediaJobForPhoto(sql, id, owner)))
+        throw new CatalogError("Processing job is unavailable or already finished", 409);
+      await audit(owner, "photo.processing_cancelled", id);
+      return { id, status: "needs_review" as const };
+    },
     async upload(id: string, bytes: Uint8Array, owner: string) {
       await uploadOriginal(id, bytes, owner);
       return this.process(id, owner);
