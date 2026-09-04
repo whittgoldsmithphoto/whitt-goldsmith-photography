@@ -3,6 +3,7 @@ import { getSql } from "../db";
 import { runtimeSetting } from "../catalog/media.server";
 import { createCommerce } from "./service";
 import { applyVerifiedSessionOutcome } from "./session-outcomes";
+import { applyVerifiedPaymentReview } from "./payment-review";
 import type { SandboxOrder } from "./stripe-adapter";
 import { createSandboxWebhookHandler, sandboxWebhookConfiguration } from "./stripe-webhook-http";
 
@@ -18,7 +19,10 @@ export async function catalogStripeWebhook(request: Request) {
     timeout: 10000,
     maxNetworkRetries: 1,
   });
-  async function order(column: "provider_session_id" | "provider_payment_id", value: string) {
+  async function order(
+    column: "provider_session_id" | "provider_payment_id" | "id",
+    value: string,
+  ) {
     const sql = await getSql();
     return (
       await sql.query<SandboxOrder>(
@@ -35,10 +39,13 @@ export async function catalogStripeWebhook(request: Request) {
       session: (id) => stripe.checkout.sessions.retrieve(id),
       paymentIntent: (id) => stripe.paymentIntents.retrieve(id, { expand: ["latest_charge"] }),
       charge: (id) => stripe.charges.retrieve(id),
+      dispute: (id) => stripe.disputes.retrieve(id),
     },
     {
       orderBySession: (id) => order("provider_session_id", id),
       orderByPayment: (id) => order("provider_payment_id", id),
+      orderById: (id) => order("id", id),
+      applyReview: async (event) => applyVerifiedPaymentReview(await getSql(), event),
       apply: async (event) =>
         createCommerce(await getSql(), async () => {
           throw new Error("Webhook cannot authorize galleries");

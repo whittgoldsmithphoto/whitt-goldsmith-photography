@@ -1,34 +1,37 @@
-# Sandbox checkout service slice
+# Sandbox checkout acceptance
 
-Status: **implemented building block; not exposed, enabled, or provider-tested**.
+Status: **wired owner-only sandbox implementation, off by default; full live-provider acceptance outstanding**. This describes current source, not production activation. Public checkout remains unavailable.
 
-`src/lib/catalog-commerce/checkout.server.ts` creates a Stripe-hosted Checkout Session from a database quote. No route imports it. This does not enable purchases or claim that checkout works on the website.
+## Implemented boundaries
 
-## Implemented safeguards
+- Same-origin bounded JSON POST `commerce:checkout` derives identity from the session and requires configured owner capability. `commerce:payment-setup` exposes safe owner-only availability flags, never credentials. `commerce:cancel-checkout` also requires owner identity and rate limiting.
+- Checkout uses customer-owned unexpired quote snapshots; it rechecks gallery access/version, publication, photo readiness/visibility/archive state and purchased-download policy. Browser prices, names, licenses and totals are not authoritative.
+- Migration `0017_checkout_attempts.sql` persists immutable provider parameters, account, origin and expiration per order. Stable order IDs are provider idempotency keys; retries do not silently change callback configuration or quote contents. Expired unbound attempts fail closed for reconciliation rather than creating another session.
+- Provider session readback validates test mode, account, amount, currency, metadata, customer reference, state and redirect. Redirects are restricted to Stripe Checkout and fixed HTTPS return routes. Returning from Stripe never changes payment state.
+- Explicit cancellation records `cancel_requested` before calling the provider, confirms expiration before recording `expired`, and remains closed on provider failure. Already-paid sessions require refund/reconciliation. Automatic scheduled reconciliation and expiration after every catalog mutation remain outstanding.
+- Migration `0018_payment_reviews.sql` records adverse provider outcomes and places partial refunds/disputes into a conservative delivery hold; full refunds revoke delivery. This is not a complete proportional partial-refund or dispute-resolution product.
+- Migration `0019_checkout_rate_limits.sql` atomically caps authenticated checkout/cancellation attempts at 20 per ten-minute window.
+- Test-only adapter requires staging, direct-account `sk_test_` credentials, matching account/webhook configuration, and independent checkout/delivery-fixture/tax-fixture gates. No live key or Connect mode is accepted. The zero-tax fixture is **not** a real tax determination.
 
-- Strict input accepts only a quote ID. The caller must derive the customer ID from authenticated identity, never request JSON.
-- Reads customer-owned, unexpired snapshots and rechecks publication, current access version, photo readiness/visibility/archive state, plus the caller's current password/access authorization callback.
-- Existing `commerce_create_order` locks the quote and returns one unique order. The stable order ID is the Stripe idempotency key. A provider timeout before local binding can retry identical parameters.
-- Integer-cent discount allocation preserves the exact immutable quote total without client totals, names, tax, coupon objects, or object keys.
-- Requires staging, an `sk_test_` credential, correct direct Stripe account, and separate checkout, delivery-acceptance, and sandbox-tax-fixture flags. No live key or Connect mode is accepted.
-- Only the configured HTTPS origin can be used for the fixed return routes. Returned redirects must use `https://checkout.stripe.com`.
-- Retrieves the provider session and checks test mode, amount, currency, metadata, customer reference, pending status, and URL before compare-and-set binding. No payment/entitlement state is granted by this service.
-- Zero tax is a deliberately gated **sandbox fixture only**, not a tax determination. Live charging is impossible in this adapter.
+## Customer interface
+
+`/purchases` reads customer-scoped cursor-paginated history. `/checkout/complete` and `/checkout/cancel` display server-recorded status. Pending orders poll at most twelve times before offering manual refresh; errors stop automatic retries. Paid orders show eligible entitlements, remaining attempts and expiry. Review/refunded/failed statuses do not expose download controls.
+
+Downloads POST an entitlement ID to `/api/commerce-download`, then POST its issued token in the request body. Tokens never enter URLs or browser persistence. The server rechecks identity, entitlement, current gallery policy, file state and original integrity before delivering bytes. Download capability remains independently gated.
 
 ## Verified locally
 
-PGlite integration test covers one logical order, repeated calls, provider read failure before binding, identical retry parameters, foreign customer, extra browser amount, disabled flags, wrong account, live key/mode, incorrect redirect, access denial, hidden photo, and access-version revocation. Discount allocation is exercised for every discount from 0 through 610 cents against a 611-cent snapshot. These tests do not prove independent-connection PostgreSQL contention or Stripe behavior.
+Service fixtures cover immutable retries, foreign customers, browser-total rejection, disabled/wrong environment credentials, provider response mismatches, access changes, expiry/cancellation and adverse-event handling. PGlite is not independent-connection Neon contention evidence.
 
-## Must finish before any activation
+`node scripts/commerce-customer-browser-check.mjs` passed with real local HTTP, Better Auth and PGlite. It covers account-isolated history/detail, pending-to-paid polling, cancellation-page non-mutation, exact downloaded fixture bytes through the actual authorization/integrity handler, attempt counting, other-account token denial, and refund UI/server revocation. Only the R2 binding and internal provider event inputs are synthetic. This is **not** proof of Stripe-hosted payment or live R2 acceptance. CI now runs this harness after the existing proof and resource browser checks; a configured step is not a claim the remote run passed.
 
-1. Wire an authenticated, same-origin/CSRF-protected POST route, rate limits, safe errors, and the fixed `/checkout/complete` and `/checkout/cancel` pages. A return page must never grant delivery.
-2. Select seller/tax/license/refund policy and implement an authoritative tax adapter; do not reuse the fixture gate for live mode.
-3. Define and implement session expiry, cancellation and reconciliation for revoked gallery access, photo removal, abandoned checkout and expired quotes. Rechecking before redirect does not retract an already issued Stripe URL. Without that lifecycle, a customer could pay after access is revoked; therefore this slice must remain unwired.
-4. Freeze callback configuration for retries or persist complete request parameters per order before supporting deployment/configuration changes during pending checkout.
-5. If allowing retries beyond the current quote-expiry window, persist provider-attempt state and protect against Stripe idempotency-key retention expiry. The present implementation refuses an expired quote.
-6. Test concurrent creation using independent PostgreSQL connections and actual sandbox provider idempotency; run checkout → signed webhook → authorized download → full refund → revoked download, including duplicate events and provider timeouts.
-7. Complete customer receipt/history and download UX, policy notices, and an explicit staging acceptance decision. Keep checkout/delivery independently disabled until then.
+## Gates still outstanding
 
-No credentials, payment account settings, real orders, publication settings, or provider state were changed by this implementation.
+1. Apply/read back new migrations in staging and deploy the exact reviewed revision before provider testing. Do not infer deployment from local tests.
+2. Run actual owner sandbox Checkout Session → signed webhook → exact local order/entitlement → authorized private R2 file → full refund → revoked delivery. Include duplicate events, provider timeouts and independent PostgreSQL connection contention.
+3. Reconcile stale/unbound attempts and unsettled orders with a scheduled durable job; expire outstanding Stripe URLs when catalog access changes, and test cancellation/payment races against Stripe.
+4. Complete partial-refund allocation and dispute outcome resolution before claiming those workflows are fully supported; current policy is a conservative hold.
+5. Decide real products/prices, seller jurisdiction, tax treatment, license/refund rules, receipt requirements and download limits. Implement a real tax adapter; never reuse sandbox zero-tax gates for live charging.
+6. Build separate production configuration/account binding and a live-safe provider adapter. Audit legacy webhook consumers/records before changing their endpoint or secret source. Confirm verification/payout readiness and explicitly authorize a live acceptance purchase.
 
-Provider reference: [Stripe Checkout Session creation](https://docs.stripe.com/api/checkout/sessions/create).
+See [live setup findings](LIVE_STRIPE_READINESS.md). No current source gate certifies live readiness.

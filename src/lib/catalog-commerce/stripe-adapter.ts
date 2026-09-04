@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 import type { VerifiedPayment } from "./service.ts";
 import type { VerifiedSessionOutcome } from "./session-outcomes.ts";
+import type { VerifiedPaymentReview } from "./payment-review.ts";
 
 export class CommerceWebhookError extends Error {
   status: number;
@@ -22,12 +23,15 @@ export interface SandboxProvider {
   session(id: string): Promise<Stripe.Checkout.Session>;
   paymentIntent(id: string): Promise<Stripe.PaymentIntent>;
   charge(id: string): Promise<Stripe.Charge>;
+  dispute?(id: string): Promise<Stripe.Dispute>;
 }
 export interface SandboxCommerce {
   orderBySession(sessionId: string): Promise<SandboxOrder | undefined>;
   orderByPayment(paymentId: string): Promise<SandboxOrder | undefined>;
   apply(payment: VerifiedPayment): Promise<unknown>;
   applySessionOutcome(event: VerifiedSessionOutcome): Promise<{ status: string }>;
+  orderById?(id: string): Promise<SandboxOrder | undefined>;
+  applyReview?(event: VerifiedPaymentReview): Promise<{ status: string }>;
 }
 export interface SandboxWebhookConfig {
   webhookSecret: string;
@@ -97,6 +101,9 @@ export async function acceptSandboxWebhook(
     "charge.refunded",
     "checkout.session.expired",
     "checkout.session.async_payment_failed",
+    "charge.dispute.created",
+    "charge.dispute.updated",
+    "charge.dispute.closed",
   ];
   if (!supported.includes(event.type))
     fail("Event type is not implemented; no order state was changed", 422);
@@ -134,30 +141,74 @@ export async function acceptSandboxWebhook(
     return paymentId;
   }
 
-  if (event.type === "charge.refunded") {
-    const supplied = event.data.object as Stripe.Charge;
+  if (event.type === "charge.refunded" || event.type.startsWith("charge.dispute.")) {
+    const isDispute = event.type.startsWith("charge.dispute.");
+    let chargeId: string;
+    if (isDispute) {
+      const supplied = event.data.object as Stripe.Dispute;
+      if (
+        supplied.object !== "dispute" ||
+        supplied.livemode !== false ||
+        !supplied.id?.startsWith("dp_")
+      )
+        fail("Invalid dispute object");
+      if (!provider.dispute) fail("Dispute readback is unavailable", 503);
+      const dispute = await provider.dispute(supplied.id);
+      if (
+        dispute.id !== supplied.id ||
+        dispute.object !== "dispute" ||
+        dispute.livemode !== false ||
+        !reference(dispute.charge)?.startsWith("ch_")
+      )
+        fail("Dispute identity mismatch", 409);
+      chargeId = reference(dispute.charge)!;
+    } else {
+      const supplied = event.data.object as Stripe.Charge;
+      if (
+        supplied.object !== "charge" ||
+        supplied.livemode !== false ||
+        !supplied.id?.startsWith("ch_")
+      )
+        fail("Invalid refund object");
+      chargeId = supplied.id;
+    }
+    const charge = await provider.charge(chargeId);
     if (
-      supplied.object !== "charge" ||
-      supplied.livemode !== false ||
-      !supplied.id?.startsWith("ch_")
-    )
-      fail("Invalid refund object");
-    const charge = await provider.charge(supplied.id);
-    if (
-      charge.id !== supplied.id ||
+      charge.id !== chargeId ||
       charge.object !== "charge" ||
       charge.livemode !== false ||
       !charge.paid ||
-      !charge.refunded ||
-      charge.amount_refunded !== charge.amount
+      (!isDispute &&
+        (!Number.isSafeInteger(charge.amount_refunded) ||
+          charge.amount_refunded <= 0 ||
+          charge.amount_refunded > charge.amount))
     )
-      fail("Only confirmed full refunds are implemented", 422);
+      fail("Refund or dispute charge is not confirmed", 422);
     const paymentId = reference(charge.payment_intent);
     if (!paymentId) fail("Refund payment identity is missing", 409);
-    const order = await commerce.orderByPayment(paymentId);
+    let order = await commerce.orderByPayment(paymentId);
+    // Refunds can precede the paid webhook. Retrieve the PaymentIntent rather
+    // than trusting event metadata, then validate its bound local Session below.
+    if (!order && commerce.orderById) {
+      const intent = await provider.paymentIntent(paymentId);
+      if (
+        intent.id !== paymentId ||
+        intent.object !== "payment_intent" ||
+        intent.livemode !== false ||
+        intent.amount !== charge.amount ||
+        intent.currency !== charge.currency ||
+        intent.metadata?.wgp_environment !== "staging" ||
+        !intent.metadata?.wgp_order_id
+      )
+        fail("Adverse payment identity mismatch", 409);
+      order = await commerce.orderById(intent.metadata.wgp_order_id);
+      if (order && intent.metadata.wgp_quote_id !== order.quote_id)
+        fail("Adverse payment quote mismatch", 409);
+    }
     if (
       !order?.provider_session_id ||
-      order.provider_payment_id !== paymentId ||
+      (order.provider_payment_id === null && !commerce.applyReview) ||
+      (order.provider_payment_id !== null && order.provider_payment_id !== paymentId) ||
       charge.amount !== order.total_cents ||
       charge.currency !== order.currency
     )
@@ -165,6 +216,23 @@ export async function acceptSandboxWebhook(
     const session = await provider.session(order.provider_session_id);
     if (validateSession(session, order) !== paymentId)
       fail("Refund payment identity does not match session", 409);
+    const fullRefund = charge.refunded && charge.amount_refunded === charge.amount;
+    if (commerce.applyReview) {
+      const result = await commerce.applyReview({
+        eventId: event.id,
+        orderId: order.id,
+        kind: isDispute ? "dispute" : fullRefund ? "full_refund" : "partial_refund",
+        sessionId: session.id,
+        paymentId,
+        amountCents: order.total_cents,
+        currency: "usd",
+      });
+      return {
+        received: true,
+        applied: result.status === "refunded" ? ("refunded" as const) : ("review" as const),
+      };
+    }
+    if (isDispute || !fullRefund) fail("Payment review ledger is unavailable", 503);
     await commerce.apply({
       eventId: event.id,
       orderId: order.id,

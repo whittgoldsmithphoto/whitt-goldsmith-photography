@@ -10,6 +10,7 @@ import { toast } from "sonner";
 const searchSchema = z.object({
   setup: z.coerce.string().optional(),
   gallery: z.string().uuid().optional().catch(undefined),
+  returnTo: z.literal("/purchases").optional().catch(undefined),
 });
 
 export const Route = createFileRoute("/login")({
@@ -18,8 +19,9 @@ export const Route = createFileRoute("/login")({
 });
 
 function Login() {
-  const { setup, gallery } = Route.useSearch();
-  const destination = gallery ? `/galleries/${gallery}` : "/organize";
+  const { setup, gallery, returnTo } = Route.useSearch();
+  const customer = Boolean(gallery || returnTo);
+  const destination = gallery ? `/galleries/${gallery}` : returnTo || "/organize";
   const firstRun = setup === "1";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -36,7 +38,7 @@ function Login() {
         const res = await authClient.signUp.email({
           email,
           password,
-          name: gallery ? "Photography customer" : "Studio account",
+          name: customer ? "Photography customer" : "Studio account",
         });
         if (res.error) throw new Error(res.error.message || "Could not create the account");
       } else {
@@ -54,10 +56,10 @@ function Login() {
   return (
     <div className="mx-auto flex min-h-[70svh] max-w-sm flex-col justify-center px-4 py-16">
       <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-        Studio
+        {customer ? "Your photographs" : "Studio"}
       </p>
       <h1 className="font-display mt-2 text-4xl tracking-tight">
-        {gallery
+        {customer
           ? firstRun
             ? "Create account"
             : "Customer sign in"
@@ -66,8 +68,8 @@ function Login() {
             : "Owner"}
       </h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        {gallery
-          ? "Save photo selections and notes to your account. Signing in does not unlock password-protected galleries."
+        {customer
+          ? "Sign in to view your purchases and saved selections. Signing in does not unlock password-protected galleries."
           : firstRun
             ? "Create your account. Studio access must then be granted to its account ID in OWNER_USER_IDS."
             : "Sign in with an account that has been granted studio access."}
@@ -117,10 +119,12 @@ function Login() {
             <Button type="submit" disabled={busy}>
               {busy
                 ? "Working…"
-                : gallery
+                : customer
                   ? firstRun
                     ? "Create customer account"
-                    : "Return to gallery"
+                    : gallery
+                      ? "Return to gallery"
+                      : "View purchases"
                   : firstRun
                     ? "Create owner account"
                     : "Enter studio"}

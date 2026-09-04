@@ -50,11 +50,16 @@ export function CommercePricing() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [quote, setQuote] = useState<Quote>();
+  const [sandboxAvailable, setSandboxAvailable] = useState(false);
   const [section, setSection] = useState<SellingSection>("pricing");
   const reload = useCallback(async () => {
     setError("");
     try {
       setData(await request<Pricing>("owner"));
+      setSandboxAvailable(
+        (await request<{ sandboxCheckoutAvailable: boolean }>("payment-setup"))
+          .sandboxCheckoutAvailable,
+      );
     } catch (e) {
       setError((e as Error).message);
     }
@@ -102,6 +107,22 @@ export function CommercePricing() {
         ...(coupon ? { couponCode: coupon } : {}),
       });
       setQuote(result.quote);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function testCheckout() {
+    if (!quote) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await request<{ url: string }>("checkout", { quoteId: quote.id });
+      const url = new URL(result.url);
+      if (url.origin !== "https://checkout.stripe.com" || url.username || url.password)
+        throw new Error("Invalid checkout destination");
+      window.location.assign(url.href);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -531,6 +552,22 @@ export function CommercePricing() {
                   <p>Tax assessment is not configured. This preview cannot be purchased.</p>
                   <p>Expires: {new Date(quote.expires_at).toLocaleString()}</p>
                   <p className="break-all">Quote reference: {quote.id}</p>
+                  {sandboxAvailable && (
+                    <>
+                      <p>
+                        Owner-only sandbox test. Use a Stripe test card; this does not charge real
+                        money.
+                      </p>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        className={buttonClass}
+                        onClick={() => void testCheckout()}
+                      >
+                        Open Stripe sandbox checkout
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </form>

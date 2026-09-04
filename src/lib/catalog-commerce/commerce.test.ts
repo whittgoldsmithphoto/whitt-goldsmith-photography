@@ -5,6 +5,7 @@ import { PGlite } from "@electric-sql/pglite";
 import type { Sql } from "../db.ts";
 import { createCommerce, type VerifiedPayment } from "./service.ts";
 import { createCommerceHandler } from "./http.ts";
+import { consumeCheckoutAttempt, sandboxCheckoutSettings } from "./checkout-settings.ts";
 
 async function fixture() {
   const db = new PGlite();
@@ -438,4 +439,159 @@ test("HTTP rejects anonymous/non-owner mutations, cross-origin, oversized payloa
   } finally {
     await f.db.close();
   }
+});
+
+test("customer history is bounded, cursor scoped and never exposes provider/storage/token data", async () => {
+  const f = await fixture();
+  try {
+    const orders = [];
+    for (let n = 0; n < 4; n++) orders.push(await f.pending());
+    await f.commerce.applyVerifiedPayment(orders[0].event);
+    const page = await f.commerce.customerOrders("customer", new URLSearchParams("limit=2"));
+    assert.equal(page.data.length, 2);
+    assert.equal(page.page.hasMore, true);
+    const next = await f.commerce.customerOrders(
+      "customer",
+      new URLSearchParams({ limit: "2", cursor: page.page.nextCursor! }),
+    );
+    assert.equal(new Set([...page.data, ...next.data].map((row) => row.id)).size, 4);
+    assert.equal(next.page.hasMore, false);
+    await assert.rejects(
+      f.commerce.customerOrders("other", new URLSearchParams({ cursor: page.page.nextCursor! })),
+    );
+    assert.deepEqual((await f.commerce.customerOrders("other", new URLSearchParams())).data, []);
+    const detail = await f.commerce.customerOrder("customer", orders[0].o.id);
+    assert.equal(detail.entitlements.length, 1);
+    for (const field of [
+      "provider_session_id",
+      "provider_payment_id",
+      "original_key",
+      "token_hash",
+      "checksum",
+    ]) {
+      assert.equal(JSON.stringify(page).includes(field), false);
+      assert.equal(JSON.stringify(detail).includes(field), false);
+    }
+    await assert.rejects(f.commerce.customerOrders("customer", new URLSearchParams("limit=51")));
+  } finally {
+    await f.db.close();
+  }
+});
+
+test("owner sandbox checkout enforces auth, origin, protection, strict callback boundary and disabled default", async () => {
+  const f = await fixture();
+  try {
+    let signedIn = false,
+      owner = false,
+      calls = 0,
+      attempts = 0;
+    const deny = (status: number) => Object.assign(new Error("Denied"), { status });
+    const deps = {
+      sql: f.sql,
+      authorizeGallery: f.authorizeGallery,
+      user: async () => {
+        if (!signedIn) throw deny(401);
+        return "customer";
+      },
+      owner: async () => {
+        if (!owner) throw deny(403);
+        return "customer";
+      },
+      checkoutAttempt: async () => {
+        attempts++;
+      },
+      sandboxCheckout: async (customer: string, input: unknown) => {
+        calls++;
+        assert.equal(customer, "customer");
+        assert.deepEqual(input, { quoteId: "fixture" });
+        return { url: "https://checkout.stripe.com/c/pay/cs_test_fixture" };
+      },
+    };
+    const handler = createCommerceHandler(deps);
+    const req = (origin = "https://example.test") =>
+      new Request("https://example.test/api/commerce?op=checkout", {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body: JSON.stringify({ quoteId: "fixture" }),
+      });
+    assert.equal((await handler(req())).status, 401);
+    signedIn = true;
+    assert.equal((await handler(req())).status, 403);
+    owner = true;
+    assert.equal((await handler(req("https://evil.test"))).status, 403);
+    assert.equal(calls, 0);
+    assert.equal((await handler(req())).status, 200);
+    assert.equal(attempts, 1);
+    assert.equal(calls, 1);
+    assert.equal(
+      (await createCommerceHandler({ ...deps, checkoutAttempt: undefined })(req())).status,
+      503,
+    );
+    assert.equal(
+      (await createCommerceHandler({ ...deps, sandboxCheckout: undefined })(req())).status,
+      503,
+    );
+    assert.equal(calls, 1);
+  } finally {
+    await f.db.close();
+  }
+});
+
+test("checkout rate limiting is persisted, bounded per customer and resets after ten minutes", async () => {
+  const f = await fixture();
+  try {
+    await f.db.exec(
+      await readFile(
+        new URL("../../../migrations/0019_checkout_rate_limits.sql", import.meta.url),
+        "utf8",
+      ),
+    );
+    for (let n = 0; n < 20; n++) await consumeCheckoutAttempt(f.sql, "customer");
+    await assert.rejects(
+      consumeCheckoutAttempt(f.sql, "customer"),
+      (e: unknown) => (e as { status: number }).status === 429,
+    );
+    await consumeCheckoutAttempt(f.sql, "other");
+    await f.db.exec(
+      "UPDATE commerce_checkout_limits SET window_started_at=now()-interval '11 minutes' WHERE customer_id='customer'",
+    );
+    await consumeCheckoutAttempt(f.sql, "customer");
+    assert.equal(
+      (
+        await f.db.query<{ attempts: number }>(
+          "SELECT attempts FROM commerce_checkout_limits WHERE customer_id='customer'",
+        )
+      ).rows[0].attempts,
+      1,
+    );
+  } finally {
+    await f.db.close();
+  }
+});
+
+test("sandbox settings refuse live keys, production, incomplete gates and unsafe callback origins", () => {
+  const values: Record<string, string> = {
+    CATALOG_ENV: "staging",
+    CATALOG_CHECKOUT_SANDBOX_ENABLED: "true",
+    CATALOG_CHECKOUT_DELIVERY_FIXTURE_ACCEPTED: "true",
+    CATALOG_CHECKOUT_TAX_FIXTURE_ACCEPTED: "true",
+    CATALOG_STRIPE_WEBHOOK_ENABLED: "true",
+    CATALOG_STRIPE_SECRET_KEY: "sk_test_fixture",
+    CATALOG_STRIPE_WEBHOOK_SECRET: "whsec_fixture",
+    CATALOG_STRIPE_ACCOUNT_ID: "acct_fixture",
+    BETTER_AUTH_URL: "https://staging.example.test",
+  };
+  const read = (changes: Record<string, string> = {}) =>
+    sandboxCheckoutSettings((name) => ({ ...values, ...changes })[name] || "");
+  assert.ok(read());
+  for (const key of Object.keys(values)) assert.equal(read({ [key]: "" }), undefined);
+  assert.equal(read({ CATALOG_ENV: "production" }), undefined);
+  assert.equal(read({ CATALOG_STRIPE_SECRET_KEY: "sk_live_fixture" }), undefined);
+  for (const origin of [
+    "http://example.test",
+    "https://example.test/path",
+    "https://user:password@example.test",
+    "//example.test",
+  ])
+    assert.equal(read({ BETTER_AUTH_URL: origin }), undefined);
 });

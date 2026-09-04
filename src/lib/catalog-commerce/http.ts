@@ -12,6 +12,10 @@ export interface CommerceDependencies {
   user(): Promise<string>;
   owner(): Promise<string>;
   authorizeGallery(galleryId: string): Promise<number>;
+  /** Owner-only acceptance path, never a public checkout capability. */
+  sandboxCheckout?(customerId: string, input: unknown): Promise<unknown>;
+  sandboxCancel?(customerId: string, input: unknown): Promise<unknown>;
+  checkoutAttempt?(customerId: string): Promise<void>;
 }
 
 /** Injectable boundary tested with real Requests and a real PostgreSQL engine.
@@ -62,6 +66,15 @@ export function createCommerceHandler(deps: CommerceDependencies) {
           return json(
             await commerce.customerOrder(await deps.user(), url.searchParams.get("id") || ""),
           );
+        if (op === "orders")
+          return json(await commerce.customerOrders(await deps.user(), url.searchParams));
+        if (op === "payment-setup") {
+          await deps.owner();
+          return json({
+            sandboxCheckoutAvailable: Boolean(deps.sandboxCheckout),
+            liveCheckoutAvailable: false,
+          });
+        }
         return json({ error: "Unknown commerce operation" }, 404);
       }
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -103,13 +116,30 @@ export function createCommerceHandler(deps: CommerceDependencies) {
             "Quote preview only. Tax assessment and Stripe acceptance are not configured; this is not a purchasable offer.",
         });
       if (op === "checkout") {
-        await deps.user();
+        const customer = await deps.user();
+        if (deps.sandboxCheckout) {
+          await deps.owner();
+          if (!deps.checkoutAttempt)
+            return json({ error: "Checkout protection is not configured" }, 503);
+          await deps.checkoutAttempt(customer);
+          return json(await deps.sandboxCheckout(customer, body));
+        }
         return json(
           {
             error: "Checkout is disabled until Stripe, tax and fulfillment acceptance checks pass.",
           },
           503,
         );
+      }
+      if (op === "cancel-checkout") {
+        const customer = await deps.user();
+        if (!deps.sandboxCancel)
+          return json({ error: "Checkout cancellation is unavailable" }, 503);
+        await deps.owner();
+        if (!deps.checkoutAttempt)
+          return json({ error: "Checkout protection is not configured" }, 503);
+        await deps.checkoutAttempt(customer);
+        return json(await deps.sandboxCancel(customer, body));
       }
       if (
         ![

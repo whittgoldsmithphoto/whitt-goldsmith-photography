@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Sql } from "../db.ts";
+import { encodeCursor, pageInput, pageResult } from "../api/pagination.ts";
 
 const id = z.string().trim().min(1).max(150);
 const selection = z
@@ -47,7 +48,7 @@ export interface Order {
   id: string;
   quote_id: string;
   customer_id: string;
-  status: "pending" | "paid" | "failed" | "refunded";
+  status: "pending" | "paid" | "failed" | "refunded" | "review";
   provider_session_id: string | null;
   provider_payment_id: string | null;
 }
@@ -197,6 +198,29 @@ export function createCommerce(sql: Sql, authorizeGallery: (galleryId: string) =
       ]);
       return row;
     },
+    async customerOrders(customerId: string, params: URLSearchParams) {
+      id.parse(customerId);
+      const scope = `orders:${customerId}`;
+      const { limit, cursor } = pageInput(params, scope);
+      if (cursor && (typeof cursor.sort !== "string" || !Number.isFinite(Date.parse(cursor.sort))))
+        throw new Error("Invalid order cursor");
+      const rows = await sql.query<{
+        id: string;
+        status: string;
+        created_at: string | Date;
+        total_cents: number;
+        currency: string;
+      }>(
+        `SELECT o.id,o.status,to_char(o.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,q.total_cents,q.currency
+         FROM commerce_orders o JOIN commerce_quotes q ON q.id=o.quote_id
+         WHERE o.customer_id=$1 AND ($2::timestamptz IS NULL OR (o.created_at,o.id)<($2::timestamptz,$3::text))
+         ORDER BY o.created_at DESC,o.id DESC LIMIT $4`,
+        [customerId, cursor?.sort ?? null, cursor?.id ?? null, limit + 1],
+      );
+      return pageResult(rows, limit, (row) =>
+        encodeCursor({ scope, id: row.id, sort: String(row.created_at) }),
+      );
+    },
     async customerOrder(customerId: string, orderId: string) {
       id.parse(customerId);
       id.parse(orderId);
@@ -209,7 +233,12 @@ export function createCommerce(sql: Sql, authorizeGallery: (galleryId: string) =
         [orderId, customerId],
       );
       if (!row) throw new Error("Order unavailable");
-      return row;
+      const entitlements = await sql.query(
+        `SELECT id,photo_id,expires_at,downloads,max_downloads,revoked_at
+         FROM commerce_entitlements WHERE order_id=$1 AND customer_id=$2 ORDER BY id LIMIT 100`,
+        [orderId, customerId],
+      );
+      return { ...row, entitlements };
     },
     /** Internal provider adapter only, after creating a provider session with
      * the order ID as idempotency key and server quote snapshots as line items.

@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Sql } from "../db.ts";
 import { createCommerce, type Quote, type Order } from "./service.ts";
 
-/** Not exposed by an HTTP route. Sandbox acceptance must precede activation. */
+/** Exposed only through the default-off owner sandbox acceptance route. Never live checkout. */
 export interface CheckoutConfiguration {
   environment: string;
   checkoutEnabled: boolean;
@@ -20,15 +20,23 @@ export interface CheckoutProvider {
     key: string,
   ): Promise<Stripe.Checkout.Session>;
   retrieve(id: string): Promise<Stripe.Checkout.Session>;
+  expire(id: string): Promise<Stripe.Checkout.Session>;
+  findSessions(input: {
+    createdAfter: number;
+    createdBefore: number;
+    orderId: string;
+    quoteId: string;
+  }): Promise<{ sessions: Stripe.Checkout.Session[]; complete: boolean }>;
 }
 export class CheckoutError extends Error {}
 
-function configuration(config: CheckoutConfiguration) {
+function configuration(config: CheckoutConfiguration, requireAcceptance = true) {
   if (
     config.environment !== "staging" ||
-    config.checkoutEnabled !== true ||
-    config.deliveryAccepted !== true ||
-    config.sandboxTaxFixtureAccepted !== true ||
+    (requireAcceptance &&
+      (config.checkoutEnabled !== true ||
+        config.deliveryAccepted !== true ||
+        config.sandboxTaxFixtureAccepted !== true)) ||
     !/^sk_test_[A-Za-z0-9_]+$/.test(config.secretKey) ||
     !/^acct_[A-Za-z0-9]+$/.test(config.accountId)
   )
@@ -45,7 +53,7 @@ function configuration(config: CheckoutConfiguration) {
 
 /** SDK adapter uses direct-account test credentials only; never Connect headers. */
 export function stripeCheckoutProvider(config: CheckoutConfiguration): CheckoutProvider {
-  configuration(config);
+  configuration(config, false);
   const stripe = new Stripe(config.secretKey, {
     httpClient: Stripe.createFetchHttpClient(),
     timeout: 10000,
@@ -55,6 +63,31 @@ export function stripeCheckoutProvider(config: CheckoutConfiguration): CheckoutP
     accountId: async () => (await stripe.accounts.retrieve(null)).id,
     create: (params, key) => stripe.checkout.sessions.create(params, { idempotencyKey: key }),
     retrieve: (id) => stripe.checkout.sessions.retrieve(id),
+    expire: (id) => stripe.checkout.sessions.expire(id),
+    findSessions: async (input) => {
+      const sessions: Stripe.Checkout.Session[] = [];
+      let startingAfter: string | undefined;
+      for (let page = 0; page < 5; page++) {
+        const result = await stripe.checkout.sessions.list({
+          created: { gte: input.createdAfter, lte: input.createdBefore },
+          limit: 100,
+          ...(startingAfter ? { starting_after: startingAfter } : {}),
+        });
+        sessions.push(
+          ...result.data.filter(
+            (session) =>
+              session.client_reference_id === input.orderId &&
+              session.metadata?.wgp_order_id === input.orderId &&
+              session.metadata?.wgp_quote_id === input.quoteId &&
+              session.metadata?.wgp_environment === "staging",
+          ),
+        );
+        if (!result.has_more) return { sessions, complete: true };
+        startingAfter = result.data.at(-1)?.id;
+        if (!startingAfter) break;
+      }
+      return { sessions, complete: false };
+    },
   };
 }
 
@@ -115,10 +148,135 @@ export function createSandboxCheckout(
   provider: CheckoutProvider,
 ) {
   const commerce = createCommerce(sql, authorizeGallery);
+  type Attempt = {
+    order_id: string;
+    account_id: string;
+    origin: string;
+    environment: string;
+    params: Stripe.Checkout.SessionCreateParams;
+    expires_at: Date | string;
+    created_at: Date | string;
+    provider_session_id: string | null;
+    state: string;
+  };
+  async function attempt(orderId: string) {
+    return (
+      await sql.query<Attempt>("SELECT * FROM commerce_checkout_attempts WHERE order_id=$1", [
+        orderId,
+      ])
+    )[0];
+  }
+  async function ownedOrder(customerId: string, quoteId: string) {
+    return (
+      await sql.query<Order>("SELECT * FROM commerce_orders WHERE quote_id=$1 AND customer_id=$2", [
+        quoteId,
+        customerId,
+      ])
+    )[0];
+  }
+  async function account() {
+    if ((await provider.accountId()) !== config.accountId)
+      throw new CheckoutError("Stripe sandbox account mismatch");
+  }
+  function sessionMatches(session: Stripe.Checkout.Session, order: Order, saved: Attempt) {
+    const amount = saved.params.line_items?.reduce(
+      (sum, item) => sum + (item.price_data?.unit_amount ?? -100000000) * (item.quantity ?? 0),
+      0,
+    );
+    if (
+      !session.id.startsWith("cs_test_") ||
+      session.object !== "checkout.session" ||
+      session.livemode !== false ||
+      session.mode !== "payment" ||
+      session.client_reference_id !== order.id ||
+      session.metadata?.wgp_order_id !== order.id ||
+      session.metadata?.wgp_quote_id !== order.quote_id ||
+      session.metadata?.wgp_environment !== "staging" ||
+      session.amount_total !== amount ||
+      session.currency !== "usd" ||
+      session.expires_at !== saved.params.expires_at ||
+      (saved.provider_session_id && saved.provider_session_id !== session.id)
+    )
+      throw new CheckoutError("Stripe session does not match the pending order");
+  }
+  async function resolveSession(order: Order, saved: Attempt) {
+    if (saved.account_id !== config.accountId || saved.environment !== "staging")
+      throw new CheckoutError("Checkout account changed");
+    const id = saved.provider_session_id ?? order.provider_session_id;
+    let session: Stripe.Checkout.Session;
+    if (id) session = await provider.retrieve(id);
+    else if (new Date(saved.expires_at).getTime() < Date.now() + 1800_000) {
+      // Never replay an invalid/past creation timestamp. Find the existing session
+      // using a bounded read-only scan, then verify every locked snapshot field.
+      const found = await provider.findSessions({
+        createdAfter: Math.floor(new Date(saved.created_at).getTime() / 1000) - 60,
+        createdBefore: Math.floor(new Date(saved.expires_at).getTime() / 1000),
+        orderId: order.id,
+        quoteId: order.quote_id,
+      });
+      if (!found.complete || found.sessions.length !== 1)
+        throw new CheckoutError(
+          "Unbound checkout requires provider reconciliation; creation window elapsed and session lookup was not definitive",
+        );
+      session = found.sessions[0];
+    } else session = await provider.create(saved.params, order.id);
+    sessionMatches(session, order, saved);
+    const [recorded] = await sql.query<Attempt>(
+      `UPDATE commerce_checkout_attempts SET provider_session_id=$2,updated_at=now()
+      WHERE order_id=$1 AND (provider_session_id IS NULL OR provider_session_id=$2) RETURNING *`,
+      [order.id, session.id],
+    );
+    if (!recorded) throw new CheckoutError("Checkout session identity changed");
+    return session;
+  }
+  async function expireOrder(order: Order) {
+    let saved = await attempt(order.id);
+    if (!saved) throw new CheckoutError("No recorded checkout to cancel");
+    if (saved.state === "expired") return { orderId: order.id, status: "expired" as const };
+    await account();
+    if (saved.account_id !== config.accountId) throw new CheckoutError("Checkout account changed");
+    await sql.query(
+      `UPDATE commerce_checkout_attempts SET state='cancel_requested',updated_at=now()
+      WHERE order_id=$1 AND state IN ('reserved','bound')`,
+      [order.id],
+    );
+    saved = (await attempt(order.id))!;
+    // Recover an ambiguous create by replaying the exact original idempotent request.
+    // A failure remains cancel_requested, never eligible to be redirected again.
+    let session = await resolveSession(order, saved);
+    // Bind before expiry so its webhook can resolve a recovered ambiguous create.
+    // No payment or failure state is granted by this binding.
+    if (order.status === "pending" && !order.provider_session_id)
+      await commerce.bindProviderSession(order.id, session.id);
+    if (session.status === "open") {
+      await provider.expire(session.id);
+      session = await provider.retrieve(session.id);
+      sessionMatches(session, order, saved);
+    }
+    if (session.status === "complete") {
+      await sql.query(
+        "UPDATE commerce_checkout_attempts SET state='complete',updated_at=now() WHERE order_id=$1",
+        [order.id],
+      );
+      throw new CheckoutError("Payment already completed; refund reconciliation is required");
+    }
+    if (session.status !== "expired")
+      throw new CheckoutError("Stripe cancellation has not been confirmed");
+    await sql.query(
+      "UPDATE commerce_checkout_attempts SET state='expired',updated_at=now() WHERE order_id=$1",
+      [order.id],
+    );
+    return { orderId: order.id, status: "expired" as const };
+  }
   async function snapshot(customerId: string, quoteId: string) {
     const [quote] = await sql.query<Quote>(
       `SELECT q.* FROM commerce_quotes q JOIN catalog_galleries g ON g.id=q.gallery_id
-       WHERE q.id=$1 AND q.customer_id=$2 AND q.status IN ('open','ordered') AND q.expires_at>now()
+       WHERE q.id=$1 AND q.customer_id=$2 AND
+       ((q.status='open' AND q.expires_at>now()) OR (q.status='ordered' AND q.expires_at>now() AND NOT EXISTS (
+         SELECT 1 FROM commerce_orders o JOIN commerce_checkout_attempts a ON a.order_id=o.id WHERE o.quote_id=q.id)) OR (q.status='ordered' AND EXISTS (
+         SELECT 1 FROM commerce_orders o JOIN commerce_checkout_attempts a ON a.order_id=o.id
+         WHERE o.quote_id=q.id AND o.customer_id=q.customer_id AND o.status='pending'
+         AND a.expires_at>now() AND a.state IN ('reserved','bound'))))
        AND g.published AND g.visibility<>'private' AND g.access_version=q.access_version
        AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(q.items) i
          LEFT JOIN catalog_photos p ON p.id=i->>'photoId'
@@ -129,56 +287,74 @@ export function createSandboxCheckout(
     await authorizeGallery(quote.gallery_id);
     return quote;
   }
-  return async (customerId: string, input: unknown) => {
-    configuration(config);
+  function inputValues(customerId: string, input: unknown, requireAcceptance = true) {
+    configuration(config, requireAcceptance);
     z.string().trim().min(1).max(150).parse(customerId);
-    const { quoteId } = z
+    return z
       .object({ quoteId: z.string().min(1).max(150) })
       .strict()
       .parse(input);
-    const quote = await snapshot(customerId, quoteId);
+  }
+  const checkout = async (customerId: string, input: unknown) => {
+    const { quoteId } = inputValues(customerId, input);
+    let quote: Quote;
+    try {
+      quote = await snapshot(customerId, quoteId);
+    } catch (error) {
+      const existing = await ownedOrder(customerId, quoteId);
+      if (existing && (await attempt(existing.id))) await expireOrder(existing);
+      throw error;
+    }
     const lines = checkoutLines(quote);
-    if ((await provider.accountId()) !== config.accountId)
-      throw new CheckoutError("Stripe sandbox account mismatch");
+    await account();
     const order = await commerce.orderForQuote(customerId, quoteId);
     if (order.status !== "pending") throw new CheckoutError("Order is not pending");
     const metadata = { wgp_order_id: order.id, wgp_quote_id: quoteId, wgp_environment: "staging" };
-    // Stable parameters and order key survive a provider timeout before local bind.
-    const created = order.provider_session_id
-      ? null
-      : await provider.create(
-          {
-            mode: "payment",
-            payment_method_types: ["card"],
-            client_reference_id: order.id,
-            metadata,
-            payment_intent_data: { metadata },
-            line_items: lines,
-            success_url: `${config.origin}/checkout/complete`,
-            cancel_url: `${config.origin}/checkout/cancel`,
-            allow_promotion_codes: false,
-            automatic_tax: { enabled: false },
-          },
-          order.id,
-        );
-    const sessionId = order.provider_session_id ?? created?.id;
-    if (!sessionId?.startsWith("cs_test_")) throw new CheckoutError("Invalid sandbox session");
+    const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+    const params: Stripe.Checkout.SessionCreateParams = {
+      mode: "payment",
+      payment_method_types: ["card"],
+      client_reference_id: order.id,
+      metadata,
+      payment_intent_data: { metadata },
+      line_items: lines,
+      success_url: `${config.origin}/checkout/complete?orderId=${encodeURIComponent(order.id)}`,
+      cancel_url: `${config.origin}/checkout/cancel?orderId=${encodeURIComponent(order.id)}`,
+      allow_promotion_codes: false,
+      automatic_tax: { enabled: false },
+      expires_at: expiresAt,
+    };
+    await sql.query(
+      `INSERT INTO commerce_checkout_attempts(order_id,account_id,origin,environment,params,expires_at)
+      VALUES($1,$2,$3,'staging',$4::jsonb,to_timestamp($5)) ON CONFLICT(order_id) DO NOTHING`,
+      [order.id, config.accountId, config.origin, JSON.stringify(params), expiresAt],
+    );
+    const saved = (await attempt(order.id))!;
+    if (!["reserved", "bound"].includes(saved.state))
+      throw new CheckoutError("Checkout has been cancelled");
+    if (new Date(saved.expires_at).getTime() <= Date.now()) {
+      await expireOrder(order);
+      throw new CheckoutError("Checkout expired");
+    }
+    await resolveSession(order, saved);
+    const recorded = (await attempt(order.id))!;
+    const sessionId = recorded.provider_session_id!;
     const session = await provider.retrieve(sessionId);
-    if (
-      session.id !== sessionId ||
-      session.object !== "checkout.session" ||
-      session.livemode !== false ||
-      session.mode !== "payment" ||
-      session.status !== "open" ||
-      session.payment_status !== "unpaid" ||
-      session.client_reference_id !== order.id ||
-      session.metadata?.wgp_order_id !== order.id ||
-      session.metadata?.wgp_quote_id !== quoteId ||
-      session.metadata?.wgp_environment !== "staging" ||
-      session.amount_total !== quote.total_cents ||
-      session.currency !== "usd" ||
-      !session.url
-    )
+    sessionMatches(session, order, recorded);
+    if (session.status === "complete" || session.status === "expired") {
+      // Resolve late webhooks even if payment/expiry beat the create response.
+      await commerce.bindProviderSession(order.id, sessionId);
+      await sql.query(
+        "UPDATE commerce_checkout_attempts SET state=$2,updated_at=now() WHERE order_id=$1",
+        [order.id, session.status],
+      );
+      throw new CheckoutError(
+        session.status === "complete"
+          ? "Payment already completed; refresh order status for verified confirmation"
+          : "Checkout expired; create a new quote",
+      );
+    }
+    if (session.status !== "open" || session.payment_status !== "unpaid" || !session.url)
       throw new CheckoutError("Stripe session does not match the pending order");
     const checkoutUrl = new URL(session.url);
     if (
@@ -187,8 +363,28 @@ export function createSandboxCheckout(
       checkoutUrl.password
     )
       throw new CheckoutError("Invalid Stripe checkout destination");
-    await snapshot(customerId, quoteId);
-    const bound: Order = await commerce.bindProviderSession(order.id, sessionId);
+    let bound: Order;
+    try {
+      await snapshot(customerId, quoteId);
+      const [active] = await sql.query(
+        `UPDATE commerce_checkout_attempts SET state='bound',updated_at=now()
+        WHERE order_id=$1 AND state IN ('reserved','bound') AND expires_at>now() RETURNING order_id`,
+        [order.id],
+      );
+      if (!active) throw new CheckoutError("Checkout cancelled or expired during creation");
+      bound = await commerce.bindProviderSession(order.id, sessionId);
+    } catch (error) {
+      await expireOrder(order);
+      throw error;
+    }
     return { orderId: bound.id, sessionId, url: session.url };
   };
+  return Object.assign(checkout, {
+    cancel: async (customerId: string, input: unknown) => {
+      const { quoteId } = inputValues(customerId, input, false);
+      const order = await ownedOrder(customerId, quoteId);
+      if (!order) throw new CheckoutError("Order unavailable");
+      return expireOrder(order);
+    },
+  });
 }

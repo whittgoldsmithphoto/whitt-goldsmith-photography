@@ -26,6 +26,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: node scripts/catalog-proof-browser-check.mjs
       - run: node scripts/catalog-resource-browser-check.mjs
+      - run: node scripts/commerce-customer-browser-check.mjs
       - run: node --experimental-strip-types scripts/catalog-load-baseline.mjs --output catalog-baseline.json
       - uses: actions/upload-artifact@v4
         with:

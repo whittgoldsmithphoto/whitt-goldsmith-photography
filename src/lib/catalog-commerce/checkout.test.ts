@@ -15,7 +15,12 @@ import {
 test("sandbox checkout uses immutable server amounts, one order/session, and current access", async () => {
   const db = new PGlite();
   try {
-    for (const name of ["0005_catalog.sql", "0006_photo_management.sql", "0008_commerce.sql"])
+    for (const name of [
+      "0005_catalog.sql",
+      "0006_photo_management.sql",
+      "0008_commerce.sql",
+      "0017_checkout_attempts.sql",
+    ])
       await db.exec(
         await readFile(new URL(`../../../migrations/${name}`, import.meta.url), "utf8"),
       );
@@ -63,23 +68,30 @@ test("sandbox checkout uses immutable server amounts, one order/session, and cur
       origin: "https://staging.example.com",
     };
     let calls = 0;
-    let transientReadFailure = true;
+    let transientCreateFailure = true;
+    let expireCalls = 0;
     let stableKey: string | undefined;
-    let stableParams: string | undefined;
+    let stableParams: Stripe.Checkout.SessionCreateParams | undefined;
     let saved: Stripe.Checkout.Session | undefined;
     const provider: CheckoutProvider = {
+      findSessions: async () => ({ sessions: [], complete: true }),
       accountId: async () => "acct_fixture",
       create: async (params, key) => {
         calls++;
         assert.equal(key, params.client_reference_id);
         if (stableKey) {
           assert.equal(key, stableKey);
-          assert.equal(JSON.stringify(params), stableParams);
+          assert.deepEqual(params, stableParams);
         }
         stableKey = key;
-        stableParams = JSON.stringify(params);
+        stableParams = params;
         assert.equal(params.line_items?.[0]?.price_data?.unit_amount, 2500);
-        assert.equal(params.success_url, "https://staging.example.com/checkout/complete");
+        assert.equal(
+          params.success_url,
+          `https://staging.example.com/checkout/complete?orderId=${key}`,
+        );
+        assert.ok(params.expires_at! >= Math.floor(Date.now() / 1000) + 1800);
+        assert.ok(params.expires_at! <= Math.floor(Date.now() / 1000) + 86400);
         saved = {
           id: "cs_test_fixture",
           object: "checkout.session",
@@ -91,15 +103,21 @@ test("sandbox checkout uses immutable server amounts, one order/session, and cur
           metadata: params.metadata,
           amount_total: 2500,
           currency: "usd",
+          expires_at: params.expires_at,
           url: "https://checkout.stripe.com/c/pay/cs_test_fixture",
         } as Stripe.Checkout.Session;
+        if (transientCreateFailure) {
+          transientCreateFailure = false;
+          throw new Error("Provider create response lost");
+        }
         return saved;
       },
       retrieve: async () => {
-        if (transientReadFailure) {
-          transientReadFailure = false;
-          throw new Error("Provider read timeout");
-        }
+        return saved!;
+      },
+      expire: async () => {
+        expireCalls++;
+        saved!.status = "expired";
         return saved!;
       },
     };
@@ -125,10 +143,31 @@ test("sandbox checkout uses immutable server amounts, one order/session, and cur
         )("customer", { quoteId: quote.id }),
       );
     assert.equal(calls, 0);
-    await assert.rejects(checkout("customer", { quoteId: quote.id }), /Provider read timeout/);
-    const first = await checkout("customer", { quoteId: quote.id });
+    await assert.rejects(
+      checkout("customer", { quoteId: quote.id }),
+      /Provider create response lost/,
+    );
+    // Retry across deployment configuration changes uses the originally frozen parameters.
+    const first = await createSandboxCheckout(
+      sql,
+      authorize,
+      { ...config, origin: "https://new-staging.example.com" },
+      provider,
+    )("customer", { quoteId: quote.id });
     assert.deepEqual(await checkout("customer", { quoteId: quote.id }), first);
     assert.equal(calls, 2);
+    await assert.rejects(
+      sql.query("UPDATE commerce_checkout_attempts SET params='{}'::jsonb"),
+      /immutable/,
+    );
+    await db.exec("UPDATE commerce_quotes SET expires_at=now()-interval '1 minute'");
+    assert.deepEqual(
+      await checkout("customer", { quoteId: quote.id }),
+      first,
+      "Existing session remains retrievable after quote expiry under recorded attempt lifetime",
+    );
+    await assert.rejects(checkout.cancel("attacker", { quoteId: quote.id }), /unavailable/);
+    assert.equal(expireCalls, 0);
     assert.equal(
       (await sql.query<{ count: number }>("SELECT count(*)::int AS count FROM commerce_orders"))[0]
         .count,
@@ -142,6 +181,15 @@ test("sandbox checkout uses immutable server amounts, one order/session, and cur
     saved!.url = "https://checkout.stripe.com/c/pay/cs_test_fixture";
     access = false;
     await assert.rejects(checkout("customer", { quoteId: quote.id }), /Access denied/);
+    assert.equal(expireCalls, 1, "Losing access expires the already issued Stripe session");
+    assert.equal(
+      (await sql.query<{ state: string }>("SELECT state FROM commerce_checkout_attempts"))[0].state,
+      "expired",
+    );
+    assert.deepEqual(await checkout.cancel("customer", { quoteId: quote.id }), {
+      orderId: first.orderId,
+      status: "expired",
+    });
     access = true;
     await db.exec("UPDATE catalog_photos SET hidden=true WHERE id='p'");
     await assert.rejects(checkout("customer", { quoteId: quote.id }), /no longer available/);
@@ -150,6 +198,198 @@ test("sandbox checkout uses immutable server amounts, one order/session, and cur
     );
     await assert.rejects(checkout("customer", { quoteId: quote.id }), /no longer available/);
     assert.equal(calls, 2);
+    // A lost create response and failed expiration cannot accidentally reopen checkout.
+    await db.exec("UPDATE catalog_galleries SET access_version=1 WHERE id='g'");
+    const cancelQuote = await commerce.quote("customer", {
+      galleryId: "g",
+      items: [{ photoId: "p", productId: "digital", quantity: 1 }],
+    });
+    let recovered: Stripe.Checkout.Session | undefined;
+    let loseCreate = true,
+      failExpiry = true;
+    let recoveryParams: Stripe.Checkout.SessionCreateParams | undefined;
+    const recoveringProvider: CheckoutProvider = {
+      findSessions: provider.findSessions,
+      accountId: provider.accountId,
+      create: async (params, key) => {
+        if (recoveryParams) assert.deepEqual(params, recoveryParams);
+        recoveryParams = params;
+        recovered ??= {
+          ...saved!,
+          id: `cs_test_${key}`,
+          status: "open",
+          client_reference_id: key,
+          metadata: params.metadata,
+          expires_at: params.expires_at,
+        } as Stripe.Checkout.Session;
+        if (loseCreate) {
+          loseCreate = false;
+          throw new Error("Ambiguous creation");
+        }
+        return recovered;
+      },
+      retrieve: async () => recovered!,
+      expire: async () => {
+        if (failExpiry) {
+          failExpiry = false;
+          throw new Error("Expiration network failure");
+        }
+        recovered!.status = "expired";
+        return recovered!;
+      },
+    };
+    const recovering = createSandboxCheckout(sql, authorize, config, recoveringProvider);
+    await assert.rejects(recovering("customer", { quoteId: cancelQuote.id }), /Ambiguous creation/);
+    const disabled = createSandboxCheckout(
+      sql,
+      authorize,
+      { ...config, checkoutEnabled: false, deliveryAccepted: false },
+      recoveringProvider,
+    );
+    await assert.rejects(
+      disabled.cancel("customer", { quoteId: cancelQuote.id }),
+      /Expiration network failure/,
+    );
+    assert.equal(
+      (
+        await sql.query<{ state: string }>(
+          "SELECT a.state FROM commerce_checkout_attempts a JOIN commerce_orders o ON o.id=a.order_id WHERE o.quote_id=$1",
+          [cancelQuote.id],
+        )
+      )[0].state,
+      "cancel_requested",
+    );
+    await assert.rejects(
+      recovering("customer", { quoteId: cancelQuote.id }),
+      /no longer available/,
+    );
+    assert.equal(recovered!.status, "expired");
+    await assert.rejects(
+      sql.query("UPDATE commerce_checkout_attempts SET state='reserved' WHERE state='expired'"),
+      /immutable/,
+    );
+    const paidQuote = await commerce.quote("customer", {
+      galleryId: "g",
+      items: [{ photoId: "p", productId: "digital", quantity: 1 }],
+    });
+    let completed: Stripe.Checkout.Session;
+    const alreadyPaidProvider: CheckoutProvider = {
+      findSessions: provider.findSessions,
+      accountId: provider.accountId,
+      create: async (params, key) => {
+        completed = {
+          ...saved!,
+          id: `cs_test_${key}`,
+          status: "complete",
+          payment_status: "paid",
+          client_reference_id: key,
+          metadata: params.metadata,
+          expires_at: params.expires_at,
+        } as Stripe.Checkout.Session;
+        return completed;
+      },
+      retrieve: async () => completed,
+      expire: async () => {
+        throw new Error("Must never expire an already completed session");
+      },
+    };
+    const paidCheckout = createSandboxCheckout(sql, authorize, config, alreadyPaidProvider);
+    await assert.rejects(paidCheckout("customer", { quoteId: paidQuote.id }), /already completed/);
+    await assert.rejects(
+      paidCheckout.cancel("customer", { quoteId: paidQuote.id }),
+      /refund reconciliation/,
+    );
+    assert.equal(
+      (
+        await sql.query<{ status: string }>(
+          "SELECT status FROM commerce_orders WHERE quote_id=$1",
+          [paidQuote.id],
+        )
+      )[0].status,
+      "pending",
+      "Only verified provider events/reconciliation may finalize payment status",
+    );
+    assert.equal(
+      (
+        await sql.query<{ state: string }>(
+          "SELECT a.state FROM commerce_checkout_attempts a JOIN commerce_orders o ON o.id=a.order_id WHERE o.quote_id=$1",
+          [paidQuote.id],
+        )
+      )[0].state,
+      "complete",
+    );
+
+    const agedQuote = await commerce.quote("customer", {
+      galleryId: "g",
+      items: [{ photoId: "p", productId: "digital", quantity: 1 }],
+    });
+    let agedCreates = 0;
+    let agedSession: Stripe.Checkout.Session;
+    let lookup: { sessions: Stripe.Checkout.Session[]; complete: boolean } = {
+      sessions: [],
+      complete: true,
+    };
+    const aged = createSandboxCheckout(sql, authorize, config, {
+      ...alreadyPaidProvider,
+      create: async (params, key) => {
+        agedCreates++;
+        agedSession = {
+          ...saved!,
+          id: `cs_test_${key}`,
+          status: "open",
+          payment_status: "unpaid",
+          client_reference_id: key,
+          metadata: params.metadata,
+          expires_at: params.expires_at,
+        } as Stripe.Checkout.Session;
+        throw new Error("Uncertain timeout");
+      },
+      findSessions: async (range) => {
+        assert.equal(range.quoteId, agedQuote.id);
+        assert.ok(range.createdBefore - range.createdAfter <= 3661);
+        return lookup;
+      },
+      retrieve: async () => agedSession,
+      expire: async () => {
+        agedSession.status = "expired";
+        return agedSession;
+      },
+    });
+    await assert.rejects(aged("customer", { quoteId: agedQuote.id }), /Uncertain timeout/);
+    const realNow = Date.now;
+    try {
+      Date.now = () => realNow() + 31 * 60 * 1000;
+      await assert.rejects(
+        aged.cancel("customer", { quoteId: agedQuote.id }),
+        /creation window elapsed/,
+      );
+      lookup = { sessions: [agedSession!], complete: false };
+      await assert.rejects(aged.cancel("customer", { quoteId: agedQuote.id }), /not definitive/);
+      lookup = { sessions: [agedSession!, agedSession!], complete: true };
+      await assert.rejects(aged.cancel("customer", { quoteId: agedQuote.id }), /not definitive/);
+      lookup = { sessions: [{ ...agedSession!, amount_total: 1 }], complete: true };
+      await assert.rejects(aged.cancel("customer", { quoteId: agedQuote.id }), /does not match/);
+      assert.equal(
+        agedSession!.status,
+        "open",
+        "No mutation based on ambiguous or mismatched lookup",
+      );
+      lookup = { sessions: [agedSession!], complete: true };
+      const cancelled = await aged.cancel("customer", { quoteId: agedQuote.id });
+      assert.equal(cancelled.status, "expired");
+      assert.equal(
+        agedSession!.status,
+        "expired",
+        "Bounded read-only lookup recovers and expires an old ambiguous session",
+      );
+      assert.equal(
+        agedCreates,
+        1,
+        "Do not recreate an ambiguous session outside the safe Stripe creation window",
+      );
+    } finally {
+      Date.now = realNow;
+    }
   } finally {
     await db.close();
   }

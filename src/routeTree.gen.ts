@@ -22,6 +22,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as MigrateRouteImport } from './routes/migrate'
 import { Route as OrganizeRouteImport } from './routes/organize'
 import { Route as PublishRouteImport } from './routes/publish'
+import { Route as PurchasesRouteImport } from './routes/purchases'
 import { Route as SellRouteImport } from './routes/sell'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as UploadRouteImport } from './routes/upload'
@@ -32,6 +33,8 @@ import { Route as ApiCommerceDownloadRouteImport } from './routes/api/commerce-d
 import { Route as ApiCommerceWebhookRouteImport } from './routes/api/commerce-webhook'
 import { Route as ApiSportsRouteImport } from './routes/api/sports'
 import { Route as CheckoutThanksRouteImport } from './routes/checkout.thanks'
+import { Route as CheckoutCancelRouteImport } from './routes/checkout_.cancel'
+import { Route as CheckoutCompleteRouteImport } from './routes/checkout_.complete'
 import { Route as FoldersFolderIdRouteImport } from './routes/folders.$folderId'
 import { Route as GalleriesIndexRouteImport } from './routes/galleries.index'
 import { Route as GalleriesGalleryIdRouteImport } from './routes/galleries.$galleryId'
@@ -108,6 +111,11 @@ const PublishRoute = PublishRouteImport.update({
   path: '/publish',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PurchasesRoute = PurchasesRouteImport.update({
+  id: '/purchases',
+  path: '/purchases',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SellRoute = SellRouteImport.update({
   id: '/sell',
   path: '/sell',
@@ -157,6 +165,16 @@ const CheckoutThanksRoute = CheckoutThanksRouteImport.update({
   id: '/thanks',
   path: '/thanks',
   getParentRoute: () => CheckoutRoute,
+} as any)
+const CheckoutCancelRoute = CheckoutCancelRouteImport.update({
+  id: '/checkout_/cancel',
+  path: '/checkout/cancel',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CheckoutCompleteRoute = CheckoutCompleteRouteImport.update({
+  id: '/checkout_/complete',
+  path: '/checkout/complete',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const FoldersFolderIdRoute = FoldersFolderIdRouteImport.update({
   id: '/folders/$folderId',
@@ -223,6 +241,7 @@ export interface FileRoutesByFullPath {
   '/migrate': typeof MigrateRoute
   '/organize': typeof OrganizeRoute
   '/publish': typeof PublishRoute
+  '/purchases': typeof PurchasesRoute
   '/sell': typeof SellRoute
   '/settings': typeof SettingsRoute
   '/upload': typeof UploadRoute
@@ -233,6 +252,8 @@ export interface FileRoutesByFullPath {
   '/api/commerce-webhook': typeof ApiCommerceWebhookRoute
   '/api/sports': typeof ApiSportsRoute
   '/checkout/thanks': typeof CheckoutThanksRoute
+  '/checkout/cancel': typeof CheckoutCancelRoute
+  '/checkout/complete': typeof CheckoutCompleteRoute
   '/folders/$folderId': typeof FoldersFolderIdRoute
   '/galleries/$galleryId': typeof GalleriesGalleryIdRoute
   '/keywords/$tag': typeof KeywordsTagRoute
@@ -256,6 +277,7 @@ export interface FileRoutesByTo {
   '/migrate': typeof MigrateRoute
   '/organize': typeof OrganizeRoute
   '/publish': typeof PublishRoute
+  '/purchases': typeof PurchasesRoute
   '/sell': typeof SellRoute
   '/settings': typeof SettingsRoute
   '/upload': typeof UploadRoute
@@ -266,6 +288,8 @@ export interface FileRoutesByTo {
   '/api/commerce-webhook': typeof ApiCommerceWebhookRoute
   '/api/sports': typeof ApiSportsRoute
   '/checkout/thanks': typeof CheckoutThanksRoute
+  '/checkout/cancel': typeof CheckoutCancelRoute
+  '/checkout/complete': typeof CheckoutCompleteRoute
   '/folders/$folderId': typeof FoldersFolderIdRoute
   '/galleries/$galleryId': typeof GalleriesGalleryIdRoute
   '/keywords/$tag': typeof KeywordsTagRoute
@@ -292,6 +316,7 @@ export interface FileRoutesById {
   '/migrate': typeof MigrateRoute
   '/organize': typeof OrganizeRoute
   '/publish': typeof PublishRoute
+  '/purchases': typeof PurchasesRoute
   '/sell': typeof SellRoute
   '/settings': typeof SettingsRoute
   '/upload': typeof UploadRoute
@@ -302,6 +327,8 @@ export interface FileRoutesById {
   '/api/commerce-webhook': typeof ApiCommerceWebhookRoute
   '/api/sports': typeof ApiSportsRoute
   '/checkout/thanks': typeof CheckoutThanksRoute
+  '/checkout_/cancel': typeof CheckoutCancelRoute
+  '/checkout_/complete': typeof CheckoutCompleteRoute
   '/folders/$folderId': typeof FoldersFolderIdRoute
   '/galleries/$galleryId': typeof GalleriesGalleryIdRoute
   '/keywords/$tag': typeof KeywordsTagRoute
@@ -329,6 +356,7 @@ export interface FileRouteTypes {
     | '/migrate'
     | '/organize'
     | '/publish'
+    | '/purchases'
     | '/sell'
     | '/settings'
     | '/upload'
@@ -339,6 +367,8 @@ export interface FileRouteTypes {
     | '/api/commerce-webhook'
     | '/api/sports'
     | '/checkout/thanks'
+    | '/checkout/cancel'
+    | '/checkout/complete'
     | '/folders/$folderId'
     | '/galleries/$galleryId'
     | '/keywords/$tag'
@@ -362,6 +392,7 @@ export interface FileRouteTypes {
     | '/migrate'
     | '/organize'
     | '/publish'
+    | '/purchases'
     | '/sell'
     | '/settings'
     | '/upload'
@@ -372,6 +403,8 @@ export interface FileRouteTypes {
     | '/api/commerce-webhook'
     | '/api/sports'
     | '/checkout/thanks'
+    | '/checkout/cancel'
+    | '/checkout/complete'
     | '/folders/$folderId'
     | '/galleries/$galleryId'
     | '/keywords/$tag'
@@ -397,6 +430,7 @@ export interface FileRouteTypes {
     | '/migrate'
     | '/organize'
     | '/publish'
+    | '/purchases'
     | '/sell'
     | '/settings'
     | '/upload'
@@ -407,6 +441,8 @@ export interface FileRouteTypes {
     | '/api/commerce-webhook'
     | '/api/sports'
     | '/checkout/thanks'
+    | '/checkout_/cancel'
+    | '/checkout_/complete'
     | '/folders/$folderId'
     | '/galleries/$galleryId'
     | '/keywords/$tag'
@@ -433,6 +469,7 @@ export interface RootRouteChildren {
   MigrateRoute: typeof MigrateRoute
   OrganizeRoute: typeof OrganizeRoute
   PublishRoute: typeof PublishRoute
+  PurchasesRoute: typeof PurchasesRoute
   SellRoute: typeof SellRoute
   SettingsRoute: typeof SettingsRoute
   UploadRoute: typeof UploadRoute
@@ -442,6 +479,8 @@ export interface RootRouteChildren {
   ApiCommerceDownloadRoute: typeof ApiCommerceDownloadRoute
   ApiCommerceWebhookRoute: typeof ApiCommerceWebhookRoute
   ApiSportsRoute: typeof ApiSportsRoute
+  CheckoutCancelRoute: typeof CheckoutCancelRoute
+  CheckoutCompleteRoute: typeof CheckoutCompleteRoute
   FoldersFolderIdRoute: typeof FoldersFolderIdRoute
   OrdersOrderIdRoute: typeof OrdersOrderIdRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -543,6 +582,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PublishRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/purchases': {
+      id: '/purchases'
+      path: '/purchases'
+      fullPath: '/purchases'
+      preLoaderRoute: typeof PurchasesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sell': {
       id: '/sell'
       path: '/sell'
@@ -612,6 +658,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/checkout/thanks'
       preLoaderRoute: typeof CheckoutThanksRouteImport
       parentRoute: typeof CheckoutRoute
+    }
+    '/checkout_/cancel': {
+      id: '/checkout_/cancel'
+      path: '/checkout/cancel'
+      fullPath: '/checkout/cancel'
+      preLoaderRoute: typeof CheckoutCancelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/checkout_/complete': {
+      id: '/checkout_/complete'
+      path: '/checkout/complete'
+      fullPath: '/checkout/complete'
+      preLoaderRoute: typeof CheckoutCompleteRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/folders/$folderId': {
       id: '/folders/$folderId'
@@ -740,6 +800,7 @@ const rootRouteChildren: RootRouteChildren = {
   MigrateRoute: MigrateRoute,
   OrganizeRoute: OrganizeRoute,
   PublishRoute: PublishRoute,
+  PurchasesRoute: PurchasesRoute,
   SellRoute: SellRoute,
   SettingsRoute: SettingsRoute,
   UploadRoute: UploadRoute,
@@ -749,6 +810,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCommerceDownloadRoute: ApiCommerceDownloadRoute,
   ApiCommerceWebhookRoute: ApiCommerceWebhookRoute,
   ApiSportsRoute: ApiSportsRoute,
+  CheckoutCancelRoute: CheckoutCancelRoute,
+  CheckoutCompleteRoute: CheckoutCompleteRoute,
   FoldersFolderIdRoute: FoldersFolderIdRoute,
   OrdersOrderIdRoute: OrdersOrderIdRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,

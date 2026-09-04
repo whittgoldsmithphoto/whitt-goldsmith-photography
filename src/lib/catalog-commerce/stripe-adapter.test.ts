@@ -6,6 +6,7 @@ import { readFile } from "node:fs/promises";
 import type { Sql } from "../db.ts";
 import { createCommerce, type VerifiedPayment } from "./service.ts";
 import { applyVerifiedSessionOutcome, type VerifiedSessionOutcome } from "./session-outcomes.ts";
+import { applyVerifiedPaymentReview, type VerifiedPaymentReview } from "./payment-review.ts";
 import {
   acceptSandboxWebhook,
   type SandboxOrder,
@@ -253,18 +254,70 @@ test("full refunds require bound payment, retrieved full amount, account and ses
   await assert.rejects(f.send("charge.refunded", f.charge), /paid local order/);
   f.order.provider_payment_id = "pi_fixture";
   f.charge.amount_refunded = 100;
-  await assert.rejects(f.send("charge.refunded", f.charge), /full refunds/);
+  await assert.rejects(f.send("charge.refunded", f.charge), /review ledger/);
   f.charge.amount_refunded = 2500;
   assert.equal((await f.send("charge.refunded", f.charge)).applied, "refunded");
   assert.equal(f.applied[0].kind, "refunded");
 });
-test("unsupported dispute and partial-refund event types are explicit, not silently acknowledged", async () => {
+test("unsupported event types and malformed dispute objects are not acknowledged", async () => {
   const f = fixture();
-  for (const type of ["charge.dispute.created", "refund.updated"])
-    await assert.rejects(f.send(type), /not implemented/);
+  for (const type of ["refund.updated"]) await assert.rejects(f.send(type), /not implemented/);
   assert.equal(f.calls(), 0);
+  await assert.rejects(f.send("charge.dispute.created"), /Invalid dispute object/);
   assert.equal(f.applied.length, 0);
 });
+test("verified partial refunds and disputes hold all delivery without creating paid events", async () => {
+  const f = fixture(),
+    reviews: VerifiedPaymentReview[] = [];
+  f.order.provider_payment_id = "pi_fixture";
+  f.commerce.applyReview = async (event) => {
+    reviews.push(event);
+    return { status: "review" };
+  };
+  f.charge.refunded = false;
+  f.charge.amount_refunded = 100;
+  assert.equal((await f.send("charge.refunded", f.charge)).applied, "review");
+  assert.equal(reviews[0].kind, "partial_refund");
+  const dispute = {
+    id: "dp_fixture",
+    object: "dispute",
+    livemode: false,
+    charge: "ch_fixture",
+    status: "won",
+  } as Stripe.Dispute;
+  f.provider.dispute = async () => dispute;
+  for (const type of ["charge.dispute.created", "charge.dispute.updated", "charge.dispute.closed"])
+    assert.equal((await f.send(type, dispute)).applied, "review");
+  assert.equal(reviews.length, 4);
+  assert.equal(f.applied.length, 0);
+  f.provider.dispute = async () => ({ ...dispute, livemode: true });
+  await assert.rejects(f.send("charge.dispute.created", dispute), /Dispute identity/);
+  assert.equal(reviews.length, 4);
+});
+test("refund-before-payment resolution rejects foreign provider metadata and Session identity", async () => {
+  const f = fixture();
+  let reviews = 0;
+  f.commerce.orderByPayment = async () => undefined;
+  f.commerce.orderById = async (id) => (id === f.order.id ? f.order : undefined);
+  f.commerce.applyReview = async () => {
+    reviews++;
+    return { status: "refunded" };
+  };
+  f.intent.metadata = {
+    wgp_order_id: f.order.id,
+    wgp_quote_id: "foreign",
+    wgp_environment: "staging",
+  };
+  await assert.rejects(f.send("charge.refunded", f.charge), /quote mismatch/);
+  f.intent.metadata.wgp_quote_id = f.order.quote_id;
+  f.session.payment_intent = "pi_foreign";
+  await assert.rejects(f.send("charge.refunded", f.charge), /payment identity/);
+  assert.equal(reviews, 0);
+  f.session.payment_intent = "pi_fixture";
+  assert.equal((await f.send("charge.refunded", f.charge)).applied, "refunded");
+  assert.equal(reviews, 1);
+});
+
 test("signed expired sessions accept null payment IDs; async failures require verified unpaid intent", async () => {
   const f = fixture();
   f.session.status = "expired";
@@ -366,6 +419,81 @@ test("sandbox HTTP defaults closed and rejects live/old settings, malformed and 
   assert.equal(response.status, 200);
   assert.equal((await response.json()).applied, "paid");
 });
+test("HTTP verifies exact chunked UTF-8 bytes and rejects a reserialized signed body", async () => {
+  const f = fixture();
+  const handler = createSandboxWebhookHandler(config, f.provider, f.commerce);
+  const event = envelope({ ...f.session, description: "CCES — José 📷" });
+  const bytes = new TextEncoder().encode(event.raw);
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      // Split every multi-byte code point across chunks. Decode only after
+      // assembling the bounded body; never parse/re-serialize before HMAC.
+      for (const byte of bytes) controller.enqueue(Uint8Array.of(byte));
+      controller.close();
+    },
+  });
+  const response = await handler(
+    new Request("https://example.test/api/commerce-webhook", {
+      method: "POST",
+      headers: { "stripe-signature": event.signature },
+      body: stream,
+      duplex: "half",
+    } as RequestInit),
+  );
+  assert.equal(response.status, 200);
+  assert.equal(f.applied.length, 1);
+  assert.equal(response.headers.get("cache-control"), "private, no-store");
+  const before = f.calls();
+  const changed = await handler(
+    new Request("https://example.test/api/commerce-webhook", {
+      method: "POST",
+      headers: { "stripe-signature": event.signature },
+      body: JSON.stringify(JSON.parse(event.raw), null, 2),
+    }),
+  );
+  assert.equal(changed.status, 400);
+  assert.equal(f.calls(), before);
+  assert.equal(f.applied.length, 1);
+});
+
+test("HTTP provider/read failures return retryable safe errors and never acknowledge payment", async () => {
+  const f = fixture();
+  const event = envelope(f.session);
+  const handler = createSandboxWebhookHandler(config, f.provider, f.commerce);
+  f.provider.session = async () => {
+    throw new Error("sensitive provider diagnostics and private object location");
+  };
+  const outage = await handler(
+    new Request("https://example.test/api/commerce-webhook", {
+      method: "POST",
+      headers: { "stripe-signature": event.signature },
+      body: event.raw,
+    }),
+  );
+  assert.equal(outage.status, 503);
+  assert.doesNotMatch(await outage.text(), /sensitive|diagnostics|object location/);
+  assert.equal(f.applied.length, 0);
+
+  const before = f.calls();
+  const failedBody = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.error(new Error("private transport diagnostics"));
+    },
+  });
+  const disconnected = await handler(
+    new Request("https://example.test/api/commerce-webhook", {
+      method: "POST",
+      headers: { "stripe-signature": event.signature },
+      body: failedBody,
+      duplex: "half",
+    } as RequestInit),
+  );
+  assert.equal(disconnected.status, 503);
+  assert.doesNotMatch(await disconnected.text(), /private transport/);
+  assert.equal(f.calls(), before);
+  assert.equal(f.applied.length, 0);
+});
+
 test("signed paid replay and signed full refund exercise the real database state machine", async () => {
   const db = new PGlite();
   try {
@@ -374,6 +502,7 @@ test("signed paid replay and signed full refund exercise the real database state
       "0006_photo_management.sql",
       "0008_commerce.sql",
       "0011_commerce_session_outcomes.sql",
+      "0018_payment_reviews.sql",
     ])
       await db.exec(
         await readFile(new URL(`../../../migrations/${name}`, import.meta.url), "utf8"),
@@ -421,6 +550,8 @@ test("signed paid replay and signed full refund exercise the real database state
     const domain: SandboxCommerce = {
       orderBySession: (id) => lookup("o.provider_session_id", id),
       orderByPayment: (id) => lookup("o.provider_payment_id", id),
+      orderById: (id) => lookup("o.id", id),
+      applyReview: (event) => applyVerifiedPaymentReview(sql, event),
       apply: (e) => commerce.applyVerifiedPayment(e),
       applySessionOutcome: (e) => applyVerifiedSessionOutcome(sql, e),
     };
@@ -445,6 +576,125 @@ test("signed paid replay and signed full refund exercise the real database state
       (await db.query<{ revoked_at: unknown }>(`SELECT revoked_at FROM commerce_entitlements`))
         .rows[0].revoked_at,
     );
+    // A real-provider refund can arrive before any paid webhook. Resolve only
+    // through retrieved PaymentIntent metadata + the exact bound local Session.
+    const q2 = await commerce.quote("customer", {
+      galleryId: "gallery",
+      items: [{ productId: "digital", photoId: "photo", quantity: 1 }],
+    });
+    const o2 = await commerce.orderForQuote("customer", q2.id);
+    await commerce.bindProviderSession(o2.id, "cs_test_pendingrefund");
+    f.session.id = "cs_test_pendingrefund";
+    f.session.client_reference_id = o2.id;
+    f.session.metadata = { wgp_order_id: o2.id, wgp_quote_id: q2.id, wgp_environment: "staging" };
+    f.session.payment_intent = "pi_pendingrefund";
+    f.charge.payment_intent = "pi_pendingrefund";
+    f.intent.id = "pi_pendingrefund";
+    f.intent.metadata = { ...f.session.metadata };
+    const early = envelope(f.charge, "charge.refunded", { id: "evt_earlyrefund" });
+    await acceptSandboxWebhook(early.raw, early.signature, config, f.provider, domain);
+    await acceptSandboxWebhook(early.raw, early.signature, config, f.provider, domain);
+    assert.equal((await commerce.customerOrder("customer", o2.id)).status, "refunded");
+    assert.equal(
+      (await db.query("SELECT * FROM commerce_entitlements WHERE order_id=$1", [o2.id])).rows
+        .length,
+      0,
+    );
+    assert.equal(
+      (await db.query("SELECT * FROM commerce_payment_reviews WHERE order_id=$1", [o2.id])).rows
+        .length,
+      1,
+    );
+    await assert.rejects(
+      commerce.applyVerifiedPayment({
+        eventId: "evt_delayed",
+        orderId: o2.id,
+        kind: "paid",
+        sessionId: f.session.id,
+        paymentId: "pi_pendingrefund",
+        amountCents: 2500,
+        currency: "usd",
+      }),
+      /Invalid payment transition/,
+    );
+    await assert.rejects(
+      applyVerifiedPaymentReview(sql, {
+        eventId: "evt_earlyrefund",
+        orderId: o2.id,
+        kind: "dispute",
+        sessionId: f.session.id,
+        paymentId: "pi_pendingrefund",
+        amountCents: 2500,
+        currency: "usd",
+      }),
+      /Conflicting event replay/,
+    );
+    for (const kind of ["partial_refund", "dispute"] as const) {
+      const quote = await commerce.quote("customer", {
+        galleryId: "gallery",
+        items: [{ productId: "digital", photoId: "photo", quantity: 1 }],
+      });
+      const order = await commerce.orderForQuote("customer", quote.id),
+        sid = `cs_test_${kind}`,
+        pid = `pi_${kind}`;
+      await commerce.bindProviderSession(order.id, sid);
+      await commerce.applyVerifiedPayment({
+        eventId: `evt_paid_${kind}`,
+        orderId: order.id,
+        kind: "paid",
+        sessionId: sid,
+        paymentId: pid,
+        amountCents: 2500,
+        currency: "usd",
+      });
+      const review: VerifiedPaymentReview = {
+        eventId: `evt_review_${kind}`,
+        orderId: order.id,
+        kind,
+        sessionId: sid,
+        paymentId: pid,
+        amountCents: 2500,
+        currency: "usd",
+      };
+      await assert.rejects(
+        applyVerifiedPaymentReview(sql, { ...review, paymentId: "pi_foreign" }),
+        /identity mismatch/,
+      );
+      assert.equal((await commerce.customerOrder("customer", order.id)).status, "paid");
+      await applyVerifiedPaymentReview(sql, review);
+      await applyVerifiedPaymentReview(sql, review);
+      assert.equal((await commerce.customerOrder("customer", order.id)).status, "review");
+      const grants = await db.query<{ revoked_at: unknown; token_hash: unknown }>(
+        "SELECT revoked_at,token_hash FROM commerce_entitlements WHERE order_id=$1",
+        [order.id],
+      );
+      assert.ok(grants.rows[0].revoked_at);
+      assert.equal(grants.rows[0].token_hash, null);
+      await assert.rejects(
+        commerce.applyVerifiedPayment({
+          eventId: `evt_late_${kind}`,
+          orderId: order.id,
+          kind: "paid",
+          sessionId: sid,
+          paymentId: pid,
+          amountCents: 2500,
+          currency: "usd",
+        }),
+        /Invalid payment transition/,
+      );
+      // A later full refund converges safely; another dispute cannot revive it.
+      await applyVerifiedPaymentReview(sql, {
+        ...review,
+        eventId: `evt_full_${kind}`,
+        kind: "full_refund",
+      });
+      await applyVerifiedPaymentReview(sql, {
+        ...review,
+        eventId: `evt_dispute_later_${kind}`,
+        kind: "dispute",
+      });
+      assert.equal((await commerce.customerOrder("customer", order.id)).status, "refunded");
+    }
   } finally {
     await db.close();
   }
