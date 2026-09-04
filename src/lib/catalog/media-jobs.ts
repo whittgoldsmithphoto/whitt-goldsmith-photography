@@ -72,6 +72,22 @@ export async function loadMediaJob(sql: Sql, id: string) {
   return rows[0] ? view(rows[0]) : null;
 }
 
+export async function listDispatchableMediaJobs(sql: Sql, limit: number) {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100)
+    throw new Error("Invalid dispatch limit");
+  const rows = await sql.query<MediaJobRow>(
+    `select * from catalog_media_jobs
+      where attempts < max_attempts and (
+        (status in ('queued','retry') and available_at <= now()) or
+        (status='processing' and leased_until <= now())
+      )
+      order by available_at,created_at,id
+      limit $1`,
+    [limit],
+  );
+  return rows.map(view);
+}
+
 export async function claimNextMediaJob(sql: Sql, workerId: string, leaseSeconds: number) {
   if (!workerId || workerId.length > 200) throw new Error("Invalid worker ID");
   if (!Number.isInteger(leaseSeconds) || leaseSeconds < 1 || leaseSeconds > 3600)

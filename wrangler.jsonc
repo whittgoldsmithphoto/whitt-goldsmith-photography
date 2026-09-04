@@ -7,6 +7,7 @@
   "observability": { "enabled": true },
   "workers_dev": true,
   "preview_urls": true,
+  "triggers": { "crons": ["*/5 * * * *"] },
   "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "78c0c17c5ba844f4bb678dbbb1846311" }],
   "r2_buckets": [{ "binding": "CATALOG_BUCKET", "bucket_name": "whitt-goldsmith-photos" }],
   "images": { "binding": "IMAGES" },
@@ -32,6 +33,7 @@
   "env": {
     "staging": {
       "name": "wgp-catalog-staging",
+      "triggers": { "crons": ["*/5 * * * *"] },
       "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "c9d803e0e964401298a952b85dd05af4" }],
       "r2_buckets": [{ "binding": "CATALOG_BUCKET", "bucket_name": "wgp-catalog-staging" }],
       "images": { "binding": "IMAGES" },

@@ -7,6 +7,7 @@ const valid = () => ({
   hyperdrive: [{ binding: "HYPERDRIVE", id: "c9d803e0e964401298a952b85dd05af4" }],
   r2_buckets: [{ binding: "CATALOG_BUCKET", bucket_name: "wgp-catalog-staging" }],
   images: { binding: "IMAGES" },
+  triggers: { crons: ["*/5 * * * *"] },
   queues: {
     producers: [{ binding: "MEDIA_QUEUE", queue: "wgp-media-staging" }],
     consumers: [
@@ -37,6 +38,7 @@ test("rejects production target, storage, database, routes and inline secrets", 
     { queues: { ...valid().queues, producers: [{ binding: "MEDIA_QUEUE", queue: "wgp-media-production" }] } },
     { queues: { ...valid().queues, consumers: [{ ...valid().queues.consumers[0], dead_letter_queue: "wgp-media-production-dlq" }] } },
     { routes: ["example.com/*"] },
+    { triggers: { crons: [] } },
     { vars: { ...valid().vars, BETTER_AUTH_SECRET: "fixture" } },
     { vars: { ...valid().vars, VITE_AUTH_ENABLED: "false" } },
   ])

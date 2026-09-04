@@ -15,6 +15,7 @@ export function checkStagingConfig(config) {
     "Staging bucket binding required",
   );
   assert.equal(config.images?.binding, "IMAGES");
+  assert.deepEqual(config.triggers, { crons: ["*/5 * * * *"] });
   assert.deepEqual(
     config.queues,
     {

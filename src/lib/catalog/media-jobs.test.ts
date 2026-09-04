@@ -10,6 +10,7 @@ import {
   enqueueMediaJob,
   failMediaJob,
   loadMediaJob,
+  listDispatchableMediaJobs,
 } from "./media-jobs.ts";
 
 async function fixture() {
@@ -104,6 +105,41 @@ test("a photo-scoped claim cannot be stolen or completed by a stale processor", 
     assert.equal(claimed?.id, job.id);
     assert.equal(await claimMediaJobForPhoto(f.sql, job.photoId, "request-b", 300), null);
     assert.equal(await completeMediaJob(f.sql, job.id, "stale"), false);
+  } finally {
+    await f.db.close();
+  }
+});
+
+test("the outbox sweep returns only bounded runnable or stale jobs", async () => {
+  const f = await fixture();
+  try {
+    const completed = await enqueueMediaJob(f.sql, {
+      photoId: "00000000-0000-4000-8000-000000000002",
+      ownerId: "owner",
+      transformationVersion: 10,
+    });
+    const claimed = await claimMediaJobForPhoto(f.sql, completed.photoId, "worker", 300);
+    assert.equal(claimed?.id, completed.id);
+    assert.equal(await completeMediaJob(f.sql, claimed!.id, claimed!.leaseToken!), true);
+    const future = await enqueueMediaJob(f.sql, {
+      photoId: completed.photoId,
+      ownerId: "owner",
+      transformationVersion: 11,
+    });
+    await f.sql`update catalog_media_jobs set available_at=now()+interval '1 hour' where id=${future.id}`;
+
+    assert.deepEqual(
+      (await listDispatchableMediaJobs(f.sql, 1)).map((job) => job.id),
+      [],
+      "completed and future jobs are not redispatched",
+    );
+    await f.sql`update catalog_media_jobs set available_at=now() where id=${future.id}`;
+    assert.deepEqual(
+      (await listDispatchableMediaJobs(f.sql, 1)).map((job) => job.id),
+      [future.id],
+      "the sweep is ordered and bounded",
+    );
+    await assert.rejects(() => listDispatchableMediaJobs(f.sql, 0), /Invalid dispatch limit/);
   } finally {
     await f.db.close();
   }

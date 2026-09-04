@@ -23,6 +23,7 @@ assert.deepEqual(config.hyperdrive, [
 assert.deepEqual(config.r2_buckets, [
   { binding: "CATALOG_BUCKET", bucket_name: "whitt-goldsmith-photos" },
 ]);
+assert.deepEqual(config.triggers, { crons: ["*/5 * * * *"] });
 assert.deepEqual(config.queues, {
   producers: [{ binding: "MEDIA_QUEUE", queue: "wgp-media-production" }],
   consumers: [
