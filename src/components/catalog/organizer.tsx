@@ -17,8 +17,8 @@ export function CatalogOrganizer() {
   const [selected, setSelected] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [foldersOpen, setFoldersOpen] = useState(false);
   const [draft, setDraft] = useState<GalleryInput | null>(null);
-  const [folderName, setFolderName] = useState("");
   const [photoDraft, setPhotoDraft] = useState<PhotoInput | null>(null);
   const [batchItems, setBatchItems] = useState<UploadItem[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -101,55 +101,29 @@ export function CatalogOrganizer() {
           New gallery
         </Button>
       </div>
-      <details className="my-6 rounded-lg border border-border p-4 text-sm">
-        <summary>Owner diagnostics</summary>
-        <CatalogDiagnostics />
-        <p>
-          JPEG/PNG: up to 20 MB. Images binding and a watermark object are required before previews
-          can become ready.
-        </p>
-        <p>
-          Browser-local collections from the previous version are preserved on this device but are
-          not published by this catalog.
-        </p>
-      </details>
       {message && (
         <p className="my-4 rounded border border-border p-3" role="status">
           {message}
         </p>
       )}
-      <form
-        className="mb-8 flex max-w-lg gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void action(async () => {
-            await catalogFetch("op=folder", { title: folderName, parentId: null });
-            setFolderName("");
-          });
-        }}
-      >
-        <Input
-          aria-label="New folder name"
-          value={folderName}
-          onChange={(e) => setFolderName(e.target.value)}
-          placeholder="New folder name"
-          required
-          maxLength={180}
-        />
-        <Button variant="outline" disabled={busy}>
-          Create folder
-        </Button>
-      </form>
-      {!busy && (
-        <FolderManager
-          onSaved={() => {
-            setMessage("Folder saved to the shared catalog.");
-            state.reload();
-          }}
-        />
-      )}
-      <div className="grid gap-8 md:grid-cols-[260px_minmax(0,1fr)]">
+      <div className="my-6 border-y border-border">
+        <details open={foldersOpen} onToggle={(event) => setFoldersOpen(event.currentTarget.open)}>
+          <summary className="cursor-pointer py-3 text-sm font-medium">Manage folders</summary>
+          <div className="pb-4">
+            {!busy && (
+              <FolderManager
+                onSaved={() => {
+                  setMessage("Folder saved to the shared catalog.");
+                  state.reload();
+                }}
+              />
+            )}
+          </div>
+        </details>
+      </div>
+      <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
         <aside className="space-y-2">
+          <h2 className="mb-3 text-sm font-semibold">Your galleries</h2>
           {galleries.length === 0 && <p>No saved galleries yet.</p>}
           {galleries.map((g) => (
             <button
@@ -163,7 +137,7 @@ export function CatalogOrganizer() {
               aria-pressed={selected === g.id}
               className={`block w-full rounded-lg border p-4 text-left ${selected === g.id ? "border-foreground" : "border-border"}`}
             >
-              <span className="font-display text-xl">{g.title}</span>
+              <span className="text-sm font-semibold">{g.title}</span>
               <span className="mt-1 block text-xs text-muted-foreground">
                 {g.published ? g.visibility : "Draft"}
                 {g.requiresPassword ? " · password" : ""}
@@ -174,7 +148,7 @@ export function CatalogOrganizer() {
         <section>
           {active ? (
             <>
-              <h2 className="font-display text-3xl">{active.title}</h2>
+              <h2 className="text-2xl font-semibold">{active.title}</h2>
               <p className="mt-2 text-muted-foreground">{active.description}</p>
               <div className="my-5 flex flex-wrap gap-3">
                 <Button variant="outline" disabled={busy} onClick={() => edit(active)}>
@@ -379,44 +353,56 @@ export function CatalogOrganizer() {
                 <SportsMetadataEditor key={`sports-${photoDraft.id}`} photoId={photoDraft.id} />
               )}
               {photoDraft && (
-                <IntegrityPanel key={`integrity-${photoDraft.id}`} photoId={photoDraft.id} />
+                <details key={`integrity-${photoDraft.id}`} className="mt-4 border-y border-border">
+                  <summary className="cursor-pointer py-3 text-sm font-medium">
+                    File integrity and delivery checks
+                  </summary>
+                  <IntegrityPanel photoId={photoDraft.id} />
+                </details>
               )}
-              <h3 className="font-display mt-8 text-2xl">Upload history</h3>
-              <ul className="mt-4 space-y-3">
-                {jobs
-                  .filter((j) => j.galleryId === active.id)
-                  .map((j) => (
-                    <li key={j.id} className="rounded border border-border p-3">
-                      <p className="break-all">
-                        {j.filename} — {j.status.replaceAll("_", " ")}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {new Date(j.updatedAt).toLocaleString()} · {j.bytes.toLocaleString()} bytes
-                      </p>
-                      {j.error && <p className="mt-2 text-sm">{j.error}</p>}
-                      <details className="mt-2 text-xs">
-                        <summary>SHA-256</summary>
-                        <p className="break-all">{j.checksum}</p>
-                      </details>
-                      {["uploaded", "needs_review", "processing"].includes(j.status) && (
-                        <Button
-                          className="mt-3"
-                          variant="outline"
-                          disabled={busy}
-                          onClick={() => void action(() => catalogFetch(`op=retry&id=${j.id}`, {}))}
-                        >
-                          Retry processing
-                        </Button>
-                      )}
-                      {["reserved", "uploading", "failed"].includes(j.status) && (
-                        <p className="mt-2 text-sm">
-                          Choose the same file above to retry. Upload reservations expire after one
-                          hour.
+              <details className="mt-8 border-y border-border">
+                <summary className="cursor-pointer py-3 text-sm font-medium">
+                  Upload history
+                </summary>
+                <ul className="mt-4 space-y-3">
+                  {jobs
+                    .filter((j) => j.galleryId === active.id)
+                    .map((j) => (
+                      <li key={j.id} className="rounded border border-border p-3">
+                        <p className="break-all">
+                          {j.filename} — {j.status.replaceAll("_", " ")}
                         </p>
-                      )}
-                    </li>
-                  ))}
-              </ul>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {new Date(j.updatedAt).toLocaleString()} · {j.bytes.toLocaleString()}{" "}
+                          bytes
+                        </p>
+                        {j.error && <p className="mt-2 text-sm">{j.error}</p>}
+                        <details className="mt-2 text-xs">
+                          <summary>SHA-256</summary>
+                          <p className="break-all">{j.checksum}</p>
+                        </details>
+                        {["uploaded", "needs_review", "processing"].includes(j.status) && (
+                          <Button
+                            className="mt-3"
+                            variant="outline"
+                            disabled={busy}
+                            onClick={() =>
+                              void action(() => catalogFetch(`op=retry&id=${j.id}`, {}))
+                            }
+                          >
+                            Retry processing
+                          </Button>
+                        )}
+                        {["reserved", "uploading", "failed"].includes(j.status) && (
+                          <p className="mt-2 text-sm">
+                            Choose the same file above to retry. Upload reservations expire after
+                            one hour.
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                </ul>
+              </details>
             </>
           ) : (
             <p className="rounded-lg border border-border p-12">
@@ -425,6 +411,18 @@ export function CatalogOrganizer() {
           )}
         </section>
       </div>
+      <details className="mt-8 border-t border-border text-sm">
+        <summary className="cursor-pointer py-3 font-medium">Owner diagnostics</summary>
+        <CatalogDiagnostics />
+        <p className="mt-3 text-muted-foreground">
+          JPEG/PNG: up to 20 MB. Images binding and a watermark object are required before previews
+          can become ready.
+        </p>
+        <p className="mt-2 text-muted-foreground">
+          Browser-local collections from the previous version are preserved on this device but are
+          not published by this catalog.
+        </p>
+      </details>
       {draft && (
         <form
           className="mt-10 max-w-2xl space-y-4 rounded-xl border border-border p-6"

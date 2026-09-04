@@ -2,35 +2,35 @@
 @import "tw-animate-css";
 
 @theme {
-  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Oswald", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: Georgia, "Times New Roman", serif;
 
-  --color-background: #0c0c0b;
-  --color-foreground: #f4f1ea;
-  --color-card: #141412;
-  --color-card-foreground: #f4f1ea;
-  --color-popover: #161614;
-  --color-popover-foreground: #f4f1ea;
-  --color-primary: #d4cfc4;
-  --color-primary-foreground: #0c0c0b;
-  --color-secondary: #1c1c19;
-  --color-secondary-foreground: #f4f1ea;
-  --color-muted: #1a1a17;
-  --color-muted-foreground: #8e8a82;
-  --color-accent: #22221e;
-  --color-accent-foreground: #f4f1ea;
+  --color-background: #101418;
+  --color-foreground: #f4f4f2;
+  --color-card: #191e24;
+  --color-card-foreground: #f4f4f2;
+  --color-popover: #191e24;
+  --color-popover-foreground: #f4f4f2;
+  --color-primary: #0866e6;
+  --color-primary-foreground: #f4f4f2;
+  --color-secondary: #222932;
+  --color-secondary-foreground: #f4f4f2;
+  --color-muted: #191e24;
+  --color-muted-foreground: #b4bbc5;
+  --color-accent: #222932;
+  --color-accent-foreground: #f4f4f2;
   --color-destructive: #c45c4a;
   --color-destructive-foreground: #f4f1ea;
-  --color-border: rgb(244 241 234 / 0.12);
-  --color-input: rgb(244 241 234 / 0.16);
-  --color-ring: #d4cfc4;
-  --color-scrim: rgb(12 12 11 / 0.62);
+  --color-border: #343b44;
+  --color-input: #7a8594;
+  --color-ring: #79afff;
+  --color-scrim: rgb(16 20 24 / 0.88);
 
   --radius-sm: 6px;
   --radius-md: 10px;
-  --radius-lg: 16px;
-  --radius-xl: 22px;
-  --radius-2xl: 28px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-2xl: 16px;
 
   --shadow-border: 0 0 0 1px rgb(244 241 234 / 0.08);
   --shadow-border-hover: 0 0 0 1px rgb(244 241 234 / 0.16);
@@ -77,13 +77,52 @@
   }
 
   ::selection {
-    background: rgb(212 207 196 / 0.28);
+    background: rgb(22 119 255 / 0.28);
     color: var(--color-foreground);
   }
 
   img {
     outline: 1px solid rgb(244 241 234 / 0.08);
     outline-offset: -1px;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 3px;
+  }
+
+  [id] {
+    scroll-margin-top: 5rem;
+  }
+}
+
+/* Workspace typography takes precedence over editorial utility classes. */
+.owner-workspace h1,
+.owner-workspace h2,
+.owner-workspace h3 {
+  font-family: var(--font-sans);
+  letter-spacing: normal;
+  text-transform: none;
+}
+.owner-workspace h1 {
+  font-size: 1.75rem;
+  line-height: 1.2;
+}
+.owner-workspace input:not([type="checkbox"]):not([type="radio"]),
+.owner-workspace select {
+  min-height: 44px;
+  font-size: 16px;
+}
+.owner-workspace summary {
+  min-height: 44px;
+  padding-block: 12px;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  header {
+    background: var(--color-background) !important;
+    backdrop-filter: none !important;
   }
 }
 

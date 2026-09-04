@@ -2,7 +2,7 @@ name: Security review
 on:
   pull_request:
   push:
-    branches: [audit/server-catalog, security/second-audit-hardening]
+    branches: [audit/server-catalog, security/second-audit-hardening, ui/consolidated-workspace]
 permissions:
   contents: read
 jobs:

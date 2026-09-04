@@ -36,22 +36,26 @@ function Card({ gallery, photos }: { gallery: CatalogGallery; photos: CatalogPho
     <Link
       to="/galleries/$galleryId"
       params={{ galleryId: gallery.id }}
-      className="group overflow-hidden rounded-xl border border-border bg-card focus-visible:outline-2 focus-visible:outline-offset-4"
+      className="group min-w-0 focus-visible:outline-2 focus-visible:outline-offset-4"
     >
       {cover && (
         <ProtectedPhoto
           src={cover.thumbSrc}
           alt=""
           loading="lazy"
-          className="aspect-[4/3] w-full object-cover"
+          className="aspect-[3/2] w-full rounded-sm object-cover"
         />
       )}
-      <div className="p-5">
-        <p className="text-xs uppercase tracking-widest text-muted-foreground">
-          {gallery.category}
-        </p>
-        <h2 className="font-display mt-2 text-2xl">{gallery.title}</h2>
-        <p className="mt-2 text-sm text-muted-foreground">{gallery.description}</p>
+      <div className={`border-b border-border pb-5 pt-4 ${cover ? "" : "border-t"}`}>
+        <p className="text-sm text-muted-foreground">{gallery.category}</p>
+        <h2 className="mt-2 text-xl font-semibold leading-snug group-hover:underline">
+          {gallery.title}
+        </h2>
+        {gallery.description && (
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            {gallery.description}
+          </p>
+        )}
       </div>
     </Link>
   );
@@ -79,70 +83,91 @@ export function CatalogIndex({
   );
   const home = page === "home";
   return (
-    <div className={`mx-auto max-w-[1400px] px-4 pb-16 sm:px-6 ${home ? "pt-32" : "pt-12"}`}>
+    <div className="mx-auto max-w-[1440px] px-4 pb-16 pt-10 sm:px-6 sm:pt-14 lg:px-10">
       <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
         {defaultStudio.location}
       </p>
-      <h1 className="font-display mt-3 text-4xl leading-tight sm:text-6xl">
-        {home || page === "about" ? defaultStudio.name : folder?.title || "Galleries"}
+      <h1 className="font-display mt-3 max-w-4xl text-4xl font-normal leading-tight sm:text-6xl">
+        {home || page === "about" ? defaultStudio.name : folder?.title || "Find your photos"}
       </h1>
       <p className="mt-5 max-w-2xl text-lg text-muted-foreground">
         {page === "about"
           ? "Sports, school games, and events in Greenville, South Carolina. For bookings, coverage requests, or questions about a gallery, contact Whitt on Instagram."
           : home
-            ? defaultStudio.tagline
-            : "Browse the published collections."}
+            ? "Sports and event photography in Greenville."
+            : "Browse events or search for your gallery."}
       </p>
-      <div className="my-8 flex flex-wrap gap-3">
-        {page !== "galleries" && (
+      {page !== "galleries" && (
+        <div className="my-8 flex flex-wrap gap-3">
           <Button asChild>
-            <Link to="/galleries">View galleries</Link>
+            <Link to="/galleries">Find your photos</Link>
           </Button>
-        )}
-        <Button variant="outline" asChild>
-          <a
-            href="https://www.instagram.com/whittgoldsmithphotography/"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Contact Whitt
-          </a>
-        </Button>
-      </div>
+          <Button variant="outline" asChild>
+            <a
+              href="https://www.instagram.com/whittgoldsmithphotography/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Contact Whitt
+            </a>
+          </Button>
+        </div>
+      )}
       {home && photos[0] && (
         <Link to="/galleries/$galleryId" params={{ galleryId: photos[0].galleryId }}>
           <ProtectedPhoto
             src={photos[0].src}
-            alt={photos[0].filename}
-            className="mb-12 max-h-[70vh] w-full rounded-xl object-contain"
+            alt={photos[0].caption || photos[0].filename}
+            className="mb-12 max-h-[70vh] w-full rounded-sm object-contain"
           />
         </Link>
       )}
       {page === "galleries" && (
-        <Input
-          className="mb-8 max-w-md"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search galleries"
-          aria-label="Search galleries"
-        />
-      )}
-      {listed.length ? (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {listed.map((g) => (
-            <Card key={g.id} gallery={g} photos={photos} />
-          ))}
-        </div>
-      ) : (
-        <div className="rounded-xl border border-border p-12 text-center">
-          <h2 className="font-display text-2xl">
-            {query ? "No matching galleries" : "No public galleries yet"}
-          </h2>
-          <p className="mt-3 text-muted-foreground">
-            {query ? "Try a different search." : "Published collections will appear here."}
+        <div className="my-8 border-b border-border pb-6">
+          <label htmlFor="gallery-search" className="mb-2 block text-sm font-medium">
+            Search galleries
+          </label>
+          <div className="flex max-w-xl items-center gap-3">
+            <Input
+              id="gallery-search"
+              className="min-h-12"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Event, team, or sport"
+            />
+            {query && (
+              <Button variant="outline" className="min-h-12" onClick={() => setQuery("")}>
+                Clear
+              </Button>
+            )}
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground" role="status">
+            {listed.length} {listed.length === 1 ? "gallery" : "galleries"}
           </p>
         </div>
       )}
+      {page !== "about" &&
+        (listed.length ? (
+          <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+            {listed.map((g) => (
+              <Card key={g.id} gallery={g} photos={photos} />
+            ))}
+          </div>
+        ) : (
+          <div className="border-t border-border py-12">
+            <h2 className="font-display text-2xl">
+              {query ? "No matching galleries" : "No public galleries yet"}
+            </h2>
+            <p className="mt-3 text-muted-foreground">
+              {query ? "Try a different search." : "Published collections will appear here."}
+            </p>
+            {query && (
+              <Button variant="outline" className="mt-4" onClick={() => setQuery("")}>
+                Clear search
+              </Button>
+            )}
+          </div>
+        ))}
     </div>
   );
 }
@@ -198,18 +223,23 @@ export function CatalogGalleryPage({ id }: { id: string }) {
   if (!state.data) return <CatalogStatus {...state} />;
   const { gallery, photos } = state.data;
   return (
-    <div className="mx-auto max-w-[1400px] px-4 py-12 sm:px-6">
-      <Link to="/galleries" className="underline">
+    <div className="mx-auto max-w-[1440px] px-4 py-10 sm:px-6 lg:px-10">
+      <Link
+        to="/galleries"
+        className="inline-flex min-h-11 items-center text-sm underline underline-offset-4"
+      >
         All galleries
       </Link>
       <p className="mt-8 text-xs uppercase tracking-widest text-muted-foreground">
         {gallery.category}
       </p>
-      <h1 className="font-display mt-2 text-4xl sm:text-5xl">{gallery.title}</h1>
+      <h1 className="font-display mt-2 max-w-4xl text-4xl font-normal leading-tight sm:text-5xl">
+        {gallery.title}
+      </h1>
       <p className="my-5 max-w-2xl text-muted-foreground">{gallery.description}</p>
       <section
         aria-label="Gallery instructions and download policy"
-        className="my-5 max-w-3xl space-y-3 rounded border border-border p-4"
+        className="my-5 max-w-3xl space-y-3 border-l-2 border-border pl-4"
       >
         {gallery.customerInstructions && (
           <>
@@ -237,7 +267,10 @@ export function CatalogGalleryPage({ id }: { id: string }) {
         Copy gallery link
       </Button>
       <ProofPanel proof={proof} galleryId={id} />
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+      <p className="mb-4 mt-8 border-t border-border pt-5 text-sm text-muted-foreground">
+        {photos.length} {photos.length === 1 ? "photograph" : "photographs"}
+      </p>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-6 md:grid-cols-3 md:gap-x-5">
         {photos.map((p, i) => (
           <div key={p.id}>
             <button
@@ -245,13 +278,13 @@ export function CatalogGalleryPage({ id }: { id: string }) {
               key={p.id}
               aria-label={`Open ${p.filename}`}
               onClick={() => setOpen(i)}
-              className="overflow-hidden rounded-md focus-visible:outline-2 focus-visible:outline-offset-4"
+              className={`block w-full overflow-hidden rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 ${proof.selection?.photoIds.includes(p.id) ? "outline-2 outline-offset-2 outline-primary" : ""}`}
             >
               <ProtectedPhoto
                 src={p.thumbSrc}
-                alt={p.filename}
+                alt={p.caption || p.filename}
                 loading="lazy"
-                className="aspect-[4/3] w-full object-cover"
+                className="aspect-[3/2] w-full object-cover"
               />
             </button>
             {proof.selection && (
@@ -262,6 +295,7 @@ export function CatalogGalleryPage({ id }: { id: string }) {
                 aria-pressed={proof.selection.photoIds.includes(p.id)}
                 onClick={() => proof.toggle(p.id)}
               >
+                {proof.selection.photoIds.includes(p.id) && <span aria-hidden="true">✓</span>}
                 {proof.selection.photoIds.includes(p.id) ? "Selected" : "Select favorite"}
               </Button>
             )}

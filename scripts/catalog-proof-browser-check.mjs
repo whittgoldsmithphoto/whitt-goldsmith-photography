@@ -343,6 +343,19 @@ try {
     "Cancel preserves current draft",
   );
   await ownerPage.goto(`${origin}/organize`);
+  const workspaceNav = ownerPage.getByRole("navigation", { name: "Owner workspace", exact: true });
+  await workspaceNav.getByRole("link", { name: "Organizer", exact: true }).waitFor();
+  assert.equal(await workspaceNav.getByRole("link").count(), 3, "Three owner destinations");
+  assert.equal(await workspaceNav.getByRole("link", { name: "Upload", exact: true }).count(), 0);
+  assert.equal(await workspaceNav.getByRole("link", { name: "Library", exact: true }).count(), 0);
+  await ownerPage.setViewportSize({ width: 375, height: 900 });
+  await ownerPage.getByRole("button", { name: "Open menu", exact: true }).click();
+  const mobileMenu = ownerPage.getByRole("dialog");
+  await mobileMenu.getByRole("link", { name: "Organizer", exact: true }).click();
+  await mobileMenu.waitFor({ state: "hidden" });
+  await ownerPage.setViewportSize({ width: 1440, height: 900 });
+  if (process.env.WGP_UI_REVIEW) await ownerPage.screenshot({ path: "test-results/owner-ui.png" });
+  await ownerPage.getByText("Manage folders", { exact: true }).click();
   const manager = ownerPage.getByRole("region", { name: "Folder manager", exact: true });
   await manager.getByLabel("Folder title", { exact: true }).fill("Browser folder test");
   await manager.getByRole("button", { name: "Create folder", exact: true }).click();
@@ -355,6 +368,7 @@ try {
     .getByLabel("Folder to edit", { exact: true })
     .selectOption({ label: "Renamed browser folder" });
   await ownerPage.reload();
+  await ownerPage.getByText("Manage folders", { exact: true }).click();
   await manager
     .getByLabel("Folder to edit", { exact: true })
     .selectOption({ label: "Renamed browser folder" });
@@ -551,6 +565,8 @@ try {
   await priceForm.getByLabel("Price in cents", { exact: true }).fill("2500");
   await priceForm.getByRole("button", { name: "Save price", exact: true }).click();
   await ownerPage.getByText("Browser digital product: $25.00", { exact: true }).waitFor();
+  await ownerPage.getByRole("button", { name: "Test quote", exact: true }).click();
+  assert.equal(await priceForm.isVisible(), false, "Inactive selling sections are hidden");
   const quoteForm = ownerPage.locator("form").filter({
     has: ownerPage.getByRole("heading", { name: "Quote preview — no payment", exact: true }),
   });
@@ -559,12 +575,14 @@ try {
   await quoteForm.getByLabel("Product", { exact: true }).selectOption(productId);
   await quoteForm.getByRole("button", { name: "Preview server quote", exact: true }).click();
   await quoteForm.getByText("Pre-tax preview: $25.00 USD", { exact: true }).waitFor();
+  await ownerPage.getByRole("button", { name: "Pricing", exact: true }).click();
   const overrideForm = ownerPage.locator("form").filter({
     has: ownerPage.getByRole("heading", { name: "Gallery price override", exact: true }),
   });
   await overrideForm.getByLabel("Gallery ID", { exact: true }).fill(gallery.id);
   await overrideForm.getByLabel("Price list", { exact: true }).selectOption(listId);
   await overrideForm.getByRole("button", { name: "Save gallery pricing", exact: true }).click();
+  await ownerPage.getByRole("button", { name: "Discounts", exact: true }).click();
   const couponForm = ownerPage
     .locator("form")
     .filter({ has: ownerPage.getByRole("heading", { name: "Create a coupon", exact: true }) });
@@ -578,6 +596,7 @@ try {
     .fill(new Date(Date.now() + 86400000).toISOString().slice(0, 16));
   await couponForm.getByRole("button", { name: "Create coupon", exact: true }).click();
   await ownerPage.getByText(/BROWSER10: 10%/).waitFor();
+  await ownerPage.getByRole("button", { name: "Test quote", exact: true }).click();
   await quoteForm.getByLabel("Coupon (optional)", { exact: true }).fill("BROWSER10");
   await quoteForm.getByRole("button", { name: "Preview server quote", exact: true }).click();
   await quoteForm.getByText("Pre-tax preview: $22.50 USD", { exact: true }).waitFor();
