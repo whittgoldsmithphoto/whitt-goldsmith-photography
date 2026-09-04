@@ -1,5 +1,15 @@
 # Live Stripe readiness
 
+## Latest implementation and deployment
+
+- Source `38865c2` pushed to `backend/resource-foundation`; earlier branches remain intact.
+- 351 tests pass, typecheck passes, lint has zero errors and six existing warnings. All three local browser suites pass, including customer history, payment-status polling, synthetic original delivery and refund revocation. These are not actual Stripe/R2 purchase acceptance.
+- Staging Worker version `804ec409-8179-45c6-910b-702624df5d8a` deployed successfully. `/purchases` renders; anonymous history is denied; public checkout remains unavailable.
+- Migrations 0017–0019 applied transactionally only to WGP Catalog Staging. Readback: three retained photographs, zero published galleries, all three new migrations recorded.
+- Prepared, **not saved**, adding `charge.dispute.created`, `charge.dispute.updated`, and `charge.dispute.closed` to existing sandbox destination `we_1UBmMQDHsmsdTdegkwrmrf59`. The other five events and destination URL are unchanged. Browser confirmation is required before saving the additional data forwarding.
+- Two sandbox destinations appear to point to the same staging URL. Do not remove either without inspecting its identity/signing-secret use and confirming removal. The named destination has three failed deliveries; an earlier signed unbound fixture is not a real successful checkout.
+- No real charge, refund, live key change or live activation occurred. Live business/tax decisions, production adapter/configuration, scheduled reconciliation and real provider acceptance remain outstanding.
+
 Inspected the signed-in Stripe dashboard during this backend revision. This is a setup report, not payment activation.
 
 - The live Whitt Goldsmith Photography account already exists: `acct_1UBQ70D2rNLvqnsK`. A live publishable key and a recorded payment are visible; this does not establish every compliance/payout requirement.
