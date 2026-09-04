@@ -1,6 +1,6 @@
 import { ZodError } from "zod";
 import { getSql } from "../db";
-import { createCatalog, CatalogError } from "./repository";
+import { createCatalog, CatalogError, digest } from "./repository";
 import { catalogMedia, catalogConfiguration, runtimeSetting } from "./media.server";
 import { assertCatalogOwner } from "./owner";
 import { proofQuerySchema } from "./proof-query";
@@ -62,6 +62,18 @@ export async function catalogRequest(request: Request): Promise<Response> {
     const id = url.searchParams.get("id") || "";
     const catalog = createCatalog(await getSql(), catalogMedia());
     if (request.method === "GET") {
+      if (op === "capabilities") {
+        const { getSessionUser } = await import("../auth/verify.server");
+        const user = await getSessionUser();
+        let isOwner = false;
+        try {
+          assertCatalogOwner(user?.id, runtimeSetting("OWNER_USER_IDS"));
+          isOwner = true;
+        } catch {
+          /* No owner capability. */
+        }
+        return Response.json({ isOwner, checkoutAvailable: false }, { headers });
+      }
       if (op === "diagnostics") {
         await owner();
         const sql = await getSql();
@@ -76,6 +88,8 @@ export async function catalogRequest(request: Request): Promise<Response> {
           "0011_commerce_session_outcomes.sql",
           "0012_gallery_customer_policy.sql",
           "0013_customer_download_authorization.sql",
+          "0014_remove_legacy_download.sql",
+          "0015_gallery_client_limits.sql",
         ];
         return Response.json(
           {
@@ -152,7 +166,15 @@ export async function catalogRequest(request: Request): Promise<Response> {
           { headers },
         );
       if (op === "unlock") {
-        const access = await catalog.unlock(id, data.password);
+        // Cloudflare supplies CF-Connecting-IP; do not trust caller-selected X-Forwarded-For.
+        const secret = runtimeSetting("BETTER_AUTH_SECRET");
+        if (!secret) throw new CatalogError("Gallery access is not configured", 503);
+        const clientBucket = await digest(
+          new TextEncoder().encode(
+            `${secret}:${id}:${request.headers.get("CF-Connecting-IP") || "local"}`,
+          ),
+        );
+        const access = await catalog.unlock(id, data.password, clientBucket);
         return Response.json(
           { ok: true },
           {

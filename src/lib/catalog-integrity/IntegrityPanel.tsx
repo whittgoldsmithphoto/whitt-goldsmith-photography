@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { apiFetch } from "../auth/api-fetch";
 import type { IntegrityResult } from "./service";
 /** Mount key={photoId} outside other forms. A check never writes or repairs files. */
 export function IntegrityPanel({ photoId }: { photoId: string }) {
@@ -12,7 +13,7 @@ export function IntegrityPanel({ photoId }: { photoId: string }) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 90_000);
     try {
-      const response = await fetch("/api/catalog-integrity", {
+      const response = await apiFetch("/api/catalog-integrity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ photoId }),

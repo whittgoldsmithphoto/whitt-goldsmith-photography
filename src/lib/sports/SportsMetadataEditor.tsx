@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { apiFetch } from "../auth/api-fetch";
 import type { SportsMetadata } from "./repository";
 import {
   applyRememberedEvent,
@@ -10,7 +11,7 @@ import {
 } from "./event-reuse";
 
 async function call<T>(op: string, photoId: string, body?: unknown): Promise<T> {
-  const response = await fetch(`/api/sports?op=${op}&photoId=${encodeURIComponent(photoId)}`, {
+  const response = await apiFetch(`/api/sports?op=${op}&photoId=${encodeURIComponent(photoId)}`, {
     ...(body
       ? {
           method: "POST",

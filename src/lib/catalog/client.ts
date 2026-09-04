@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "../auth/api-fetch";
 
 export class CatalogRequestError extends Error {
   status: number;
@@ -8,7 +9,7 @@ export class CatalogRequestError extends Error {
   }
 }
 export async function catalogFetch<T>(query: string, body?: unknown): Promise<T> {
-  const response = await fetch(`/api/catalog?${query}`, {
+  const response = await apiFetch(`/api/catalog?${query}`, {
     method: body === undefined ? "GET" : "POST",
     credentials: "same-origin",
     cache: "no-store",

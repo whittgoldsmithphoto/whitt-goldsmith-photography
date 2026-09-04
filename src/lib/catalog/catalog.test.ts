@@ -36,6 +36,12 @@ async function fixture() {
     for (let i = 0; i < values.length; i++) query += `$${i + 1}${strings[i + 1]}`;
     return (await db.query(query, values)).rows;
   }) as Sql;
+  await db.exec(
+    await readFile(
+      new URL("../../../migrations/0015_gallery_client_limits.sql", import.meta.url),
+      "utf8",
+    ),
+  );
   sql.query = async <T>(query: string, values: unknown[] = []) =>
     (await db.query<T>(query, values)).rows;
   const objects = new Map<string, Uint8Array>();
@@ -568,6 +574,8 @@ test("password grants are scoped, expiring, revocable and never disclose credent
     await assert.rejects(f.catalog.detail(g.id, next), /password required/);
     for (let i = 0; i < 7; i++) await assert.rejects(f.catalog.unlock(g.id, "wrong"), /Incorrect/);
     await assert.rejects(f.catalog.unlock(g.id, "wrong"), /Too many/);
+    const cleanGrant = await f.catalog.unlock(g.id, "correct horse battery", "clean-client");
+    assert.ok(cleanGrant, "one abusive client must not lock out a different client");
     await f.catalog.saveGallery(
       { ...f.input, id: g.id, revision: saved.revision, visibility: "private", published: true },
       "owner",

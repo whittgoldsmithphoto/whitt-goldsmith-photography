@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { apiFetch } from "@/lib/auth/api-fetch";
 import type { Quote } from "@/lib/catalog-commerce/service";
 
 type Product = { id: string; name: string; license: string; active: boolean };
@@ -18,7 +19,7 @@ type Pricing = {
   orders: { id: string; status: string; total_cents: number; currency: string }[];
 };
 async function request<T>(op: string, body?: unknown): Promise<T> {
-  const response = await fetch(`/api/commerce?op=${op}`, {
+  const response = await apiFetch(`/api/commerce?op=${op}`, {
     method: body === undefined ? "GET" : "POST",
     credentials: "same-origin",
     cache: "no-store",

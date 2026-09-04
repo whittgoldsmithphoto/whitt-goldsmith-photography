@@ -1,0 +1,22 @@
+name: Security review
+on:
+  pull_request:
+  push:
+    branches: [audit/server-catalog, security/second-audit-hardening]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run verify:staging
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/catalog-proof-browser-check.mjs
+      - run: npm audit --audit-level=high

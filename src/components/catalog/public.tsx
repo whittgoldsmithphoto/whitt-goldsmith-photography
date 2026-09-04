@@ -167,6 +167,7 @@ export function CatalogGalleryPage({ id }: { id: string }) {
             await catalogFetch(`op=unlock&id=${encodeURIComponent(id)}`, { password });
             setPassword("");
             state.reload();
+            proof.reload();
           } catch (error) {
             setUnlockError(error instanceof Error ? error.message : "Could not unlock gallery");
           } finally {

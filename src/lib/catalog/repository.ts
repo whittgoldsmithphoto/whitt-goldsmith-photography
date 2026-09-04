@@ -310,18 +310,30 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
       await audit(owner, "folder.created", id);
       return { id, ...data };
     },
-    async unlock(id: string, password: string) {
+    async unlock(id: string, password: string, clientBucket = "local") {
       const row = await gallery(id);
       if (!row.published || row.visibility === "private" || !row.password_hash)
         throw new CatalogError("Gallery unavailable", 404);
       if (typeof password !== "string" || password.length > 128)
         throw new CatalogError("Invalid password");
-      // Shared database bucket: limits apply across Worker instances and rotating IPs.
+      // Per-client atomic bucket runs before the higher shared abuse ceiling.
+      const client = await sql<{ attempts: number; allowed: boolean }>`
+        insert into catalog_client_attempts(gallery_id,client_bucket,window_start)
+        values(${id},${clientBucket},now())
+        on conflict(gallery_id,client_bucket) do update set
+          attempts=case when catalog_client_attempts.window_start < now()-interval '1 minute' then 1 else least(catalog_client_attempts.attempts+1,30) end,
+          window_start=case when catalog_client_attempts.window_start < now()-interval '1 minute' then now() else catalog_client_attempts.window_start end,
+          blocked_until=case when catalog_client_attempts.window_start < now()-interval '1 minute' then now()
+            when catalog_client_attempts.attempts>=10 then now()+least(60,power(2,least(6,catalog_client_attempts.attempts-10))) * interval '1 second'
+            else catalog_client_attempts.blocked_until end
+        returning attempts,blocked_until<=now() as allowed`;
+      if (!client[0].allowed || client[0].attempts > 10)
+        throw new CatalogError("Too many attempts. Try again in a minute.", 429);
       const limit = await sql<{
         attempts: number;
       }>`insert into catalog_access_attempts(gallery_id,window_start) values(${id},date_trunc('minute',now()))
         on conflict(gallery_id,window_start) do update set attempts=catalog_access_attempts.attempts+1 returning attempts`;
-      if (limit[0].attempts > 10)
+      if (limit[0].attempts > 1000)
         throw new CatalogError("Too many attempts. Try again in a minute.", 429);
       if (!(await passwordMatches(password, row.password_hash))) {
         await audit(null, "gallery.unlock_failed", id);

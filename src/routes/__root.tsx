@@ -3,10 +3,18 @@ import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { StudioShell } from "@/components/studio-shell";
 import appCss from "../styles.css?url";
+import { documentSecurityHeaders } from "../lib/security-headers";
 
 const APP_NAME = "Whitt Goldsmith Photography";
 
 export const Route = createRootRoute({
+  headers: () =>
+    import.meta.env.DEV
+      ? {
+          ...documentSecurityHeaders,
+          "Content-Security-Policy": "base-uri 'self'; object-src 'none'",
+        }
+      : documentSecurityHeaders,
   head: () => ({
     meta: [
       { charSet: "utf-8" },

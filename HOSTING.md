@@ -46,7 +46,7 @@ DATABASE_URL="postgresql://…" npm run db:migrate
 
 1. [Workers & Pages](https://dash.cloudflare.com/) → **Create** → **Workers** → **Connect to Git**.
 2. Select the repo.
-3. Build command: `npm run build:cloudflare`
+3. This review branch is staging-only. Build command: `npm run build:staging`. Do not connect this branch to the production Worker; use the separate `wgp-catalog-staging` service.
 4. Deploy command: `npx wrangler deploy --config dist/server/wrangler.json`
 5. After the first deploy, **Settings → Variables and Secrets**:
 
@@ -73,7 +73,7 @@ STRIPE_WEBHOOK_SECRET
 
 ```
 npx wrangler login
-npm run deploy:cloudflare
+npm run deploy:staging
 npx wrangler secret put BETTER_AUTH_SECRET
 npx wrangler secret put DATABASE_URL
 ```

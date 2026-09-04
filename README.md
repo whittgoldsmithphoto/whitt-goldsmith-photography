@@ -1,12 +1,12 @@
 # Whitt Goldsmith Photography
 
-Public galleries, guest checkout, prints. Owner tools stay behind an unlisted door.
+Server-backed sports and event galleries with private originals and owner authorization. Checkout and prints are not available yet.
 
 ## Public vs owner
 
-Visitors see galleries, photographs, cart, and checkout. They do not create accounts.
+Visitors can view permitted galleries without an account. Saving proof selections and notes currently requires an account. Guest checkout is not implemented; commerce remains disabled pending sandbox acceptance.
 
-The owner door is `/login` (first time `/login?setup=1`). It is not in the public menu. A small mark in the footer is the quiet link. After you sign in: Organizer, Upload, Library, Selling, Settings, Migrate.
+The owner door is `/login`; access requires the explicitly configured owner account, not merely being signed in. Legacy Settings, Keywords, Migrate, Publish and order tools are disabled. Use Organizer, Proofs and Selling for server-backed operations.
 
 ## Run locally
 
@@ -25,7 +25,7 @@ npm run typecheck
 Same account as R2. See [HOSTING.md](HOSTING.md).
 
 ```
-npm run build:cloudflare
+npm run verify:staging
 npx wrangler deploy
 ```
 

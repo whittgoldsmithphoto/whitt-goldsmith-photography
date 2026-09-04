@@ -12,6 +12,7 @@ if (process.env.DATABASE_URL || process.env.HYPERDRIVE || process.env.CLOUDFLARE
   throw new Error("Run this harness without remote database/environment configuration");
 const origin = "http://localhost:8092";
 process.env.VITE_AUTH_ENABLED = "true";
+process.env.BETTER_AUTH_SECRET = "local-browser-test-only-not-a-provider-secret";
 process.env.BETTER_AUTH_URL = origin;
 process.env.OWNER_USER_IDS = "fixture-owner-before-registration";
 const server = await createServer({
@@ -148,11 +149,29 @@ try {
     pages.push(page);
   }
   const [firstPage, secondPage, ownerPage] = pages;
+  assert.equal(
+    (await (await customer.request.get(`${origin}/api/catalog?op=capabilities`)).json()).isOwner,
+    false,
+  );
+  assert.equal(
+    (await (await owner.request.get(`${origin}/api/catalog?op=capabilities`)).json()).isOwner,
+    true,
+  );
+  await ownerPage.goto(`${origin}/settings`);
+  await ownerPage.getByRole("heading", { name: "Legacy tools are disabled" }).waitFor();
+  assert.equal(await ownerPage.getByRole("button", { name: "Empty the catalog" }).count(), 0);
   await firstPage.goto(`${origin}/checkout`);
   await firstPage.getByRole("heading", { name: "Checkout is not available yet" }).waitFor();
   assert.equal(await firstPage.getByRole("button", { name: "Pay with card" }).count(), 0);
   await firstPage.goto(`${origin}/galleries/${gallery.id}`);
   await firstPage.getByRole("button", { name: "Select favorite", exact: true }).click();
+  assert.equal(
+    await firstPage
+      .getByRole("navigation")
+      .getByRole("link", { name: "Organizer", exact: true })
+      .count(),
+    0,
+  );
   await firstPage.getByLabel("Note to Whitt").fill("Please review this frame.");
   await firstPage.getByRole("button", { name: "Save selection", exact: true }).click();
   await firstPage
@@ -571,6 +590,29 @@ try {
     ).status(),
     503,
     "Pricing setup never enables checkout",
+  );
+  const currentGallery = (await catalog.ownerIndex()).galleries.find((g) => g.id === gallery.id);
+  await catalog.saveGallery(
+    {
+      id: gallery.id,
+      revision: currentGallery.revision,
+      title: currentGallery.title,
+      description: currentGallery.description,
+      category: currentGallery.category,
+      folderId: currentGallery.folderId,
+      visibility: "unlisted",
+      published: true,
+      password: "local-proof-unlock-test",
+    },
+    process.env.OWNER_USER_IDS,
+  );
+  await firstPage.goto(`${origin}/galleries/${gallery.id}`);
+  await firstPage.getByLabel("Gallery password").fill("local-proof-unlock-test");
+  await firstPage.getByRole("button", { name: "Open gallery", exact: true }).click();
+  await firstPage.getByLabel("Note to Whitt").waitFor();
+  assert.equal(
+    await firstPage.getByRole("button", { name: "Save selection", exact: true }).count(),
+    1,
   );
   assert.deepEqual(errors, []);
   console.log(

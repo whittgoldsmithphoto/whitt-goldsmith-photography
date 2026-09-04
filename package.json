@@ -4,14 +4,18 @@
   "sideEffects": false,
   "type": "module",
   "overrides": {
-    "nf3": "0.3.17"
+    "nf3": "0.3.17",
+    "undici": "7.29.0"
   },
   "scripts": {
     "dev": "node scripts/with-app-env.mjs vite dev --host 0.0.0.0 --port 8080",
     "build": "node scripts/with-app-env.mjs vite build && npm run db:migrate",
-    "build:cloudflare": "node scripts/with-app-env.mjs vite build --mode cloudflare",
+    "build:cloudflare": "npm run build:staging",
+    "build:staging": "node scripts/staging-release.mjs build",
+    "verify:staging": "node scripts/staging-release.mjs verify",
+    "deploy:staging": "node scripts/staging-release.mjs deploy",
     "check:staging": "node scripts/check-staging-config.mjs",
-    "deploy:cloudflare": "npm run build:cloudflare && wrangler deploy --config dist/server/wrangler.json",
+    "deploy:cloudflare": "node -e \"throw new Error('Ambiguous deployment disabled. Use npm run deploy:staging.')\"",
     "db:migrate": "node scripts/migrate.mjs",
     "build:dev": "node scripts/with-app-env.mjs vite build --mode development",
     "preview": "node scripts/with-app-env.mjs vite preview",
@@ -19,7 +23,7 @@
     "preview:stop": "node scripts/preview.mjs stop",
     "typecheck": "tsc --noEmit",
     "check:auth": "node scripts/check-auth-invariant.mjs",
-    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/auth/gate-identity.test.ts src/lib/catalog/catalog.test.ts src/lib/catalog/upload-batch.test.ts src/lib/catalog/jpeg-privacy.test.ts src/lib/catalog-commerce/commerce.test.ts src/lib/catalog-commerce/stripe-adapter.test.ts src/lib/catalog-commerce/session-outcomes.test.ts src/lib/catalog-commerce/customer-download.test.ts src/lib/catalog-integrity/integrity.test.ts src/lib/sports/sports.test.ts",
+    "test": "node scripts/run-tests.mjs",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

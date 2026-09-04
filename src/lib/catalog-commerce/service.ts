@@ -275,16 +275,11 @@ export function createCommerce(sql: Sql, authorizeGallery: (galleryId: string) =
      * consumes one attempt, even if the subsequent storage transfer fails.
      */
     async reserveDownload(customerId: string, token: string) {
-      id.parse(customerId);
-      z.string()
-        .regex(/^[0-9a-f]{64}$/)
-        .parse(token);
-      const [row] = await sql.query<{ original_key: string; filename: string; mime: string }>(
-        `SELECT * FROM commerce_reserve_download($1,$2)`,
-        [customerId, await sha256(token)],
+      void customerId;
+      void token;
+      throw new Error(
+        "Download unavailable: legacy reservation disabled; use verified customer delivery",
       );
-      if (!row) throw new Error("Download unavailable");
-      return row;
     },
     async revokeEntitlement(entitlementId: string) {
       z.string().min(1).max(350).parse(entitlementId);

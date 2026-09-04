@@ -277,9 +277,10 @@ test("hashed tokens are customer-scoped, rotate, cap downloads, expire and revok
     assert.notEqual(stored, second.token);
     await assert.rejects(f.commerce.reserveDownload("customer", first.token), /unavailable/);
     await assert.rejects(f.commerce.reserveDownload("other", second.token), /unavailable/);
-    assert.equal(
-      (await f.commerce.reserveDownload("customer", second.token)).original_key,
-      "private/original.jpg",
+    assert.notEqual(first.token, second.token);
+    await assert.rejects(
+      f.commerce.reserveDownload("customer", second.token),
+      /legacy reservation disabled/,
     );
     await f.db.exec(`UPDATE commerce_entitlements SET downloads=10`);
     await assert.rejects(f.commerce.reserveDownload("customer", second.token), /unavailable/);

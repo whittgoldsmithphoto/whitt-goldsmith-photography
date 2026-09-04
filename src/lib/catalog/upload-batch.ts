@@ -1,3 +1,4 @@
+import { apiFetch } from "../auth/api-fetch.ts";
 export type UploadFile = Pick<File, "name" | "size" | "type" | "arrayBuffer">;
 export type UploadState =
   "queued" | "hashing" | "uploading" | "ready" | "review" | "duplicate" | "failed" | "cancelled";
@@ -11,7 +12,7 @@ export async function uploadRequest(query: string, body: unknown, raw = false): 
   // it never assumes that a missing response means the original was not stored.
   const timer = setTimeout(() => controller.abort(), 180_000);
   try {
-    const response = await fetch(`/api/catalog?${query}`, {
+    const response = await apiFetch(`/api/catalog?${query}`, {
       method: "POST",
       credentials: "same-origin",
       cache: "no-store",

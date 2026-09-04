@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Menu } from "lucide-react";
 import { Toaster } from "sonner";
-import { CartButton } from "@/components/shop/cart-button";
+import { catalogFetch } from "@/lib/catalog/client";
 import { SiteFooter } from "@/components/site-footer";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -23,31 +23,36 @@ const STUDIO_NAV = [
   { to: "/upload" as const, label: "Upload" },
   { to: "/library" as const, label: "Library" },
   { to: "/favorites" as const, label: "Proofs" },
-  { to: "/keywords" as const, label: "Keywords" },
   { to: "/sell" as const, label: "Selling" },
-  { to: "/migrate" as const, label: "Migrate" },
-  { to: "/publish" as const, label: "Publish" },
-  { to: "/settings" as const, label: "Settings" },
 ];
 
 export function StudioShell({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const overlay = pathname === "/";
-  const legacyPage = [
-    "/keywords",
-    "/migrate",
-    "/settings",
-    "/publish",
-    "/cart",
-    "/checkout",
-    "/orders",
-  ].some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  const legacyPage = ["/keywords", "/migrate", "/settings", "/publish", "/orders"].some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
+  );
   const studio = defaultStudio;
   const persist = useStudioStore.persist;
   const setHydrated = useStudioStore((s) => s.setHydrated);
   const { user } = useCurrentUserState();
+  const userId = user?.id;
+  const [ownerUserId, setOwnerUserId] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setOwnerUserId(null);
+    if (userId)
+      catalogFetch<{ isOwner: boolean }>("op=capabilities")
+        .then((result) => {
+          if (!cancelled && result.isOwner) setOwnerUserId(userId);
+        })
+        .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
   const [scrolled, setScrolled] = useState(false);
-  const nav = user ? [...PUBLIC_NAV, ...STUDIO_NAV] : PUBLIC_NAV;
+  const nav = user && ownerUserId === user.id ? [...PUBLIC_NAV, ...STUDIO_NAV] : PUBLIC_NAV;
 
   useEffect(() => {
     const finish = () => setHydrated(true);
@@ -97,14 +102,12 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
                   {item.label}
                 </Link>
               ))}
-              <CartButton />
               <SignedIn>
                 <UserButton />
               </SignedIn>
             </nav>
 
             <div className="flex items-center gap-1 md:hidden">
-              <CartButton />
               <Sheet>
                 <SheetTrigger asChild>
                   <Button variant="ghost" size="icon" aria-label="Open menu">
@@ -126,18 +129,6 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
                         </Link>
                       </SheetTrigger>
                     ))}
-                    <SheetTrigger asChild>
-                      <Link to="/cart" className="flex h-12 items-center text-base">
-                        Cart
-                      </Link>
-                    </SheetTrigger>
-                    <SignedIn>
-                      <SheetTrigger asChild>
-                        <Link to="/settings" className="flex h-12 items-center text-base">
-                          Settings
-                        </Link>
-                      </SheetTrigger>
-                    </SignedIn>
                   </nav>
                 </SheetContent>
               </Sheet>
@@ -158,7 +149,18 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
               </div>
             </SignedIn>
           )}
-          {children}
+          {legacyPage ? (
+            <section className="mx-auto max-w-3xl px-6 py-20">
+              <h1 className="text-2xl">Legacy tools are disabled</h1>
+              <p className="mt-4">
+                These tools do not update the shared server catalog. No changes have been made. Use
+                Organizer or Selling for the current server-backed tools.
+              </p>
+              <Link to="/organize">Open Organizer</Link>
+            </section>
+          ) : (
+            children
+          )}
         </main>
         {pathname === "/login" || pathname === "/organize" ? null : <SiteFooter />}
 
