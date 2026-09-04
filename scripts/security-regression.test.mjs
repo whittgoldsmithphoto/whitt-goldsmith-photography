@@ -3,6 +3,15 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { stagingEnvironment } from "./staging-environment.mjs";
 const read = (path) => readFileSync(new URL("../" + path, import.meta.url), "utf8");
+test("production release disables new sales without overwriting the runtime webhook gate", () => {
+  const config = JSON.parse(read("wrangler.jsonc"));
+  assert.equal(config.vars.CATALOG_LIVE_CHECKOUT_ENABLED, "false");
+  assert.equal(config.vars.CATALOG_LIVE_DOWNLOADS_ENABLED, "false");
+  assert.equal(config.vars.CATALOG_LIVE_WEBHOOK_ENABLED, undefined);
+  const runner = read("scripts/production-release.mjs");
+  assert.match(runner, /--keep-vars/);
+  assert.match(runner, /config\.vars\.CATALOG_LIVE_WEBHOOK_ENABLED,\s*undefined/);
+});
 test("release commands cannot silently deploy the production default", () => {
   const pkg = JSON.parse(read("package.json"));
   assert.equal(pkg.scripts["build:cloudflare"], "npm run build:staging");

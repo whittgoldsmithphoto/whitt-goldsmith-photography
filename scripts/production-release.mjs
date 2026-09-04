@@ -30,12 +30,15 @@ assert.equal(
   "https://whitt-goldsmith-photography.whittgoldsmithmedia.workers.dev",
 );
 assert.ok(!config.routes?.length && !config.route, "Do not change the SmugMug domain");
-for (const key of [
-  "CATALOG_LIVE_CHECKOUT_ENABLED",
-  "CATALOG_LIVE_DOWNLOADS_ENABLED",
-  "CATALOG_LIVE_WEBHOOK_ENABLED",
-])
+for (const key of ["CATALOG_LIVE_CHECKOUT_ENABLED", "CATALOG_LIVE_DOWNLOADS_ENABLED"])
   assert.equal(config.vars[key], "false", "Release cannot implicitly enable sales");
+// Webhook processing must survive a sales shutdown for refunds and delayed events.
+// Runtime configuration is retained by --keep-vars; absence defaults to disabled.
+assert.equal(
+  config.vars.CATALOG_LIVE_WEBHOOK_ENABLED,
+  undefined,
+  "Release must preserve the independently configured webhook gate",
+);
 if (mode !== "build")
   for (const script of ["test", "typecheck", "lint"]) run("npm", ["run", script]);
 if (mode === "deploy") {

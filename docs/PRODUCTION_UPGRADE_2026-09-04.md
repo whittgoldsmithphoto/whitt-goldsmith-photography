@@ -17,16 +17,25 @@ The owner explicitly selected upgrading `whitt-goldsmith-photography`, not creat
 - 360 tests pass; typecheck passes; lint zero errors/six existing warnings; production build passes. Tests use a complete release snapshot, leaving unrelated working-tree deletions untouched.
 - `/api/commerce?op=status`: HTTP 200, checkout unavailable and quote-only.
 - Anonymous `/api/commerce?op=owner`: HTTP 401. `/api/auth/get-session`: HTTP 200, null session.
-- POST `/api/commerce-webhook`: HTTP 503 while explicitly disabled. This is deployed routing evidence, not accepted Stripe delivery.
+- Initial POST `/api/commerce-webhook` returned HTTP 503 while disabled. After live connection, unsigned requests return HTTP 400 (invalid signature), and a locally signed unsupported diagnostic event returns HTTP 422 without changing order state. This verifies signature handling, not a real Stripe delivery or purchase.
+
+## Live Stripe connection verified September 4
+
+- Dedicated live key securely stored as `CATALOG_LIVE_STRIPE_SECRET_KEY`; account verified through the Stripe API as `acct_1UBQ70D2rNLvqnsK`, with charges and payouts enabled. Legacy keys remain untouched.
+- Live webhook `we_1UBv9SD2rNLvqnsKYWcbccYp` targets `https://whitt-goldsmith-photography.whittgoldsmithmedia.workers.dev/api/commerce-webhook`. Subscriptions: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `checkout.session.expired`, `charge.refunded`, `charge.dispute.created`, `charge.dispute.updated`, `charge.dispute.closed`.
+- Its signing secret is encrypted as `CATALOG_LIVE_STRIPE_WEBHOOK_SECRET`; account ID and digital tax code are also stored. No credentials are committed. Existing webhook destinations remain unchanged.
+- Active connection deployment: `69b54cb2-399c-416c-b878-33801aa702eb`. Webhook enabled independently; customer checkout and downloads remain disabled. Public commerce status still reports quote-only.
+- Stripe Tax settings report active, provider Stripe, default code `txcd_10505000`. The active-registration list is empty: South Carolina registration is NOT verified or configured. Tax classification still requires owner confirmation.
+- Cloudflare secret updates initially failed with error 10215 because the latest uploaded Worker version was not deployed. Redeploying the known verified production bundle resolved this; all four live bindings were then successfully saved.
 
 ## Remaining connection steps
 
-- A dedicated live Stripe key named `WGP Catalog Production` was created in live account `acct_1UBQ70D2rNLvqnsK`; it has not yet been copied into the Worker. Old Stripe keys were not rotated or deleted. The one-time confirmation dialog needs to be made visible in Dia to complete secure transfer.
-- Store the key as encrypted `CATALOG_LIVE_STRIPE_SECRET_KEY`; configure `CATALOG_LIVE_STRIPE_ACCOUNT_ID` and verify account/mode via read-only provider calls.
-- Create the live catalog webhook at `https://whitt-goldsmith-photography.whittgoldsmithmedia.workers.dev/api/commerce-webhook`, store its signing secret under `CATALOG_LIVE_STRIPE_WEBHOOK_SECRET`, verify required events, then enable webhook processing independently of checkout. Do not silently repoint the legacy destination.
+- Verify a real Stripe-delivered event and complete end-to-end checkout, payment-ledger and delivery acceptance. The signed diagnostic is not a substitute for these checks.
 - Create/sign into the first production owner account and bind its verified ID to `OWNER_USER_IDS`. Staging account records were deliberately not copied.
-- Configure the actual production watermark, prices, photos, Stripe Tax classification/registration, receipt/policies, recovery credentials and delivery acceptance. All live checkout/download/webhook flags remain false.
+- Configure the actual production watermark, prices, photos, Stripe Tax classification/registration, receipt/policies, recovery credentials and delivery acceptance. Checkout/download flags remain false; webhook processing is enabled.
 
 Use `npm run verify:production` for explicit production configuration/build/test checks. `WGP_PRODUCTION_MIGRATIONS_VERIFIED=true npm run deploy:production` additionally deploys, retaining runtime secrets. The generic Cloudflare deployment command stays disabled, and staging commands remain staging-only. GitHub-connected build settings still need a deliberate production command update; this release was deployed through the explicit local production runner.
+
+Production source deliberately omits the webhook gate from build-time variables. The guarded deployment preserves its runtime value with `--keep-vars`, so deploying with sales disabled does not also stop refund and delayed-event processing. Missing runtime configuration still fails closed.
 
 The Postgres guidance influenced the short, guarded migration transaction; external provider work happened outside it. No real charge or live purchase test was performed.
