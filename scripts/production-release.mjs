@@ -23,6 +23,20 @@ assert.deepEqual(config.hyperdrive, [
 assert.deepEqual(config.r2_buckets, [
   { binding: "CATALOG_BUCKET", bucket_name: "whitt-goldsmith-photos" },
 ]);
+assert.deepEqual(config.queues, {
+  producers: [{ binding: "MEDIA_QUEUE", queue: "wgp-media-production" }],
+  consumers: [
+    {
+      queue: "wgp-media-production",
+      max_batch_size: 1,
+      max_batch_timeout: 5,
+      max_retries: 5,
+      retry_delay: 30,
+      dead_letter_queue: "wgp-media-production-dlq",
+      max_concurrency: 2,
+    },
+  ],
+});
 assert.equal(config.vars.CATALOG_ENV, "production");
 assert.equal(config.vars.VITE_AUTH_ENABLED, "true");
 assert.equal(

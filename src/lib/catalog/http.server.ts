@@ -5,6 +5,7 @@ import { catalogMedia, catalogConfiguration, runtimeSetting } from "./media.serv
 import { assertCatalogOwner } from "./owner";
 import { proofQuerySchema } from "./proof-query";
 import { createFolderService } from "./folders";
+import { dispatchMediaJob } from "./media-queue.server";
 
 const headers = {
   "Cache-Control": "private, no-store",
@@ -158,10 +159,16 @@ export async function catalogRequest(request: Request): Promise<Response> {
         throw new CatalogError("Same-origin request required", 403);
       if (op === "upload") {
         const actor = await owner();
-        return Response.json(
-          await catalog.upload(id, await readLimited(request, 20 * 1024 * 1024), actor),
-          { headers },
+        const uploaded = await catalog.uploadOriginal(
+          id,
+          await readLimited(request, 20 * 1024 * 1024),
+          actor,
         );
+        if (await dispatchMediaJob(uploaded.jobId))
+          return Response.json(uploaded, { headers, status: 202 });
+        // Local development has no Cloudflare Queue. Preserve a real, testable
+        // processing path there while deployed environments fail closed.
+        return Response.json(await catalog.process(id, actor), { headers });
       }
       const data = JSON.parse(new TextDecoder().decode(await readLimited(request, 32768)));
       if (op === "proof")

@@ -177,6 +177,39 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
       : sql<PhotoRow>`select p.* from catalog_photos p join catalog_galleries g on g.id=p.gallery_id
           where p.status='ready' and p.hidden=false and p.archived=false and g.published=true and g.visibility='public' and g.password_hash is null order by p.display_order,p.created_at,p.id`;
   }
+  async function uploadOriginal(id: string, bytes: Uint8Array, owner: string) {
+    const lease = crypto.randomUUID();
+    const locked =
+      await sql<PhotoRow>`update catalog_photos set status='uploading',operation_token=${lease},error=null,updated_at=now() where id=${id} and owner_id=${owner}
+      and reserved_until>now() and (status in ('reserved','failed') or (status='uploading' and updated_at<now()-interval '5 minutes')) returning *`;
+    const row = locked[0];
+    if (!row) throw new CatalogError("Upload is unavailable, expired, or already received", 409);
+    try {
+      const isJpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
+      const isPng = [137, 80, 78, 71, 13, 10, 26, 10].every((b, i) => bytes[i] === b);
+      if (
+        bytes.length !== row.bytes ||
+        (await digest(bytes)) !== row.checksum ||
+        !(row.mime === "image/jpeg" ? isJpeg : isPng)
+      )
+        throw new CatalogError("File does not match the reserved size, checksum, or image format");
+      await media.putOriginal(row.original_key, bytes, row.mime);
+      const completed =
+        await sql`update catalog_photos set status='uploaded',updated_at=now() where id=${id} and operation_token=${lease} returning id`;
+      if (!completed.length)
+        throw new CatalogError("A newer upload attempt has taken over. Reload its status.", 409);
+      const job = await enqueueMediaJob(sql, {
+        photoId: id,
+        ownerId: owner,
+        transformationVersion: DERIVATIVE_TRANSFORMATION_VERSION,
+      });
+      await audit(owner, "upload.verified", id);
+      return { id, status: "uploaded" as const, jobId: job.id };
+    } catch (err) {
+      await sql`update catalog_photos set status='failed',error=${err instanceof CatalogError ? err.message : "Storage failed. Retry the upload."},updated_at=now() where id=${id} and operation_token=${lease}`;
+      throw err;
+    }
+  }
   return {
     ...createProofService(sql, authorized),
     authorizeGallery: authorized,
@@ -371,39 +404,9 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
       await audit(owner, "upload.reserved", id);
       return { id, status: "reserved", duplicate: false };
     },
+    uploadOriginal,
     async upload(id: string, bytes: Uint8Array, owner: string) {
-      const lease = crypto.randomUUID();
-      const locked =
-        await sql<PhotoRow>`update catalog_photos set status='uploading',operation_token=${lease},error=null,updated_at=now() where id=${id} and owner_id=${owner}
-        and reserved_until>now() and (status in ('reserved','failed') or (status='uploading' and updated_at<now()-interval '5 minutes')) returning *`;
-      const row = locked[0];
-      if (!row) throw new CatalogError("Upload is unavailable, expired, or already received", 409);
-      try {
-        const isJpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
-        const isPng = [137, 80, 78, 71, 13, 10, 26, 10].every((b, i) => bytes[i] === b);
-        if (
-          bytes.length !== row.bytes ||
-          (await digest(bytes)) !== row.checksum ||
-          !(row.mime === "image/jpeg" ? isJpeg : isPng)
-        )
-          throw new CatalogError(
-            "File does not match the reserved size, checksum, or image format",
-          );
-        await media.putOriginal(row.original_key, bytes, row.mime);
-        const completed =
-          await sql`update catalog_photos set status='uploaded',updated_at=now() where id=${id} and operation_token=${lease} returning id`;
-        if (!completed.length)
-          throw new CatalogError("A newer upload attempt has taken over. Reload its status.", 409);
-        await enqueueMediaJob(sql, {
-          photoId: id,
-          ownerId: owner,
-          transformationVersion: DERIVATIVE_TRANSFORMATION_VERSION,
-        });
-        await audit(owner, "upload.verified", id);
-      } catch (err) {
-        await sql`update catalog_photos set status='failed',error=${err instanceof CatalogError ? err.message : "Storage failed. Retry the upload."},updated_at=now() where id=${id} and operation_token=${lease}`;
-        throw err;
-      }
+      await uploadOriginal(id, bytes, owner);
       return this.process(id, owner);
     },
     async process(id: string, owner: string) {

@@ -9,6 +9,7 @@ import {
   completeMediaJob,
   enqueueMediaJob,
   failMediaJob,
+  loadMediaJob,
 } from "./media-jobs.ts";
 
 async function fixture() {
@@ -41,6 +42,8 @@ test("media jobs are idempotent, exclusively claimed, and require the active lea
       transformationVersion: 1,
     });
     assert.equal(replay.id, first.id);
+    assert.deepEqual(await loadMediaJob(f.sql, first.id), first);
+    assert.equal(await loadMediaJob(f.sql, "00000000-0000-4000-8000-000000000099"), null);
 
     const claimed = await claimNextMediaJob(f.sql, "worker-a", 300);
     assert.equal(claimed?.id, first.id);

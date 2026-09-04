@@ -622,6 +622,24 @@ test("upload failures stay durable and retries verify derivatives before ready",
     await f.db.close();
   }
 });
+
+test("an asynchronous upload stores the immutable original and job without publishing derivatives", async () => {
+  const f = await fixture();
+  try {
+    const g = await f.create();
+    const reservation = await f.reserve(g.id);
+    const uploaded = await f.catalog.uploadOriginal(reservation.id, f.bytes, "owner");
+    assert.equal(uploaded.status, "uploaded");
+    assert.ok(uploaded.jobId);
+    assert.equal(f.objects.size, 1, "only the immutable original is durable before the worker runs");
+    assert.equal((await f.catalog.ownerIndex()).photos.length, 0);
+    const jobs = await f.sql<{ status: string; attempts: number }>`select status,attempts from catalog_media_jobs`;
+    assert.deepEqual(jobs, [{ status: "queued", attempts: 0 }]);
+    assert.equal((await f.catalog.process(reservation.id, "owner")).status, "ready");
+  } finally {
+    await f.db.close();
+  }
+});
 test("duplicate reservations, expiry and gallery revision conflicts", async () => {
   const f = await fixture();
   try {

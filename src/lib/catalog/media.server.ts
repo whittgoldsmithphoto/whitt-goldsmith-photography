@@ -5,6 +5,7 @@ import type { CatalogMedia } from "./repository";
 import { digest } from "./repository";
 import { bindingStorage, type CatalogR2Binding } from "./r2-binding";
 import { privateMetadataFreeJpeg } from "./jpeg-privacy";
+import { mediaQueueConfigured } from "./media-queue.server";
 
 type ImageChain = {
   transform(options: Record<string, unknown>): ImageChain;
@@ -33,6 +34,7 @@ export async function catalogConfiguration() {
         ? "missing-staging-binding"
         : "s3-credentials",
     imagesConfigured: Boolean((env as unknown as { IMAGES?: unknown }).IMAGES),
+    mediaQueueConfigured: mediaQueueConfigured(),
     watermarkConfigured: Boolean(runtimeSetting("CATALOG_WATERMARK_KEY")),
     verification: "configuration-only",
     checkedAt: new Date().toISOString(),

@@ -67,6 +67,11 @@ export async function enqueueMediaJob(
   return view(rows[0]);
 }
 
+export async function loadMediaJob(sql: Sql, id: string) {
+  const rows = await sql<MediaJobRow>`select * from catalog_media_jobs where id=${id}`;
+  return rows[0] ? view(rows[0]) : null;
+}
+
 export async function claimNextMediaJob(sql: Sql, workerId: string, leaseSeconds: number) {
   if (!workerId || workerId.length > 200) throw new Error("Invalid worker ID");
   if (!Number.isInteger(leaseSeconds) || leaseSeconds < 1 || leaseSeconds > 3600)
