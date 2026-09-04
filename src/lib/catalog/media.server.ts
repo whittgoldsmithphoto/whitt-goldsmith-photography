@@ -6,7 +6,7 @@ import { digest } from "./repository";
 import { bindingStorage, type CatalogR2Binding } from "./r2-binding";
 import { privateMetadataFreeJpeg } from "./jpeg-privacy";
 import { mediaQueueConfigured } from "./media-queue.server";
-import { DERIVATIVE_VARIANT_NAMES, VARIANT_MAX_EDGE } from "./media-variants";
+import { createNativeImageProcessor, type NativeImagesBinding } from "./native-image-processor";
 
 type ImageChain = {
   transform(options: Record<string, unknown>): ImageChain;
@@ -96,43 +96,13 @@ export function catalogMedia(): CatalogMedia {
         new PutObjectCommand({ Bucket: bucket, Key: key, Body: bytes, ContentType: "image/jpeg" }),
       );
     },
-    async process(bytes) {
-      const images = (env as unknown as { IMAGES?: Images }).IMAGES;
-      const watermarkKey = runtimeSetting("CATALOG_WATERMARK_KEY");
-      if (!images || !watermarkKey) throw new Error("Images binding and watermark required");
-      const watermark = await get(watermarkKey);
-      const stream = (input: Uint8Array) => new Response(new Uint8Array(input)).body!;
-      const info = await images.info(stream(bytes));
-      if (!info.width || !info.height || info.width * info.height > 60_000_000)
-        throw new Error("Unsupported image dimensions");
-      async function render(edge: number) {
-        const response = (
-          await images!
-            .input(stream(bytes))
-            .transform({ width: edge, height: edge, fit: "scale-down", metadata: "none" })
-            .draw(
-              images!
-                .input(stream(watermark))
-                .transform({ width: Math.round(edge * 0.5), fit: "scale-down" }),
-              { opacity: 0.5 },
-            )
-            .output({ format: "image/jpeg", quality: 85 })
-        ).response();
-        if (!response.ok) throw new Error("Image rendering failed");
-        return privateMetadataFreeJpeg(new Uint8Array(await response.arrayBuffer()));
-      }
-      return {
-        width: info.width,
-        height: info.height,
-        variants: Object.fromEntries(
-          await Promise.all(
-            DERIVATIVE_VARIANT_NAMES.map(async (name) => [
-              name,
-              await render(VARIANT_MAX_EDGE[name]),
-            ]),
-          ),
-        ) as Awaited<ReturnType<CatalogMedia["process"]>>["variants"],
-      };
-    },
+    process: createNativeImageProcessor(
+      (env as unknown as { IMAGES?: Images }).IMAGES as NativeImagesBinding | undefined,
+      async () => {
+        const watermarkKey = runtimeSetting("CATALOG_WATERMARK_KEY");
+        if (!watermarkKey) throw new Error("Watermark is not configured");
+        return get(watermarkKey);
+      },
+    ),
   };
 }
