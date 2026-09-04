@@ -715,7 +715,18 @@ test("an asynchronous upload stores the immutable original and job without publi
     assert.equal(
       f.objects.size,
       1,
-      "only the immutable original is durable before the worker runs",
+      "only the immutable quarantine object is durable before the worker runs",
+    );
+    const quarantined = (
+      await f.sql<{ original_key: string }>`select original_key from catalog_photos
+        where id=${reservation.id}`
+    )[0];
+    assert.match(quarantined.original_key, /^catalog\/quarantine\//);
+    assert.deepEqual(f.objects.get(quarantined.original_key), f.bytes);
+    assert.equal(
+      [...f.objects.keys()].some((key) => key.startsWith("catalog/originals/")),
+      false,
+      "unverified uploads cannot appear in the trusted originals prefix",
     );
     assert.equal((await f.catalog.ownerIndex()).photos.length, 0);
     const jobs = await f.sql<{
@@ -724,6 +735,22 @@ test("an asynchronous upload stores the immutable original and job without publi
     }>`select status,attempts from catalog_media_jobs`;
     assert.deepEqual(jobs, [{ status: "queued", attempts: 0 }]);
     assert.equal((await f.catalog.process(reservation.id, "owner")).status, "ready");
+    const promoted = (
+      await f.sql<{ original_key: string }>`select original_key from catalog_photos
+        where id=${reservation.id}`
+    )[0];
+    assert.match(promoted.original_key, /^catalog\/originals\//);
+    assert.notEqual(promoted.original_key, quarantined.original_key);
+    assert.deepEqual(f.objects.get(promoted.original_key), f.bytes);
+    assert.deepEqual(
+      (
+        await f.sql<{ action: string }>`select action from catalog_audit
+          where target_id=${reservation.id}`
+      )
+        .map((event) => event.action)
+        .sort(),
+      ["original.promoted", "photo.ready", "upload.reserved", "upload.verified"],
+    );
   } finally {
     await f.db.close();
   }

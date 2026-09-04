@@ -109,6 +109,12 @@ export interface CatalogMedia {
 export async function digest(bytes: Uint8Array): Promise<string> {
   return Buffer.from(await crypto.subtle.digest("SHA-256", new Uint8Array(bytes))).toString("hex");
 }
+function quarantineOriginalKey(photoId: string, checksum: string) {
+  return `catalog/quarantine/${photoId}/${checksum}`;
+}
+function trustedOriginalKey(photoId: string, checksum: string) {
+  return `catalog/originals/${photoId}/${checksum}`;
+}
 async function passwordHash(password: string, salt: string = crypto.randomUUID()) {
   const key = await crypto.subtle.importKey(
     "raw",
@@ -455,7 +461,7 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
       const id = crypto.randomUUID();
       const rows =
         await sql<PhotoRow>`insert into catalog_photos(id,gallery_id,owner_id,filename,mime,bytes,checksum,original_key)
-        values(${id},${data.galleryId},${owner},${data.filename},${data.mime},${data.bytes},${data.checksum},${`catalog/originals/${id}`})
+        values(${id},${data.galleryId},${owner},${data.filename},${data.mime},${data.bytes},${data.checksum},${quarantineOriginalKey(id, data.checksum)})
         on conflict(gallery_id,checksum) do nothing returning *`;
       let selected = rows[0];
       if (!selected) {
@@ -559,8 +565,17 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
               409,
             );
         }
+        const promotedOriginalKey = row.original_key.startsWith("catalog/quarantine/")
+          ? trustedOriginalKey(id, row.checksum)
+          : row.original_key;
+        if (promotedOriginalKey !== row.original_key) {
+          await media.putOriginal(promotedOriginalKey, original, row.mime);
+          const promoted = await media.get(promotedOriginalKey);
+          if (promoted.length !== row.bytes || (await digest(promoted)) !== row.checksum)
+            throw new Error("Promoted original verification failed");
+        }
         await sql`insert into catalog_media_variants(photo_id,name,transformation_version,object_key,mime,bytes,checksum,width,height)
-          select ${id},'original',${DERIVATIVE_TRANSFORMATION_VERSION},${row.original_key},${row.mime},${row.bytes},${row.checksum},${output.width},${output.height}
+          select ${id},'original',${DERIVATIVE_TRANSFORMATION_VERSION},${promotedOriginalKey},${row.mime},${row.bytes},${row.checksum},${output.width},${output.height}
           where exists(select 1 from catalog_photos where id=${id} and operation_token=${lease})
           on conflict(photo_id,name,transformation_version) do update set
             object_key=excluded.object_key,mime=excluded.mime,bytes=excluded.bytes,checksum=excluded.checksum,
@@ -578,12 +593,23 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
         // Publish the photo and close its fenced job in one database statement.
         // A database interruption can therefore never leave a completed job
         // pointing at a photo that is still unavailable.
+        const promotionAuditId = crypto.randomUUID();
+        const readyAuditId = crypto.randomUUID();
         const completed = await sql`with completed_photo as (
-          update catalog_photos set status='ready',width=${output.width},height=${output.height},error=null,updated_at=now()
+          update catalog_photos set status='ready',original_key=${promotedOriginalKey},width=${output.width},height=${output.height},error=null,updated_at=now()
           where id=${id} and operation_token=${lease}
             and exists(select 1 from catalog_media_jobs where id=${job.id} and status='processing' and lease_token=${job.leaseToken})
             and (select count(*) from catalog_media_variants
               where photo_id=${id} and transformation_version=${DERIVATIVE_TRANSFORMATION_VERSION})=${MEDIA_VARIANT_NAMES.length}
+          returning id
+        ), logged_promotion as (
+          insert into catalog_audit(id,actor_id,action,target_id)
+          select ${promotionAuditId},${owner},'original.promoted',id from completed_photo
+          where ${promotedOriginalKey !== row.original_key}
+          returning id
+        ), logged_ready as (
+          insert into catalog_audit(id,actor_id,action,target_id)
+          select ${readyAuditId},${owner},'photo.ready',id from completed_photo
           returning id
         ) update catalog_media_jobs set
           status='completed',lease_token=null,worker_id=null,leased_until=null,
@@ -591,13 +617,14 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
           error_code=null,error_message=null,completed_at=now(),updated_at=now()
           where id=${job.id} and status='processing' and lease_token=${job.leaseToken}
             and exists(select 1 from completed_photo)
+            and (${promotedOriginalKey === row.original_key} or exists(select 1 from logged_promotion))
+            and exists(select 1 from logged_ready)
           returning id`;
         if (!completed.length)
           throw new CatalogError(
             "A newer processing attempt has taken over. Reload its status.",
             409,
           );
-        await audit(owner, "photo.ready", id);
         return { id, status: "ready" };
       } catch (error) {
         if (error instanceof CatalogError) throw error;
