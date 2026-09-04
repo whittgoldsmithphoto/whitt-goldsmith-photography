@@ -31,6 +31,9 @@ async function fixture() {
       "utf8",
     ),
   );
+  await db.exec(
+    await readFile(new URL("../../../migrations/0023_media_jobs.sql", import.meta.url), "utf8"),
+  );
   const sql = (async (strings: TemplateStringsArray, ...values: unknown[]) => {
     let query = strings[0];
     for (let i = 0; i < values.length; i++) query += `$${i + 1}${strings[i + 1]}`;
@@ -493,6 +496,7 @@ test("expired processing attempts cannot overwrite a successful retry", async ()
     const oldResult = assert.rejects(old, /newer processing attempt/);
     await startedPromise;
     await f.sql`update catalog_photos set updated_at=now()-interval '6 minutes' where id=${r.id}`;
+    await f.sql`update catalog_media_jobs set leased_until=now()-interval '1 second' where photo_id=${r.id}`;
     assert.equal((await f.catalog.process(r.id, "owner")).status, "ready");
     release();
     await oldResult;

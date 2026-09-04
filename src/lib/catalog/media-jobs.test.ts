@@ -1,0 +1,107 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { PGlite } from "@electric-sql/pglite";
+import type { Sql } from "../db.ts";
+import {
+  claimNextMediaJob,
+  claimMediaJobForPhoto,
+  completeMediaJob,
+  enqueueMediaJob,
+  failMediaJob,
+} from "./media-jobs.ts";
+
+async function fixture() {
+  const db = new PGlite();
+  await db.exec(await readFile(new URL("../../../migrations/0005_catalog.sql", import.meta.url), "utf8"));
+  await db.exec(await readFile(new URL("../../../migrations/0023_media_jobs.sql", import.meta.url), "utf8"));
+  const sql = (async (strings: TemplateStringsArray, ...values: unknown[]) => {
+    let query = strings[0];
+    for (let index = 0; index < values.length; index++) query += `$${index + 1}${strings[index + 1]}`;
+    return (await db.query(query, values)).rows;
+  }) as Sql;
+  sql.query = async <T>(query: string, values: unknown[] = []) => (await db.query<T>(query, values)).rows;
+  await sql`insert into catalog_galleries(id,title) values ('00000000-0000-4000-8000-000000000001','Test')`;
+  await sql`insert into catalog_photos(id,gallery_id,owner_id,filename,mime,bytes,checksum,original_key,status)
+    values ('00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000001','owner','photo.jpg','image/jpeg',4,${"a".repeat(64)},'catalog/originals/test','uploaded')`;
+  return { db, sql };
+}
+
+test("media jobs are idempotent, exclusively claimed, and require the active lease to complete", async () => {
+  const f = await fixture();
+  try {
+    const first = await enqueueMediaJob(f.sql, {
+      photoId: "00000000-0000-4000-8000-000000000002",
+      ownerId: "owner",
+      transformationVersion: 1,
+    });
+    const replay = await enqueueMediaJob(f.sql, {
+      photoId: first.photoId,
+      ownerId: "owner",
+      transformationVersion: 1,
+    });
+    assert.equal(replay.id, first.id);
+
+    const claimed = await claimNextMediaJob(f.sql, "worker-a", 300);
+    assert.equal(claimed?.id, first.id);
+    assert.equal(claimed?.attempts, 1);
+    assert.equal(await claimNextMediaJob(f.sql, "worker-b", 300), null);
+    assert.equal(await completeMediaJob(f.sql, first.id, "wrong-token"), false);
+    assert.equal(await completeMediaJob(f.sql, first.id, claimed!.leaseToken!), true);
+    assert.equal((await claimNextMediaJob(f.sql, "worker-b", 300)), null);
+  } finally {
+    await f.db.close();
+  }
+});
+
+test("failed jobs retry after their backoff and stale processing leases are reclaimable", async () => {
+  const f = await fixture();
+  try {
+    const job = await enqueueMediaJob(f.sql, {
+      photoId: "00000000-0000-4000-8000-000000000002",
+      ownerId: "owner",
+      transformationVersion: 2,
+      maxAttempts: 2,
+    });
+    const first = await claimNextMediaJob(f.sql, "worker-a", 300);
+    assert.ok(first);
+    assert.equal(await failMediaJob(f.sql, job.id, first!.leaseToken!, "processor_unavailable", "Retry safely", 0), true);
+    const retry = await claimNextMediaJob(f.sql, "worker-b", 300);
+    assert.equal(retry?.id, job.id);
+    assert.equal(retry?.attempts, 2);
+    assert.equal(await failMediaJob(f.sql, job.id, retry!.leaseToken!, "processor_unavailable", "Stopped", 0), true);
+    assert.equal(await claimNextMediaJob(f.sql, "worker-c", 300), null);
+
+    const operatorRetry = await enqueueMediaJob(f.sql, {
+      photoId: job.photoId,
+      ownerId: "owner",
+      transformationVersion: 2,
+      maxAttempts: 2,
+    });
+    assert.equal(operatorRetry.status, "queued");
+    assert.equal(operatorRetry.attempts, 0);
+    await f.sql`update catalog_media_jobs set status='processing',lease_token='dead',leased_until=now()-interval '1 second',available_at=now() where id=${job.id}`;
+    const reclaimed = await claimNextMediaJob(f.sql, "worker-c", 300);
+    assert.equal(reclaimed?.id, job.id);
+    assert.notEqual(reclaimed?.leaseToken, "dead");
+  } finally {
+    await f.db.close();
+  }
+});
+
+test("a photo-scoped claim cannot be stolen or completed by a stale processor", async () => {
+  const f = await fixture();
+  try {
+    const job = await enqueueMediaJob(f.sql, {
+      photoId: "00000000-0000-4000-8000-000000000002",
+      ownerId: "owner",
+      transformationVersion: 3,
+    });
+    const claimed = await claimMediaJobForPhoto(f.sql, job.photoId, "request-a", 300);
+    assert.equal(claimed?.id, job.id);
+    assert.equal(await claimMediaJobForPhoto(f.sql, job.photoId, "request-b", 300), null);
+    assert.equal(await completeMediaJob(f.sql, job.id, "stale"), false);
+  } finally {
+    await f.db.close();
+  }
+});

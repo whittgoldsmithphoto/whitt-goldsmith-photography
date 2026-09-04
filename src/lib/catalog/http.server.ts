@@ -93,6 +93,7 @@ export async function catalogRequest(request: Request): Promise<Response> {
           "0014_remove_legacy_download.sql",
           "0015_gallery_client_limits.sql",
           "0016_catalog_pagination_and_covers.sql",
+          "0023_media_jobs.sql",
         ];
         return Response.json(
           {

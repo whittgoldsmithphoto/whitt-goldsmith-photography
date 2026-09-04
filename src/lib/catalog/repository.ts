@@ -12,7 +12,13 @@ import type {
 
 import { CatalogError } from "./errors.ts";
 import { createProofService } from "./proofs.ts";
+import {
+  claimMediaJobForPhoto,
+  enqueueMediaJob,
+  failMediaJob,
+} from "./media-jobs.ts";
 export { CatalogError } from "./errors.ts";
+const DERIVATIVE_TRANSFORMATION_VERSION = 1;
 const idSchema = z.string().uuid();
 const gallerySchema = z
   .object({
@@ -388,6 +394,11 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
           await sql`update catalog_photos set status='uploaded',updated_at=now() where id=${id} and operation_token=${lease} returning id`;
         if (!completed.length)
           throw new CatalogError("A newer upload attempt has taken over. Reload its status.", 409);
+        await enqueueMediaJob(sql, {
+          photoId: id,
+          ownerId: owner,
+          transformationVersion: DERIVATIVE_TRANSFORMATION_VERSION,
+        });
         await audit(owner, "upload.verified", id);
       } catch (err) {
         await sql`update catalog_photos set status='failed',error=${err instanceof CatalogError ? err.message : "Storage failed. Retry the upload."},updated_at=now() where id=${id} and operation_token=${lease}`;
@@ -406,6 +417,17 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
           "Processing is already running or the original has not been uploaded",
           409,
         );
+      await enqueueMediaJob(sql, {
+        photoId: id,
+        ownerId: owner,
+        transformationVersion: DERIVATIVE_TRANSFORMATION_VERSION,
+      });
+      const job = await claimMediaJobForPhoto(sql, id, `catalog-request:${lease}`, 300);
+      if (!job?.leaseToken) {
+        await sql`update catalog_photos set status='needs_review',error='Processing is already claimed. Retry after its lease expires.',updated_at=now()
+          where id=${id} and operation_token=${lease}`;
+        throw new CatalogError("Processing is already running", 409);
+      }
       try {
         const original = await media.get(row.original_key);
         if (original.length !== row.bytes || (await digest(original)) !== row.checksum)
@@ -424,8 +446,20 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
             where exists(select 1 from catalog_photos where id=${id} and operation_token=${lease})
             on conflict(photo_id,kind) do update set object_key=excluded.object_key,bytes=excluded.bytes,checksum=excluded.checksum`;
         }
-        const completed =
-          await sql`update catalog_photos set status='ready',width=${output.width},height=${output.height},error=null,updated_at=now() where id=${id} and operation_token=${lease} returning id`;
+        // Publish the photo and close its fenced job in one database statement.
+        // A database interruption can therefore never leave a completed job
+        // pointing at a photo that is still unavailable.
+        const completed = await sql`with completed_photo as (
+          update catalog_photos set status='ready',width=${output.width},height=${output.height},error=null,updated_at=now()
+          where id=${id} and operation_token=${lease}
+            and exists(select 1 from catalog_media_jobs where id=${job.id} and status='processing' and lease_token=${job.leaseToken})
+          returning id
+        ) update catalog_media_jobs set
+          status='completed',lease_token=null,worker_id=null,leased_until=null,
+          error_code=null,error_message=null,completed_at=now(),updated_at=now()
+          where id=${job.id} and status='processing' and lease_token=${job.leaseToken}
+            and exists(select 1 from completed_photo)
+          returning id`;
         if (!completed.length)
           throw new CatalogError(
             "A newer processing attempt has taken over. Reload its status.",
@@ -435,6 +469,19 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
         return { id, status: "ready" };
       } catch (error) {
         if (error instanceof CatalogError) throw error;
+        const recorded = await failMediaJob(
+          sql,
+          job.id,
+          job.leaseToken,
+          "derivative_processing_failed",
+          "Original is durable; derivative processing must be retried.",
+          Math.min(3600, 30 * 2 ** Math.max(0, job.attempts - 1)),
+        );
+        if (!recorded)
+          throw new CatalogError(
+            "A newer processing attempt has taken over. Reload its status.",
+            409,
+          );
         const failed =
           await sql`update catalog_photos set status='needs_review',error='Original stored. Preview processing failed or is not configured. Retry after checking the Images binding and watermark.',updated_at=now() where id=${id} and operation_token=${lease} returning id`;
         if (!failed.length)
