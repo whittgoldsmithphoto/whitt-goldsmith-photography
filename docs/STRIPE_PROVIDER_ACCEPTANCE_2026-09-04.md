@@ -27,6 +27,14 @@ Synthetic gallery/media, pricing and refunded order are retained as audit fixtur
 
 ## Still not provider-verified
 
-Independent replay readback/entitlement counts; declines and 3DS; delayed payment events; timeout recovery; cancellation/payment races; independent database contention; partial refunds and disputes; scheduled reconciliation; live tax and production configuration; account/payout readiness. Local fixture coverage is recorded separately and must not be substituted for these provider checks.
+### Follow-up decline and failed-authentication checks
+
+Created quote `3571739f-640c-43c5-a002-0c123877dd8d`, order `409b558d-f2ed-450f-b289-4164f7e99d60`, Session `cs_test_a1pQtlpvObxifvospv4xAZqVGpkeryQU3PLU8AJbrPjeMSKIsR293RhtZ9` through the actual owner UI. Stripe test card ending 9995 returned insufficient funds. Retrying with test card ending 3155 displayed Stripe's actual 3DS challenge; selecting FAIL returned unable to authenticate. Returning to the site showed Pending and no download control. No charge succeeded. The Session has its original one-hour expiry; returning via cancel URL does not itself expire it. Successful 3DS and server-triggered cancellation are still outstanding.
+
+Follow-up test rerun: intact deployed-source snapshot passed 351/351 tests. Current dirty working copy passed 350/351, with the one failure caused by the already-deleted `public/__grok/icon-180.png`; unrelated user deletions were preserved. Source wording now distinguishes sandbox zero-tax testing from unavailable real purchases; it does not enable tax or production processing.
+
+Reference: [Stripe test cards](https://docs.stripe.com/testing).
+
+Independent replay readback/entitlement counts; successful 3DS; delayed payment events; timeout recovery; cancellation/payment races; independent database contention; partial refunds and disputes; scheduled reconciliation; live tax and production configuration; payout destination confirmation. Local fixture coverage is recorded separately and must not be substituted for these provider checks.
 
 Browser issue: an inactive Dia Stripe tab rendered at zero width and hid responsive dialog buttons. Activating its visible tab in Dia restored the Refund confirmation button; this was a browser presentation issue, not a payment authorization failure.

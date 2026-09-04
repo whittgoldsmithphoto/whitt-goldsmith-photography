@@ -549,7 +549,11 @@ export function CommercePricing() {
                     {(quote.discount_cents / 100).toFixed(2)}
                   </p>
                   <p>Pre-tax preview: ${(quote.total_cents / 100).toFixed(2)} USD</p>
-                  <p>Tax assessment is not configured. This preview cannot be purchased.</p>
+                  <p>
+                    {sandboxAvailable
+                      ? "Sandbox uses a zero-tax test fixture. Real purchases remain disabled until tax assessment is configured."
+                      : "Tax assessment is not configured. This preview cannot be purchased."}
+                  </p>
                   <p>Expires: {new Date(quote.expires_at).toLocaleString()}</p>
                   <p className="break-all">Quote reference: {quote.id}</p>
                   {sandboxAvailable && (

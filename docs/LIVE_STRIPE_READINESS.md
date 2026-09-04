@@ -2,6 +2,8 @@
 
 ## Latest actual-provider acceptance
 
+Follow-up account inspection: live account `acct_1UBQ70D2rNLvqnsK` Account status shows Payments and Payouts Active and "No active tasks to complete". Account details separately asks for phone verification to process payments from the Dashboard; this is not evidence that API payments are disabled. No account information, payout destination or tax setting was changed. Owner confirmation of real pricing/license/refund terms and tax registrations remains necessary.
+
 The deployed sandbox checkout → signed webhook → paid order → byte-identical private R2 download → full refund → server-denied download sequence passed on 2026-09-04 UTC. See [provider evidence and remaining cases](STRIPE_PROVIDER_ACCEPTANCE_2026-09-04.md). All five temporary acceptance switches have been returned to false. Real payment processing remains disabled; tax, production configuration and the remaining failure cases are not yet accepted.
 
 ## Earlier implementation and deployment snapshot (before provider acceptance)
