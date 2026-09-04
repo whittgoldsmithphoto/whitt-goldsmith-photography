@@ -10,6 +10,7 @@ import {
   completeMediaJob,
   enqueueMediaJob,
   failMediaJob,
+  heartbeatMediaJob,
   loadMediaJob,
   listDispatchableMediaJobs,
   advanceMediaJobStage,
@@ -233,6 +234,36 @@ test("job stages advance monotonically only for the active lease", async () => {
     const advanced = await loadMediaJob(f.sql, job.id);
     assert.equal(advanced?.stage, "derivatives");
     assert.equal(advanced?.progressPercent, 60);
+  } finally {
+    await f.db.close();
+  }
+});
+
+test("heartbeats extend only a live active lease and never revive stale work", async () => {
+  const f = await fixture();
+  try {
+    const job = await enqueueMediaJob(f.sql, {
+      photoId: "00000000-0000-4000-8000-000000000002",
+      ownerId: "owner",
+      transformationVersion: 31,
+    });
+    const claimed = await claimMediaJobForPhoto(f.sql, job.photoId, "worker", 60);
+    assert.ok(claimed?.leaseToken);
+    assert.equal(await heartbeatMediaJob(f.sql, job.id, "wrong", 300), false);
+    assert.equal(await heartbeatMediaJob(f.sql, job.id, claimed!.leaseToken!, 300), true);
+
+    const extended = await f.sql<{
+      seconds: number;
+    }>`select extract(epoch from (leased_until-now()))::int as seconds
+      from catalog_media_jobs where id=${job.id}`;
+    assert.ok(extended[0].seconds > 240);
+
+    await f.sql`update catalog_media_jobs set leased_until=now()-interval '1 second' where id=${job.id}`;
+    assert.equal(await heartbeatMediaJob(f.sql, job.id, claimed!.leaseToken!, 300), false);
+    await assert.rejects(
+      () => heartbeatMediaJob(f.sql, job.id, claimed!.leaseToken!, 0),
+      /Invalid lease duration/,
+    );
   } finally {
     await f.db.close();
   }

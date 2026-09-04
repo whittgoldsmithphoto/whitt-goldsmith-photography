@@ -111,6 +111,24 @@ export async function advanceMediaJobStage(
   return rows.length === 1;
 }
 
+export async function heartbeatMediaJob(
+  sql: Sql,
+  id: string,
+  leaseToken: string,
+  leaseSeconds: number,
+) {
+  if (!Number.isInteger(leaseSeconds) || leaseSeconds < 1 || leaseSeconds > 3600)
+    throw new Error("Invalid lease duration");
+  const rows = await sql.query<{ id: string }>(
+    `update catalog_media_jobs set
+      leased_until=now()+($3::text || ' seconds')::interval,updated_at=now()
+      where id=$1 and status='processing' and lease_token=$2 and leased_until > now()
+      returning id`,
+    [id, leaseToken, leaseSeconds],
+  );
+  return rows.length === 1;
+}
+
 export async function cancelMediaJobForPhoto(sql: Sql, photoId: string, ownerId: string) {
   const rows = await sql.query<{ id: string }>(
     `with cancelled as (

@@ -18,6 +18,7 @@ import {
   advanceMediaJobStage,
   enqueueMediaJob,
   failMediaJob,
+  heartbeatMediaJob,
 } from "./media-jobs.ts";
 import {
   DERIVATIVE_VARIANT_NAMES,
@@ -519,8 +520,32 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
           where id=${id} and operation_token=${lease}`;
         throw new CatalogError("Processing is already running", 409);
       }
+      let leaseLost = false;
+      let heartbeatPending = false;
+      const heartbeatTimer = setInterval(() => {
+        if (heartbeatPending) return;
+        heartbeatPending = true;
+        void heartbeatMediaJob(sql, job.id, job.leaseToken!, 300)
+          .then((active) => {
+            if (!active) leaseLost = true;
+          })
+          .catch(() => {
+            leaseLost = true;
+          })
+          .finally(() => {
+            heartbeatPending = false;
+          });
+      }, 60_000);
+      const requireActiveLease = () => {
+        if (leaseLost)
+          throw new CatalogError(
+            "The processing lease could not be renewed. Reload its status.",
+            409,
+          );
+      };
       try {
         const original = await media.get(row.original_key);
+        requireActiveLease();
         if (original.length !== row.bytes || (await digest(original)) !== row.checksum)
           throw new Error("Original verification failed");
         if (!(await advanceMediaJobStage(sql, job.id, job.leaseToken, "metadata", 30)))
@@ -529,6 +554,7 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
             409,
           );
         const output = await media.process(original);
+        requireActiveLease();
         if (!(await advanceMediaJobStage(sql, job.id, job.leaseToken, "derivatives", 50)))
           throw new CatalogError(
             "A newer processing attempt has taken over. Reload its status.",
@@ -536,6 +562,7 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
           );
         const storedVariants = new Map<DerivativeVariantName, { key: string; bytes: Uint8Array }>();
         for (const [variantIndex, kind] of DERIVATIVE_VARIANT_NAMES.entries()) {
+          requireActiveLease();
           const bytes = output.variants[kind];
           if (!bytes?.length) throw new Error("Missing or empty derivative");
           const checksum = await digest(bytes);
@@ -570,6 +597,7 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
           ? trustedOriginalKey(id, row.checksum)
           : row.original_key;
         if (promotedOriginalKey !== row.original_key) {
+          requireActiveLease();
           await media.putOriginal(promotedOriginalKey, original, row.mime);
           const promoted = await media.get(promotedOriginalKey);
           if (promoted.length !== row.bytes || (await digest(promoted)) !== row.checksum)
@@ -650,6 +678,8 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
             409,
           );
         return { id, status: "needs_review" };
+      } finally {
+        clearInterval(heartbeatTimer);
       }
     },
     async media(id: string, kind: string, token?: string, owner = false) {
