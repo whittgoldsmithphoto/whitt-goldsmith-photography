@@ -103,7 +103,7 @@ the generated `dist/server/wrangler.json` before deployment, then run
 Deployed `wgp-catalog-staging` at
 https://wgp-catalog-staging.whittgoldsmithmedia.workers.dev with version
 `71444499-252d-443c-8b6c-ddbcb384754a`. Unique runtime auth secret and actual auth
-URL are configured. Owner allowlist is now configured; watermark key remains unset. User account
+URL are configured. Owner allowlist and watermark key are now configured. User account
 creation is prepared at `/login?setup=1`; email/password is the configured path,
 not the currently visible but unconfigured Google/X options.
 
@@ -112,9 +112,9 @@ empty `wgp-catalog-staging-staging` Worker. It was deleted successfully; no user
 data was stored there. The correct Worker received a separately generated secret
 using the generated config. Do not combine name and environment for secret setup.
 
-The user also needs to supply an approved
-transparent PNG watermark and representative photographs explicitly approved for
-a public test gallery. Keep private test photographs private.
+The supplied SVG logo was rasterized to a transparent PNG without changing its
+design and stored privately at `branding/watermark.png`. Public test-gallery
+publication is still pending; keep the approved private test photographs private.
 
 After that:
 
@@ -125,12 +125,27 @@ After that:
 3. Staging R2, Images, Hyperdrive, environment and auth URL/secret configured.
    Provider bindings are not equivalent to tested photo processing.
 4. Owner account and exact `OWNER_USER_IDS` are configured and the signed-in
-   Organizer was verified live. Set `CATALOG_WATERMARK_KEY` once the approved PNG
-   is supplied.
+   Organizer was verified live. `CATALOG_WATERMARK_KEY` points to the supplied logo.
 5. Verify real original checksums, ready JPEG/PNG derivatives, watermark pixels,
    stripped GPS, retry behavior and representative Worker resource usage.
 6. Test public/private/password galleries and proof persistence with fresh
    customer/owner sessions on staging. No public original access is acceptable.
+
+### Real private photo acceptance — 2026-09-03
+
+- Uploaded three user-approved football JPEGs through the signed-in Organizer:
+  SWG01452.jpg (6,826,940 bytes), SWG01538.jpg (2,310,885 bytes), and
+  SWG03038.jpg (10,242,855 bytes). All three returned `ready`, with zero awaiting
+  processing. The gallery remains a private draft.
+- All three displayed SHA-256 values match the corresponding local originals.
+  An independent R2 download of SWG01452.jpg also matched its local SHA-256.
+  The live processing path verifies original and derivative R2 readbacks before
+  marking a photo ready. Watermarked thumbnails were visually observed.
+- Signed-out original request returned 401; private preview returned 404; public
+  index contained no galleries, photos, or folders. No originals were added to Git.
+- This verifies the JPEG sample only, not RAW/TIFF, all 131 photos, GPS stripping,
+  interrupted-upload recovery, public proofing, load limits, or commerce.
+  Stripe and the existing SmugMug custom domain remain untouched.
 
 Relevant provider contracts:
 [R2 binding and conditional operations](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/),
