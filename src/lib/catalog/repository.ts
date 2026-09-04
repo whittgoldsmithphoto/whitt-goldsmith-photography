@@ -98,6 +98,7 @@ export type PhotoRow = {
 };
 export interface CatalogMedia {
   putOriginal(key: string, bytes: Uint8Array, mime: string): Promise<void>;
+  deleteOriginal(key: string): Promise<void>;
   get(key: string): Promise<Uint8Array>;
   process(bytes: Uint8Array): Promise<{
     width: number;

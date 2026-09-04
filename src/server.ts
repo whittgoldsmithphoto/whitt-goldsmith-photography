@@ -5,6 +5,7 @@ import { catalogMedia } from "./lib/catalog/media.server";
 import { listDispatchableMediaJobs, loadMediaJob } from "./lib/catalog/media-jobs";
 import { processMediaQueueBatch } from "./lib/catalog/media-queue";
 import { dispatchMediaJob } from "./lib/catalog/media-queue.server";
+import { cleanupExpiredUploads } from "./lib/catalog/upload-cleanup";
 
 type WorkerQueueBatch = Parameters<typeof processMediaQueueBatch>[0];
 
@@ -23,6 +24,7 @@ export default {
   },
   async scheduled() {
     const sql = await getSql();
+    await cleanupExpiredUploads(sql, catalogMedia(), 25);
     const jobs = await listDispatchableMediaJobs(sql, 50);
     for (const job of jobs) await dispatchMediaJob(job.id);
   },

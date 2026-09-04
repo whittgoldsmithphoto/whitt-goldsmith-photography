@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getR2Secrets, r2ClientFrom } from "../secrets.server";
 import type { CatalogMedia } from "./repository";
 import { digest } from "./repository";
@@ -84,6 +84,11 @@ export function catalogMedia(): CatalogMedia {
         if ((await digest(await get(key))) !== (await digest(bytes))) throw error;
       }
     },
+    async deleteOriginal(key) {
+      if (bound) return bound.deleteOriginal(key);
+      const { s3, bucket } = await connection();
+      await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+    },
     async putDerivative(key, bytes) {
       if (bound) return bound.putDerivative(key, bytes);
       const { s3, bucket } = await connection();
@@ -121,7 +126,10 @@ export function catalogMedia(): CatalogMedia {
         height: info.height,
         variants: Object.fromEntries(
           await Promise.all(
-            DERIVATIVE_VARIANT_NAMES.map(async (name) => [name, await render(VARIANT_MAX_EDGE[name])]),
+            DERIVATIVE_VARIANT_NAMES.map(async (name) => [
+              name,
+              await render(VARIANT_MAX_EDGE[name]),
+            ]),
           ),
         ) as Awaited<ReturnType<CatalogMedia["process"]>>["variants"],
       };

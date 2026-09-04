@@ -79,6 +79,9 @@ async function fixture() {
       if (objects.has(key)) assert.deepEqual(objects.get(key), bytes);
       objects.set(key, bytes);
     },
+    async deleteOriginal(key) {
+      objects.delete(key);
+    },
     async putDerivative(key, bytes) {
       objects.set(key, bytes);
     },
@@ -283,6 +286,9 @@ test("native R2 binding keeps originals immutable and reports storage failure", 
       const bytes = objects.get(key);
       return bytes ? { arrayBuffer: async () => new Uint8Array(bytes).buffer } : null;
     },
+    async delete(key) {
+      objects.delete(key);
+    },
     async put(key, bytes, options) {
       if (fail) throw new Error("Unavailable");
       assert.equal(options.sha256, await digest(bytes));
@@ -303,6 +309,8 @@ test("native R2 binding keeps originals immutable and reports storage failure", 
     /already exists/,
   );
   assert.deepEqual(await storage.get("original"), bytes);
+  await storage.deleteOriginal("original");
+  await assert.rejects(() => storage.get("original"), /missing/i);
   disconnectAfterWrite = true;
   await storage.putOriginal("response-lost", bytes, "image/jpeg");
   disconnectAfterWrite = false;

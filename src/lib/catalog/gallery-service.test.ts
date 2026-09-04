@@ -66,6 +66,7 @@ async function fixture() {
   const media: CatalogMedia = {
     get: unavailable,
     putOriginal: unavailable,
+    deleteOriginal: unavailable,
     process: unavailable,
     putDerivative: unavailable,
   };

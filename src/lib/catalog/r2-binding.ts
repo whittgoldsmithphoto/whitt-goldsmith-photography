@@ -2,6 +2,7 @@ import { digest } from "./repository.ts";
 
 export interface CatalogR2Binding {
   get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
+  delete(key: string): Promise<void>;
   put(
     key: string,
     bytes: Uint8Array,
@@ -21,6 +22,7 @@ export function bindingStorage(bucket: CatalogR2Binding) {
   }
   return {
     get,
+    deleteOriginal: (key: string) => bucket.delete(key),
     async putOriginal(key: string, bytes: Uint8Array, mime: string) {
       const checksum = await digest(bytes);
       try {
