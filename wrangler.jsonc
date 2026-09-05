@@ -5,6 +5,7 @@
   "compatibility_flags": ["nodejs_compat", "nodejs_compat_populate_process_env"],
   "main": "src/server.ts",
   "observability": { "enabled": true },
+  "limits": { "cpu_ms": 300000 },
   "workers_dev": true,
   "preview_urls": true,
   "triggers": { "crons": ["*/5 * * * *"] },
@@ -33,6 +34,7 @@
   "env": {
     "staging": {
       "name": "wgp-catalog-staging",
+      "limits": { "cpu_ms": 300000 },
       "triggers": { "crons": ["*/5 * * * *"] },
       "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "c9d803e0e964401298a952b85dd05af4" }],
       "r2_buckets": [{ "binding": "CATALOG_BUCKET", "bucket_name": "wgp-catalog-staging" }],

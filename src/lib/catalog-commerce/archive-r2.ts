@@ -14,7 +14,8 @@ export interface ArchiveBucket {
   get(key: string): Promise<{ size: number; body: ReadableStream<Uint8Array> } | null>;
   delete(key: string): Promise<void>;
 }
-const PART_SIZE = 5 * 1024 * 1024;
+// One bounded 16 MiB part reduces remote round trips for full-size albums.
+const PART_SIZE = 16 * 1024 * 1024;
 
 /** A fresh, random temporary key per attempt is required. Never pass an original
  * key here. Only private catalog/archives/<uuid>/<uuid>.zip is accepted.

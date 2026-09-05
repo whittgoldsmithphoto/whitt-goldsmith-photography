@@ -7,7 +7,11 @@ import { processMediaQueueBatch } from "./lib/catalog/media-queue";
 import { dispatchMediaJob } from "./lib/catalog/media-queue.server";
 import { cleanupExpiredUploads } from "./lib/catalog/upload-cleanup";
 import { runScheduledMaintenance } from "./lib/ops/scheduled-maintenance";
-import { processScheduledArchive } from "./lib/catalog-commerce/archive.server";
+import {
+  dispatchScheduledArchive,
+  processQueuedArchive,
+} from "./lib/catalog-commerce/archive.server";
+import { processArchiveQueueBatch } from "./lib/catalog-commerce/archive-queue";
 
 type WorkerQueueBatch = Parameters<typeof processMediaQueueBatch>[0];
 
@@ -37,8 +41,10 @@ async function fetch(request: Request, env: unknown, ctx: ExecutionContext): Pro
 export default {
   fetch,
   async queue(batch: WorkerQueueBatch) {
+    const mediaBatch = { messages: await processArchiveQueueBatch(batch, processQueuedArchive) };
+    if (!mediaBatch.messages.length) return;
     if (runtimeSetting("CATALOG_MEDIA_PROCESSING_PAUSED") === "true") {
-      await processMediaQueueBatch(batch, {
+      await processMediaQueueBatch(mediaBatch, {
         paused: true,
         loadJob: async () => null,
         processJob: async () => {},
@@ -47,7 +53,7 @@ export default {
     }
     const sql = await getSql();
     const catalog = createCatalog(sql, catalogMedia());
-    await processMediaQueueBatch(batch, {
+    await processMediaQueueBatch(mediaBatch, {
       loadJob: (id) => loadMediaJob(sql, id),
       processJob: async (job) => {
         const result = await catalog.process(job.photoId, job.ownerId);
@@ -72,9 +78,7 @@ export default {
         dispatchFailed: result.dispatchFailed,
       });
     try {
-      const archive = await processScheduledArchive();
-      if (archive === "retry")
-        console.error("Album archive will retry; no download was published.");
+      await dispatchScheduledArchive();
     } catch {
       console.error("Scheduled album processing failed; private job remains recoverable.");
     }

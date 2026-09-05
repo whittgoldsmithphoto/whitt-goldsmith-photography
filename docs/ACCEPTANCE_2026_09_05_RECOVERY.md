@@ -16,6 +16,15 @@
 - Safe failure-category reporting was added after a failing regression test, then its six focused tests and typecheck passed. The canonical staging release passed its full checks and deployed source `fac8c20e91f22f93bca54c78559c54c7059cb45d`, version `c8ab74d4-4865-4401-89b0-7ebc0c7b0359`, with revision and 15 assets verified.
 - Added `python3 scripts/verify-album-zip.py DOWNLOAD.zip ORIGINAL_FOLDER`: bounded-memory, read-only ZIP verification of every original size and SHA256 without extracting files. Its synthetic exact/mutated-byte regression passed. Running it on a real hosted download is still pending. The verifier test requires Python 3.
 
+## Hosted CPU failure and queue correction
+
+- Cloudflare tail classified the second full-album invocation as **Exceeded CPU Limit** (scheduled at 21:10:22 UTC). Its frequent-cron CPU budget is 30 seconds, distinct from elapsed time; a heartbeat alone did not prove forward progress or completion.
+- Album packaging now runs through a strictly parsed envelope on the existing private media queue. Cron dispatches durable work only. Both environment configurations bound CPU to 300,000 ms for queue invocations, batch size one, concurrency two. Paid snapshot checks, leases, output integrity checks, and download reservations are unchanged.
+- Increased the bounded multipart buffer from 5 MiB to 16 MiB to reduce storage round trips. Failing queue-envelope and multipart-size tests were observed before implementation; 14 focused queue/storage/worker tests and typecheck then passed. Hosted delivery after this correction remains pending.
+- Official limits: https://developers.cloudflare.com/workers/platform/limits/ and https://developers.cloudflare.com/queues/platform/limits/ . Queue wall time remains limited to 15 minutes; this change is not a claim of unlimited processing.
+- Production recovery branch `pre-live-readiness-2026-09-05` (`br-empty-water-a52qcp7y`) was created with auto-delete Never, then independently queried: schema 0022, three photos, zero orders and entitlements. This is a same-provider recovery point, not an independent full restore test. Production's active database was not changed.
+- Fresh Desktop source/history backup: `Whitt Goldsmith Photography Backups/verified-release-2026-09-05-Uvq3LH`, revision `451119f`; complete Git bundle verification passed. Older backups were preserved.
+
 The sections below preserve earlier checkpoints; newer checkpoints supersede their upload, owner setup, and archive-wiring pending notes.
 
 ## Verified hosted behavior

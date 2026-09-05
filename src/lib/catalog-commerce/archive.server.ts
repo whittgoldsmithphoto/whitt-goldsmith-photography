@@ -37,8 +37,8 @@ export async function archiveRequest(request: Request) {
   }
 }
 
-/** Scheduled invocation, never a browser-lifetime background operation. */
-export async function processScheduledArchive() {
+/** Queue invocation has a larger CPU budget than a frequent cron trigger. */
+export async function processQueuedArchive() {
   if (!archiveDeliveryEnabled(runtimeSetting)) return "disabled";
   const sql = await getSql();
   return runArchiveWorker({
@@ -47,4 +47,19 @@ export async function processScheduledArchive() {
     reportFailure: (code) => console.error("Album archive failure category:", code),
     ...privateArchiveStorage(bucket()),
   });
+}
+
+/** Cron only dispatches; it must not package large albums under its 30s CPU cap. */
+export async function dispatchScheduledArchive() {
+  if (!archiveDeliveryEnabled(runtimeSetting)) return;
+  const sql = await getSql();
+  const [job] = await sql.query<{ id: string }>(`SELECT id FROM commerce_archive_jobs
+    WHERE (status IN ('queued','retry') AND attempts<5 AND available_at<=now())
+      OR (status='processing' AND leased_until<=now())
+    ORDER BY available_at,id LIMIT 1`);
+  if (!job) return;
+  const queue = (env as unknown as { MEDIA_QUEUE?: { send(body: unknown): Promise<void> } })
+    .MEDIA_QUEUE;
+  if (!queue) throw new Error("Archive processing queue unavailable");
+  await queue.send({ version: 1, kind: "album_archive" });
 }

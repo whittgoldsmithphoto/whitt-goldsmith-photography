@@ -40,11 +40,11 @@ function fixture(corrupt = false) {
 test("private R2 archive writer produces uniform multipart parts and verifies readback", async () => {
   const f = fixture();
   const sink = await openR2ArchiveSink(f.bucket, key);
-  for (let i = 0; i < 13; i++) await sink.write(new Uint8Array(1024 * 1024).fill(i));
+  for (let i = 0; i < 35; i++) await sink.write(new Uint8Array(1024 * 1024).fill(i));
   await sink.commit();
   assert.deepEqual(
     f.parts.map((part) => part.length),
-    [5, 5, 3].map((n) => n * 1024 * 1024),
+    [16, 16, 3].map((n) => n * 1024 * 1024),
   );
   assert.deepEqual(f.state(), { complete: true, deleted: false, aborted: false });
   await assert.rejects(sink.write(new Uint8Array([1])));
