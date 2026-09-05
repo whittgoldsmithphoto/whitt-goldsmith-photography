@@ -18,6 +18,23 @@ interface Dependencies {
   ): Promise<{ bytes: number; checksum: string }>;
   /** Delete only this attempt's generated ZIP, never source photographs. */
   discard(key: string): Promise<void>;
+  reportFailure?(code: string): void;
+}
+
+/** Return fixed categories only: provider messages may contain private keys. */
+export function archiveFailureCode(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  if (/too many subrequests/i.test(message)) return "provider_subrequest_limit";
+  if (/cpu time|memory limit/i.test(message)) return "provider_resource_limit";
+  if (/connection.*terminated|connection.*closed|timeout|timed out/i.test(message))
+    return "connection_or_timeout";
+  if (/Archive original (checksum|size) mismatch/.test(message)) return "original_integrity";
+  if (/Archive original unavailable/.test(message)) return "original_missing";
+  if (/Archive readback|Completed archive is missing/.test(message)) return "archive_readback";
+  if (/Archive lease/.test(message)) return "lease_lost";
+  if (/Purchased album archive unavailable/.test(message)) return "access_changed";
+  if (/multipart|uploadPart|part.*size/i.test(message)) return "multipart_upload";
+  return "unclassified";
 }
 
 /** Processes one durable job; caller must supply real authorization, not a no-op.
@@ -58,7 +75,12 @@ export async function runArchiveWorker(deps: Dependencies) {
     if (!(await deps.jobs.complete(job.id, token, result.checksum, result.bytes)))
       throw new Error("Archive lease lost before completion");
     return "completed";
-  } catch {
+  } catch (error) {
+    try {
+      deps.reportFailure?.(archiveFailureCode(error));
+    } catch {
+      /* Diagnostics must not prevent cleanup/retry. */
+    }
     // Even successfully packed bytes stay private when final authorization fails.
     // Cleanup failure propagates for operator reconciliation; never mark ready.
     await deps.discard(job.output_key);

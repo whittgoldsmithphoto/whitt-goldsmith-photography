@@ -44,6 +44,7 @@ export async function processScheduledArchive() {
   return runArchiveWorker({
     jobs: createArchiveJobs(sql),
     authorize: paidArchiveAccess(sql).authorize,
+    reportFailure: (code) => console.error("Album archive failure category:", code),
     ...privateArchiveStorage(bucket()),
   });
 }

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { runArchiveWorker } from "./archive-worker.ts";
+import { runArchiveWorker, archiveFailureCode } from "./archive-worker.ts";
 import type { ArchiveJob } from "./archive-jobs.ts";
 
 function fixture() {
@@ -44,6 +44,36 @@ function fixture() {
   };
   return { deps, state: () => ({ completed, retried, deleted, checks }) };
 }
+test("archive diagnostics classify failures without returning private error text", () => {
+  assert.equal(archiveFailureCode(new Error("Too many subrequests")), "provider_subrequest_limit");
+  assert.equal(
+    archiveFailureCode(new Error("Archive original checksum mismatch")),
+    "original_integrity",
+  );
+  assert.equal(
+    archiveFailureCode(new Error("private-key secret customer@example.com")),
+    "unclassified",
+  );
+});
+test("failure reporting cannot prevent retry or expose the raw error", async () => {
+  const f = fixture();
+  const reports: string[] = [];
+  f.deps.pack = async () => {
+    throw new Error("Archive original checksum mismatch");
+  };
+  assert.equal(
+    await runArchiveWorker({
+      ...f.deps,
+      reportFailure: (code) => {
+        reports.push(code);
+        throw new Error("logging failed");
+      },
+    }),
+    "retry",
+  );
+  assert.deepEqual(reports, ["original_integrity"]);
+  assert.equal(f.state().retried, 1);
+});
 test("worker packs a leased job, rechecks access and records completion", async () => {
   const f = fixture();
   assert.equal(await runArchiveWorker(f.deps), "completed");
