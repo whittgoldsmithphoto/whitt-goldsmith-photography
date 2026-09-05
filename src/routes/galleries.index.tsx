@@ -4,8 +4,7 @@ import { SportsSearch } from "@/lib/sports/SportsSearch";
 export const Route = createFileRoute("/galleries/")({
   component: () => (
     <>
-      <CatalogIndex page="galleries" />
-      <SportsSearch />
+      <CatalogIndex page="galleries" sportsSearch={<SportsSearch />} />
     </>
   ),
 });
