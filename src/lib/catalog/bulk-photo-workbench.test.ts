@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   clearPhotoSelection,
+  executeBulkPhotoAction,
+  formatBulkPhotoSuccessMessage,
   planBulkPhotoAction,
   resetSelectionOnGalleryChange,
   selectAllVisiblePhotos,
@@ -36,6 +38,44 @@ test("clear selection is the explicit pruning operation", () => {
 test("switching galleries clears the previous gallery selection", () => {
   assert.deepEqual(resetSelectionOnGalleryChange("g1", "g2", ["a", "b"]), []);
   assert.deepEqual(resetSelectionOnGalleryChange("g1", "g1", ["a", "b"]), ["a", "b"]);
+});
+
+test("bulk execution stops at the first rejection and leaves selection for the caller to preserve", async () => {
+  const inputs = planBulkPhotoAction(photos, ["a", "b", "d"], "g1", "hide");
+  const calls: string[] = [];
+  const selected = ["a", "b", "d"];
+
+  await assert.rejects(
+    executeBulkPhotoAction(inputs, async (input) => {
+      calls.push(input.id!);
+      if (input.id === "b") throw new Error("b failed");
+    }),
+    /b failed/,
+  );
+
+  assert.deepEqual(calls, ["a", "b"]);
+  assert.deepEqual(selected, ["a", "b", "d"]);
+});
+
+test("bulk execution clears selection only after every photo succeeds", async () => {
+  const inputs = planBulkPhotoAction(photos, ["a", "b"], "g1", "archive");
+  const calls: string[] = [];
+  let selected = ["a", "b"];
+
+  await executeBulkPhotoAction(inputs, async (input) => {
+    calls.push(input.id!);
+  });
+  selected = clearPhotoSelection();
+
+  assert.deepEqual(calls, ["a", "b"]);
+  assert.deepEqual(selected, []);
+});
+
+test("bulk success messages use the correct past tense for every action", () => {
+  assert.equal(formatBulkPhotoSuccessMessage(1, "hide"), "1 photograph hidden successfully.");
+  assert.equal(formatBulkPhotoSuccessMessage(2, "unhide"), "2 photographs unhidden successfully.");
+  assert.equal(formatBulkPhotoSuccessMessage(2, "archive"), "2 photographs archived successfully.");
+  assert.equal(formatBulkPhotoSuccessMessage(1, "restore"), "1 photograph restored successfully.");
 });
 
 for (const [action, expected] of [

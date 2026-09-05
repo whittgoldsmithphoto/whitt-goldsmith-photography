@@ -2,6 +2,24 @@ import type { OwnerCatalogPhoto, PhotoInput } from "./types.ts";
 
 export type BulkPhotoAction = "hide" | "unhide" | "archive" | "restore";
 
+const BULK_ACTION_PAST_TENSE: Record<BulkPhotoAction, string> = {
+  hide: "hidden",
+  unhide: "unhidden",
+  archive: "archived",
+  restore: "restored",
+};
+
+export async function executeBulkPhotoAction(
+  inputs: PhotoInput[],
+  execute: (input: PhotoInput) => Promise<unknown>,
+): Promise<void> {
+  for (const input of inputs) await execute(input);
+}
+
+export function formatBulkPhotoSuccessMessage(count: number, action: BulkPhotoAction): string {
+  return `${count} photograph${count === 1 ? "" : "s"} ${BULK_ACTION_PAST_TENSE[action]} successfully.`;
+}
+
 export function togglePhotoSelection(selected: string[], id: string, checked: boolean): string[] {
   const unique = [...new Set(selected)];
   return checked ? (unique.includes(id) ? unique : [...unique, id]) : unique.filter((value) => value !== id);

@@ -20,6 +20,8 @@ import {
 } from "@/lib/catalog/organizer-photo-view";
 import {
   clearPhotoSelection,
+  executeBulkPhotoAction,
+  formatBulkPhotoSuccessMessage,
   planBulkPhotoAction,
   resetSelectionOnGalleryChange,
   selectAllVisiblePhotos,
@@ -100,9 +102,9 @@ export function CatalogOrganizer() {
     setBusy(true);
     setMessage("");
     try {
-      for (const input of inputs) await catalogFetch("op=photo", input);
+      await executeBulkPhotoAction(inputs, (input) => catalogFetch("op=photo", input));
       setSelectedPhotoIds(clearPhotoSelection());
-      setMessage(`${inputs.length} photograph${inputs.length === 1 ? "" : "s"} ${bulkActionName}d successfully.`);
+      setMessage(formatBulkPhotoSuccessMessage(inputs.length, bulkActionName));
       state.reload();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : `Could not ${bulkActionName} photographs.`);
