@@ -15,6 +15,7 @@ process.env.VITE_AUTH_ENABLED = "true";
 process.env.BETTER_AUTH_SECRET = "local-browser-test-only-not-a-provider-secret";
 process.env.BETTER_AUTH_URL = origin;
 process.env.OWNER_USER_IDS = "fixture-owner-before-registration";
+process.env.CATALOG_LIBRARY_METADATA_ENABLED = "true";
 const server = await createServer({
   server: { host: "127.0.0.1", port: 8092, strictPort: true },
   logLevel: "error",
@@ -387,6 +388,37 @@ try {
     await ownerPage.screenshot({ path: "test-results/owner-mobile.png" });
   await ownerPage.setViewportSize({ width: 1440, height: 900 });
   await ownerPage.getByRole("heading", { name: gallery.title, exact: true }).waitFor();
+  await ownerPage.getByText("Keywords, ratings & bulk metadata", { exact: true }).click();
+  const metadata = ownerPage.getByRole("region", { name: "Private library metadata", exact: true });
+  await metadata.getByRole("button", { name: "Select this page", exact: true }).click();
+  await metadata.getByLabel("Add keywords", { exact: true }).fill("Football, CCES");
+  await metadata.getByLabel("Set rating", { exact: true }).selectOption("5");
+  await metadata.getByRole("button", { name: "Apply metadata", exact: true }).click();
+  await metadata.getByText(/Saved metadata for/).waitFor();
+  await ownerPage.reload();
+  await ownerPage.getByText("Keywords, ratings & bulk metadata", { exact: true }).click();
+  await metadata
+    .getByText(/5 stars.*cces, football/)
+    .first()
+    .waitFor();
+  await metadata.getByLabel("Keyword filter", { exact: true }).fill("football");
+  await metadata.getByRole("button", { name: "Filter", exact: true }).click();
+  await metadata.getByText(/5 stars.*cces, football/).first().waitFor();
+  await metadata.getByLabel("Smart collection title", { exact: true }).fill("Football selects");
+  await metadata.getByRole("button", { name: "Save collection", exact: true }).click();
+  await metadata.getByText("Saved private smart collection.", { exact: true }).waitFor();
+  await ownerPage.reload();
+  await ownerPage.getByText("Keywords, ratings & bulk metadata", { exact: true }).click();
+  await metadata.getByLabel("Private smart collection", { exact: true }).selectOption({ label: "Football selects" });
+  assert.equal(await metadata.getByLabel("Keyword filter", { exact: true }).inputValue(), "football");
+  await metadata.getByText(/5 stars.*cces, football/).first().waitFor();
+  await metadata.getByLabel("Keyword filter", { exact: true }).fill("no-such-keyword");
+  await metadata.getByRole("button", { name: "Filter", exact: true }).click();
+  await metadata.getByText("No matching photographs.", { exact: true }).waitFor();
+  assert.equal((await customer.request.get(`${origin}/api/catalog/metadata`)).status(), 403);
+  assert.equal((await anonymous.request.get(`${origin}/api/catalog/metadata`)).status(), 401);
+  assert.equal((await customer.request.get(`${origin}/api/catalog/collections`)).status(), 403);
+  await ownerPage.getByText("Keywords, ratings & bulk metadata", { exact: true }).click();
   await ownerPage.getByLabel("Search galleries", { exact: true }).fill("NO MATCHING GALLERY");
   await ownerPage.getByText("No galleries yet.", { exact: true }).waitFor();
   await ownerPage.getByLabel("Search galleries", { exact: true }).fill("");

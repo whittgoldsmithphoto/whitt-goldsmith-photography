@@ -6,14 +6,47 @@ import { createGalleryService } from "./gallery-service";
 import { errorResponse, privateHeaders } from "../api/errors";
 import { catalogRequest, readLimited } from "./http.server";
 import { multipartRequest } from "../ingest/multipart-http.server";
+import { libraryMetadataHandler } from "./library-metadata-http";
+import { createLibraryMetadata } from "./library-metadata";
+import { createSmartCollections } from "./smart-collections";
 export async function catalogResourceRequest(request: Request): Promise<Response> {
   // TanStack splats also match an empty suffix. Preserve the exact legacy root.
   if (new URL(request.url).pathname === "/api/catalog") return catalogRequest(request);
   try {
     const url = new URL(request.url),
       path = url.pathname.slice("/api/catalog/".length).split("/");
-    if (path[0] === "multipart")
-      return multipartRequest(request, path[1]);
+    if (path.length === 1 && path[0] === "metadata")
+      return libraryMetadataHandler({
+        enabled: runtimeSetting("CATALOG_LIBRARY_METADATA_ENABLED") === "true",
+        owner: async () => {
+          const { getSessionUser } = await import("../auth/verify.server");
+          return assertCatalogOwner((await getSessionUser())?.id, runtimeSetting("OWNER_USER_IDS"));
+        },
+        service: async () => createLibraryMetadata(await getSql()),
+      })(request);
+    if (path.length === 1 && path[0] === "collections")
+      return libraryMetadataHandler({
+        enabled: runtimeSetting("CATALOG_LIBRARY_METADATA_ENABLED") === "true",
+        owner: async () => {
+          const { getSessionUser } = await import("../auth/verify.server");
+          return assertCatalogOwner((await getSessionUser())?.id, runtimeSetting("OWNER_USER_IDS"));
+        },
+        service: async () => {
+          const collections = createSmartCollections(await getSql());
+          return {
+            list: async (params, actor) => {
+              if (
+                [...params.keys()].some((key) => key !== "after") ||
+                (params.get("after") || "").length > 200
+              )
+                throw new CatalogError("Invalid collection query", 400);
+              return collections.list(actor, params.get("after") || "");
+            },
+            bulk: collections.save,
+          };
+        },
+      })(request);
+    if (path[0] === "multipart") return multipartRequest(request, path[1]);
     const coverWrite =
       request.method === "POST" &&
       path.length === 3 &&

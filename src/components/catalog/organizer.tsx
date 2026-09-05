@@ -14,6 +14,7 @@ import { SportsMetadataEditor } from "@/lib/sports/SportsMetadataEditor";
 import { IntegrityPanel } from "@/lib/catalog-integrity/IntegrityPanel";
 import { FolderManager } from "./folder-manager";
 import { LibrarySearch } from "./library-search";
+import { LibraryMetadataPanel } from "./library-metadata";
 import { apiFetch } from "@/lib/auth/api-fetch";
 import {
   filterAndSortOwnerPhotos,
@@ -50,6 +51,7 @@ export function CatalogOrganizer() {
   const [foldersOpen, setFoldersOpen] = useState(false);
   const [galleryQuery, setGalleryQuery] = useState("");
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [metadataOpen, setMetadataOpen] = useState(false);
   const [draft, setDraft] = useState<GalleryInput | null>(null);
   const [photoDraft, setPhotoDraft] = useState<PhotoInput | null>(null);
   const [batchItems, setBatchItems] = useState<UploadItem[]>([]);
@@ -670,6 +672,16 @@ export function CatalogOrganizer() {
                 ))}
               </div>
 
+              <details
+                className="mt-6 border-t border-border"
+                open={metadataOpen}
+                onToggle={(event) => setMetadataOpen(event.currentTarget.open)}
+              >
+                <summary className="cursor-pointer py-3 text-sm">
+                  Keywords, ratings & bulk metadata
+                </summary>
+                {metadataOpen && <LibraryMetadataPanel key={active.id} galleryId={active.id} />}
+              </details>
               {jobs.some((job) => job.galleryId === active.id) && (
                 <details className="mt-6 text-sm">
                   <summary className="cursor-pointer py-2 text-muted-foreground">

@@ -1,0 +1,46 @@
+# Photographer feature program
+
+This tracks the owner's eight requested feature groups. Source implementation,
+local acceptance and live activation are different milestones. No group is
+complete merely because a table or UI control exists.
+
+| Requested group | Current slice | Remaining |
+| --- | --- | --- |
+| Advanced metadata, keywords, filters, bulk editing | Private normalized keywords, rating, label, notes storage; indexed filters; atomic revision-checked bulk writes; owner API and Organizer keyword/rating/label editor | EXIF/IPTC/XMP extraction and provenance, advanced camera/date filters, notes editor, real staging acceptance |
+| One original in multiple galleries; replacement/history | Existing canonical originals unchanged | Membership schema and compatibility migration, independent gallery presentation, immutable replacements/version rollback, paid-reference preservation, all read/write consumer migration |
+| Smart collections | Owner-scoped saved allowlisted filter rules; revision-safe updates; Organizer save/reopen of dynamic filters for a gallery | Cross-gallery collection UI, membership/publication evaluation and explicit publication revisions; larger saved-collection navigation; live acceptance |
+| Invitations, guest proofs, rounds, comments, notifications | Existing account-based proofing remains working | Unified scoped invitations/revocation, guest identity binding, rounds and threads, durable notification outbox/provider delivery |
+| Folder/ZIP import and interrupted upload recovery | Existing upload fixes and durable media queue preserved | Streamed archive ingestion, mapping/retry UX, real provider interruption/recovery and resource-budget acceptance |
+| Packages, coupons, pricing inheritance, reconciliation | Existing digital offers, owner pricing and gated payment paths preserved | Expanded package semantics, inherited prices, conflict/refund/concurrency acceptance and real Stripe workflow |
+| Monitoring and truthful analytics | Existing diagnostics/processing pause preserved | Durable operational views, scoped events and real aggregates, retention and fault acceptance |
+| Publishing integrations and branding/settings | Existing storefront styling preserved | Scoped publisher credentials/client, conflict handling, server-backed settings and branding editor |
+
+## Metadata and smart-collection implementation boundary
+
+- Additive migrations `0030_library_metadata.sql` and `0031_smart_collections.sql`.
+- Owner-only `/api/catalog/metadata` and `/api/catalog/collections`; reads are
+  private/no-store, writes require same-origin JSON and bounded payloads.
+- Both require `CATALOG_LIBRARY_METADATA_ENABLED=true`. Do not enable before
+  migrations and isolated acceptance. No deployed database was migrated by this slice.
+- Metadata bulk writes lock parent photos in a consistent order and reject the
+  entire batch on a missing/stale target. Public captions and originals are not changed.
+- Smart rules are data, not executable SQL. A collection reevaluates current
+  metadata when opened; saving it never publishes photos or grants downloads.
+- Saved collections currently list at most 100 owner records per API page. The
+  initial Organizer picker displays matching current-gallery records from that page.
+  Larger-library collection navigation is not yet complete.
+- Tests use local PostgreSQL-compatible PGlite, not independent Neon connections.
+  The browser harness uses real local routes/auth/database with synthetic photo media.
+
+## Deployment and preservation
+
+Local acceptance for this slice: 456 automated tests pass; typecheck passes;
+lint has zero errors and seven existing warnings. The full local owner/proof
+browser harness passes, including metadata bulk save, reload persistence,
+keyword filtering, smart-collection save/reopen, and anonymous/customer denial.
+These results do not claim live Cloudflare/Neon acceptance.
+
+Keep Cloudflare photo processing paused until the existing capacity blocker is
+resolved. Keep live sales closed until real payment/delivery acceptance. Do not
+switch the SmugMug domain. Original objects and historical purchases must not be
+rewritten to simplify the later membership/version migration.

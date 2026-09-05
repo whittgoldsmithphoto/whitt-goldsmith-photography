@@ -1,5 +1,9 @@
 # September 5 repair checkpoint
 
+The subsequent metadata/smart-collection source work and all eight requested
+feature groups are tracked in [Photographer feature program](PHOTOGRAPHER_FEATURE_PROGRAM.md).
+They have not been activated on the deployed site.
+
 This checkpoint supersedes old decision requests and deployment claims, not the unfinished engineering backlog in `BACKEND_REVISION_REMAINING.md`.
 
 ## Owner decisions already made

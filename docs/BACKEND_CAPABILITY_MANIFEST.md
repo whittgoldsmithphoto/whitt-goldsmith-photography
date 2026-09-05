@@ -85,6 +85,10 @@ New resource contract slice: typed errors/pages, validated deterministic cursors
 
 ## Migration inventory
 
+`migrations/0031_smart_collections.sql` adds private owner-scoped dynamic filter rules and revision-safe updates. `/api/catalog/collections` shares the configured-owner, same-origin and bounded-body metadata boundary. The Organizer can save/reopen filters for the current gallery; no public collection publication or original duplication is enabled.
+
+`migrations/0030_library_metadata.sql` adds private owner keywords, ratings, labels and notes, indexed filtering, and atomic revision-checked bulk changes. The owner-only `/api/catalog/metadata` resource and Organizer editor are implemented behind `CATALOG_LIBRARY_METADATA_ENABLED=true`; leave disabled until migration and staging acceptance. Public captions and original objects are unchanged. EXIF extraction, versioning and memberships are not provided by this migration.
+
 `migrations/0029_archive_jobs.sql` adds the internal archive job ledger: immutable manifest identity, exclusive expiring leases, isolated attempt output keys, bounded retries and customer-scoped lookup/cancellation. Unit-tested with the private ZIP/R2 worker adapter; not yet applied to staging/production or exposed through customer routes. Paid-snapshot authorization, transactional delivery allowance binding and live archive acceptance remain required.
 
 Routing implementation note: `src/routes/api/catalog_.$.ts` declares `/api/catalog_/$`. The trailing underscore is TanStack's non-nesting route marker, not part of the HTTP URL; the served catch-all remains `/api/catalog/$`. This keeps the legacy `/api/catalog` root from being intercepted.
