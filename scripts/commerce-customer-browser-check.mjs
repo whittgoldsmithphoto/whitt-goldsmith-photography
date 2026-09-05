@@ -227,65 +227,67 @@ try {
   assert.equal(await ownerPage.getByLabel("Gallery ID", { exact: true }).count(), 0);
   assert.equal(await ownerPage.getByLabel("Photo ID", { exact: true }).count(), 0);
   await ownerPage.getByRole("tab", { name: "Test quote", exact: true }).click();
-  await ownerPage
-    .getByLabel("Gallery", { exact: true })
-    .selectOption({ label: "SYNTHETIC COMMERCE FIXTURE" });
+  const quotePanel = ownerPage.getByRole("tabpanel", { name: "Test quote" });
+  const quoteGallery = quotePanel.getByLabel("Gallery", { exact: true });
+  const quotePhoto = quotePanel.getByLabel("Photo", { exact: true });
+  await quoteGallery.selectOption({ label: "SYNTHETIC COMMERCE FIXTURE" });
   assert.equal(
-    await ownerPage.getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true }).count(),
+    await quoteGallery
+      .getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true })
+      .count(),
     0,
     "Later gallery page is initially absent",
   );
   assert.equal(
-    await ownerPage.getByRole("option", { name: "synthetic-later-51.jpg", exact: true }).count(),
+    await quotePhoto.getByRole("option", { name: "synthetic-later-51.jpg", exact: true }).count(),
     0,
     "Later photo page is initially absent",
   );
   await ownerPage.getByRole("tab", { name: "Pricing", exact: true }).click();
-  await ownerPage
-    .getByRole("tabpanel", { name: "Pricing" })
-    .getByRole("button", { name: "Load more galleries", exact: true })
-    .click();
+  const pricingPanel = ownerPage.getByRole("tabpanel", { name: "Pricing" });
+  const pricingGallery = pricingPanel.getByLabel("Gallery to override", { exact: true });
+  await pricingPanel.getByRole("button", { name: "Load more galleries", exact: true }).click();
+  await pricingGallery
+    .getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true })
+    .waitFor({ state: "attached" });
   assert.equal(
-    await ownerPage
-      .getByLabel("Gallery to override", { exact: true })
-      .getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true })
-      .count(),
+    await pricingGallery.getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true }).count(),
     1,
     "Pricing gallery selector exposes later page",
   );
   await ownerPage.getByRole("tab", { name: "Discounts", exact: true }).click();
+  const discountsPanel = ownerPage.getByRole("tabpanel", { name: "Discounts" });
+  const couponGallery = discountsPanel.getByLabel("Coupon gallery", { exact: true });
+  await couponGallery
+    .getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true })
+    .waitFor({ state: "attached" });
   assert.equal(
-    await ownerPage
-      .getByLabel("Coupon gallery", { exact: true })
-      .getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true })
-      .count(),
+    await couponGallery.getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true }).count(),
     1,
     "Discount gallery selector exposes later page",
   );
   await ownerPage.getByRole("tab", { name: "Test quote", exact: true }).click();
+  await quoteGallery
+    .getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true })
+    .waitFor({ state: "attached" });
   assert.equal(
-    await ownerPage.getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true }).count(),
+    await quoteGallery.getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true }).count(),
     1,
     "Quote gallery selector exposes later page",
   );
-  await ownerPage
-    .getByLabel("Gallery", { exact: true })
-    .selectOption({ label: "SYNTHETIC Z ARCHIVE 51" });
-  await ownerPage
-    .getByLabel("Gallery", { exact: true })
-    .selectOption({ label: "SYNTHETIC COMMERCE FIXTURE" });
-  await ownerPage.getByRole("button", { name: "Load more photos", exact: true }).click();
+  await quoteGallery.selectOption({ label: "SYNTHETIC Z ARCHIVE 51" });
+  await quoteGallery.selectOption({ label: "SYNTHETIC COMMERCE FIXTURE" });
+  await quotePanel.getByRole("button", { name: "Load more photos", exact: true }).click();
+  await quotePhoto
+    .getByRole("option", { name: "synthetic-later-51.jpg", exact: true })
+    .waitFor({ state: "attached" });
   assert.equal(
-    await ownerPage.getByRole("option", { name: "synthetic-later-51.jpg", exact: true }).count(),
+    await quotePhoto.getByRole("option", { name: "synthetic-later-51.jpg", exact: true }).count(),
     1,
     "Quote photo selector exposes later page",
   );
-  await ownerPage
-    .getByLabel("Photo", { exact: true })
-    .selectOption({ label: "synthetic-later-51.jpg" });
-  await ownerPage
-    .getByLabel("Photo", { exact: true })
-    .selectOption({ label: "synthetic-purchase.jpg" });
+  await quotePhoto.selectOption({ label: "synthetic-later-51.jpg" });
+  await quotePhoto.selectOption({ label: "synthetic-purchase.jpg" });
   await ownerPage.getByRole("tab", { name: "Pricing", exact: true }).click();
   const productForm = ownerPage
     .locator("form")
