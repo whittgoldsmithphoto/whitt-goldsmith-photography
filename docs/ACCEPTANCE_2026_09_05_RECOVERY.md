@@ -25,6 +25,13 @@
 - Production recovery branch `pre-live-readiness-2026-09-05` (`br-empty-water-a52qcp7y`) was created with auto-delete Never, then independently queried: schema 0022, three photos, zero orders and entitlements. This is a same-provider recovery point, not an independent full restore test. Production's active database was not changed.
 - Fresh Desktop source/history backup: `Whitt Goldsmith Photography Backups/verified-release-2026-09-05-Uvq3LH`, revision `451119f`; complete Git bundle verification passed. Older backups were preserved.
 
+## Production release and hosted delivery checkpoint
+
+- Production source `900fb4b8e24c7d0ec39d26416189ea2bc39a9d70` deployed as Cloudflare version `de7e117c-0443-4f17-b1c3-c7eb57990b9f`. Release checks passed: 472 tests, typecheck, lint with seven existing warnings and no errors, exact revision and 15 referenced assets. Production owner Organizer was then opened successfully with the existing owner session; its three-photo draft was intact. Live checkout/download flags remain false; no custom domain was changed.
+- The corrected staging queue completed the 131-photo paid album preparation. Customer UI exposed Download album ZIP. One native download was requested and began transferring to the browser. A separately loaded order page showed **all 131 photos with two attempts remaining**, versus three before the ZIP request. Full downloaded-byte verification is still pending while transfer runs; a ready button alone is not the completed acceptance test.
+- A new hosted single-photo sandbox purchase for SWG01910.jpg completed at **$4.95**, order `7b174743-6f75-4367-84b0-6c1a2be5b482`. The application returned server-confirmed paid status, the correct perpetual personal/commercial/no-resale license, and three attempts expiring September 19. Synthetic Stripe test-card details were used and saving payment information was unchecked. Its original download was requested; downloaded checksum verification remains pending.
+- Production recovery upload of all 131 source files started through the supported browser file chooser. The current batch reached 24 checked, with existing originals recognized as duplicates. This is an in-progress upload, not proof that all production photographs are ready. Keep the production Organizer tab open until completion.
+
 ## Production schema upgrade completed
 
 - Applied canonical migrations 0023–0032 to the active production branch `br-twilight-term-a597tv8m` after a successful local rehearsal with three existing photo fixtures. The generated transaction used an advisory lock, 3-second lock timeout, 15-second statement timeout, baseline guards, and exact before/after JSON comparison of all existing photo records.
