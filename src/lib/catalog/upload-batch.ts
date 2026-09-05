@@ -1,3 +1,4 @@
+import { photoUploadError } from "./upload-limits.ts";
 import { apiFetch } from "../auth/api-fetch.ts";
 export type UploadFile = Pick<File, "name" | "size" | "type" | "arrayBuffer">;
 export type UploadState =
@@ -88,12 +89,8 @@ export async function uploadBatch(options: {
       continue;
     }
     try {
-      if (
-        !["image/jpeg", "image/png"].includes(file.type) ||
-        file.size <= 0 ||
-        file.size > 20 * 1024 * 1024
-      )
-        throw new Error("Use a nonempty JPEG or PNG up to 20 MiB. RAW/TIFF are not supported yet.");
+      const invalid = photoUploadError(file);
+      if (invalid) throw new Error(invalid);
       emit("hashing");
       const bytes = await file.arrayBuffer();
       const checksum = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)))

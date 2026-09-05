@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { filterAndSortOwnerPhotos, type OrganizerPhotoFilter } from "./organizer-photo-view.ts";
+import { filterAndSortOwnerPhotos, reorderPhotoIds, type OrganizerPhotoFilter } from "./organizer-photo-view.ts";
 import type { OwnerCatalogPhoto } from "./types.ts";
 
 const photos = [
@@ -29,4 +29,10 @@ test("sorts filenames with deterministic locale-insensitive comparison", () => {
 test("sorts newest updated safely when timestamps are invalid", () => {
   const input = photos.map((photo) => photo.id === "a" ? { ...photo, updatedAt: "not-a-date" } : photo);
   assert.deepEqual(filterAndSortOwnerPhotos(input, "g1", "all", "newest-updated").map((photo) => photo.id), ["r", "h", "z", "a"]);
+});
+
+test("reorders ids for drag-and-drop display order", () => {
+  assert.deepEqual(reorderPhotoIds(["a", "b", "c"], 0, 2), ["b", "c", "a"]);
+  assert.deepEqual(reorderPhotoIds(["a", "b", "c"], 2, 0), ["c", "a", "b"]);
+  assert.deepEqual(reorderPhotoIds(["a", "b"], 0, 0), ["a", "b"]);
 });

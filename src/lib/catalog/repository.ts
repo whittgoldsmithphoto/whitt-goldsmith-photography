@@ -11,6 +11,7 @@ import type {
 } from "./types.ts";
 
 import { CatalogError } from "./errors.ts";
+import { MAX_PHOTO_BYTES } from "./upload-limits.ts";
 import { createProofService } from "./proofs.ts";
 import {
   claimMediaJobForPhoto,
@@ -56,7 +57,7 @@ const reservationSchema = z
       .number()
       .int()
       .positive()
-      .max(20 * 1024 * 1024),
+      .max(MAX_PHOTO_BYTES),
     checksum: z.string().regex(/^[a-f0-9]{64}$/),
     idempotencyKey: idSchema.optional(),
   })

@@ -1,8 +1,13 @@
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { CatalogStatus } from "./public";
 import { Button } from "@/components/ui/button";
 import { catalogFetch, useCatalog } from "@/lib/catalog/client";
 import type { OwnerProofPage } from "@/lib/catalog/proof-query";
+
+function who(item: { customerName?: string; customerEmail?: string; id: string }) {
+  return item.customerName || item.customerEmail || "Signed-in customer";
+}
 
 export function ProofInbox() {
   const [search, setSearch] = useState("");
@@ -15,141 +20,154 @@ export function ProofInbox() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   return (
-    <div className="mx-auto max-w-[1400px] px-4 py-10 sm:px-6">
-      <h1 className="font-display text-4xl">Customer proof inbox</h1>
-      <p className="my-4 text-muted-foreground">
-        Saved selections from the shared database, 20 per page. New or changed selections stay
-        unread until you mark that version reviewed. Notifications are in this inbox; no email is
-        sent yet.
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+      <h1 className="text-xl font-semibold">Proofs</h1>
+      <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+        Favorites parents and players saved from a gallery. Mark a set done when you have seen it.
+        Email alerts are not on yet.
       </p>
       <form
-        className="my-4 flex flex-wrap items-end gap-3"
+        className="my-6 flex flex-wrap items-end gap-3"
         onSubmit={(event) => {
           event.preventDefault();
           setQuery(search.trim());
           setCursors([]);
         }}
       >
-        <label className="flex flex-col gap-1">
-          Search gallery, note, or reference
+        <label className="flex min-w-[12rem] flex-1 flex-col gap-1 text-sm">
+          Search
           <input
-            className="rounded border border-border bg-background px-3 py-2"
+            className="min-h-11 rounded border border-border bg-background px-3"
             maxLength={120}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
+            placeholder="Gallery or note"
           />
         </label>
-        <label className="flex flex-col gap-1">
-          Review status
+        <label className="flex flex-col gap-1 text-sm">
+          Status
           <select
-            className="rounded border border-border bg-background px-3 py-2"
+            className="min-h-11 rounded border border-border bg-background px-3"
             value={filter}
             onChange={(event) => {
               setFilter(event.target.value);
               setCursors([]);
             }}
           >
-            <option value="all">All selections</option>
-            <option value="unreviewed">New or updated</option>
-            <option value="reviewed">Reviewed</option>
+            <option value="all">All</option>
+            <option value="unreviewed">New</option>
+            <option value="reviewed">Done</option>
           </select>
         </label>
         <Button type="submit" disabled={busy}>
           Search
         </Button>
       </form>
-      <Button variant="outline" disabled={busy} onClick={state.reload}>
-        Refresh inbox
-      </Button>
-      <p role="status" className="my-3">
-        {message}
-      </p>
-      {!state.data && <CatalogStatus {...state} />}
-      {state.data && !state.data.items.length && (
-        <p className="my-10">
-          No selections match this page. Change the filters or return to the first page.
+      {message && (
+        <p role="status" className="mb-4 text-sm">
+          {message}
         </p>
       )}
-      <div className="space-y-8">
-        {state.data?.items.map((p) => (
-          <section key={p.id} className="rounded border border-border p-5">
-            <h2 className="font-display text-2xl">
-              {p.galleryTitle} · {p.reviewedRevision < p.revision ? "New or updated" : "Reviewed"}
-            </h2>
-            <p className="mt-2 break-all text-sm">Reference: {p.id}</p>
-            <p className="mt-1 text-sm">
-              {p.photoIds.length} selections ·{" "}
-              {p.updatedAt && new Date(p.updatedAt).toLocaleString()} · Version {p.revision}
-            </p>
-            <p className="my-4 whitespace-pre-wrap break-words">{p.note || "No customer note."}</p>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              {p.photos.map((photo) => (
-                <div key={photo.id}>
-                  <img
-                    src={photo.thumbSrc}
-                    alt={photo.filename}
-                    className="aspect-[4/3] w-full rounded object-cover"
-                    loading="lazy"
-                  />
-                  <p className="mt-1 break-all text-sm">
-                    {photo.filename}
-                    {photo.unavailable ? " — no longer customer-visible" : ""}
+      {!state.data && <CatalogStatus {...state} />}
+      {state.data && !state.data.items.length && (
+        <p className="py-12 text-muted-foreground">No selections yet.</p>
+      )}
+      <div className="space-y-6">
+        {state.data?.items.map((item) => {
+          const unread = item.reviewedRevision < item.revision;
+          return (
+            <section key={item.id} className="border-b border-border pb-6">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                    {unread ? "New" : "Done"} · {item.photoIds.length} frames
+                  </p>
+                  <h2 className="mt-1 text-lg font-semibold">
+                    {who(item)}
+                    <span className="font-normal text-muted-foreground"> · {item.galleryTitle}</span>
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {item.updatedAt && new Date(item.updatedAt).toLocaleString()}
                   </p>
                 </div>
-              ))}
-            </div>
-            <Button
-              className="mt-4"
-              variant="outline"
-              disabled={busy || p.reviewedRevision === p.revision}
-              onClick={async () => {
-                setBusy(true);
-                setMessage("");
-                try {
-                  await catalogFetch("op=proof-review", { id: p.id, revision: p.revision });
-                  state.reload();
-                } catch (error) {
-                  setMessage(error instanceof Error ? error.message : "Could not mark reviewed");
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              Mark this version reviewed
-            </Button>
-          </section>
-        ))}
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to="/galleries/$galleryId" params={{ galleryId: item.galleryId }}>
+                      Open gallery
+                    </Link>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={unread ? "default" : "outline"}
+                    disabled={busy || !unread}
+                    onClick={async () => {
+                      setBusy(true);
+                      setMessage("");
+                      try {
+                        await catalogFetch("op=proof-review", {
+                          id: item.id,
+                          revision: item.revision,
+                        });
+                        state.reload();
+                      } catch (error) {
+                        setMessage(
+                          error instanceof Error ? error.message : "Could not mark done",
+                        );
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    {unread ? "Mark done" : "Done"}
+                  </Button>
+                </div>
+              </div>
+              {item.note && (
+                <p className="mt-3 max-w-2xl whitespace-pre-wrap text-sm">{item.note}</p>
+              )}
+              <div className="mt-4 grid grid-cols-3 gap-1 sm:grid-cols-5 md:grid-cols-6">
+                {item.photos.map((photo) => (
+                  <img
+                    key={photo.id}
+                    src={photo.thumbSrc}
+                    alt={photo.filename}
+                    className={`aspect-[3/2] w-full object-cover ${photo.unavailable ? "opacity-40" : ""}`}
+                    loading="lazy"
+                  />
+                ))}
+              </div>
+            </section>
+          );
+        })}
       </div>
-      <nav aria-label="Proof inbox pages" className="mt-6 flex flex-wrap items-center gap-3">
+      <nav aria-label="Proof pages" className="mt-6 flex flex-wrap gap-2">
         <Button
           variant="outline"
-          disabled={busy || state.loading || !cursors.length}
+          size="sm"
+          disabled={!cursors.length}
           onClick={() => setCursors([])}
         >
-          First page
+          First
         </Button>
         <Button
           variant="outline"
-          disabled={busy || state.loading || !cursors.length}
+          size="sm"
+          disabled={!cursors.length}
           onClick={() => setCursors((value) => value.slice(0, -1))}
         >
-          Previous page
+          Previous
         </Button>
-        <span role="status">Page {cursors.length + 1}</span>
         <Button
           variant="outline"
-          disabled={busy || state.loading || !state.data?.nextCursor}
+          size="sm"
+          disabled={!state.data?.nextCursor}
           onClick={() => {
             if (state.data?.nextCursor) setCursors((value) => [...value, state.data!.nextCursor!]);
           }}
         >
-          Next page
+          Next
         </Button>
       </nav>
-      <p className="mt-3 text-sm text-muted-foreground">
-        New submissions may move to an earlier page. Return to the first page and refresh to see the
-        latest changes.
-      </p>
     </div>
   );
 }

@@ -173,7 +173,7 @@ test("bounded reader rejects oversized metadata before reading, cancels overflow
     "Each chunk is copied directly into the one bounded buffer",
   );
   if (chunked.status === "verified") assert.deepEqual(chunked.bytes, bytes);
-  await assert.rejects(readVerifiedOriginal(object(), 20 * 1024 * 1024 + 1, checksum), /safely/);
+  await assert.rejects(readVerifiedOriginal(object(), 40 * 1024 * 1024 + 1, checksum), /safely/);
   await assert.rejects(readVerifiedOriginal(object(), bytes.length, "bad"), /safely/);
   await assert.rejects(
     readVerifiedOriginal(

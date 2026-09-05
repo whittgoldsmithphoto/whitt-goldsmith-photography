@@ -43,3 +43,18 @@ export function filterAndSortOwnerPhotos(
     })
     .map(({ photo }) => photo);
 }
+
+export function reorderPhotoIds(ids: readonly string[], from: number, to: number): string[] {
+  if (
+    from === to ||
+    from < 0 ||
+    to < 0 ||
+    from >= ids.length ||
+    to >= ids.length
+  )
+    return [...ids];
+  const next = [...ids];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
+}

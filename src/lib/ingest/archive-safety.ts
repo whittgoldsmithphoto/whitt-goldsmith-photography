@@ -1,3 +1,4 @@
+import { MAX_PHOTO_BYTES } from "../catalog/upload-limits.ts";
 import { validateFolderManifest, type ManifestLimits, type ManifestFile } from "./folder-manifest.ts";
 
 /** Metadata read from an archive central directory. No archive bytes are extracted here. */
@@ -21,7 +22,7 @@ export interface ArchiveSafetyLimits extends ManifestLimits {
 export const DEFAULT_ARCHIVE_SAFETY_LIMITS: Readonly<ArchiveSafetyLimits> = Object.freeze({
   maxFiles: 1000,
   maxDepth: 8,
-  maxFileBytes: 20 * 1024 * 1024,
+  maxFileBytes: MAX_PHOTO_BYTES,
   maxTotalBytes: 1024 * 1024 * 1024,
   maxArchiveBytes: 1024 * 1024 * 1024,
   maxCompressionRatio: 100,

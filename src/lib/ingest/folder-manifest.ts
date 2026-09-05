@@ -1,6 +1,8 @@
 /** Declaration validation only. The upload worker must independently inspect bytes,
  * verify sizes/checksums, and reject links before creating private assets.
  * This is not a ZIP parser or permission to extract an archive. */
+import { MAX_PHOTO_BYTES } from "../catalog/upload-limits.ts";
+
 export interface ManifestLimits {
   maxFiles: number;
   maxDepth: number;
@@ -11,7 +13,7 @@ export interface ManifestLimits {
 export const DEFAULT_MANIFEST_LIMITS: Readonly<ManifestLimits> = Object.freeze({
   maxFiles: 1000,
   maxDepth: 8,
-  maxFileBytes: 20 * 1024 * 1024,
+  maxFileBytes: MAX_PHOTO_BYTES,
   maxTotalBytes: 1024 * 1024 * 1024,
 });
 

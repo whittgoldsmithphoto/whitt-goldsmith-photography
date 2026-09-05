@@ -87,13 +87,13 @@ test("stop finishes current file and never reserves remaining files", async () =
 test("unsupported and oversized files fail before any network operation", async () => {
   const results = await uploadBatch({
     galleryId: "gallery",
-    files: [file("raw.nef", "application/octet-stream"), { ...file(), size: 20 * 1024 * 1024 + 1 }],
+    files: [file("raw.nef", "application/octet-stream"), { ...file(), size: 40 * 1024 * 1024 + 1 }],
     onItem: () => {},
     transport: async () => {
       throw new Error("Network must not be used");
     },
   });
-  assert.ok(results.every((item) => item.state === "failed" && item.error?.includes("20 MiB")));
+  assert.ok(results.every((item) => item.state === "failed" && item.error?.includes("40 MB")));
 });
 test("uncertain completion cannot be reported as successful", async () => {
   const results = await uploadBatch({

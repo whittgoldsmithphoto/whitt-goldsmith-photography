@@ -100,5 +100,7 @@ export type OwnerProof = ProofSelection & {
   id: string;
   galleryTitle: string;
   reviewedRevision: number;
+  customerName?: string;
+  customerEmail?: string;
   photos: { id: string; filename: string; thumbSrc: string; unavailable: boolean }[];
 };

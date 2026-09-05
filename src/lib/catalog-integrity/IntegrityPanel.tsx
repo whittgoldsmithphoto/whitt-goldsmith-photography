@@ -32,7 +32,7 @@ export function IntegrityPanel({ photoId }: { photoId: string }) {
         !Number.isFinite(Date.parse(body.checkedAt)) ||
         !Number.isInteger(body.expectedBytes) ||
         body.expectedBytes < 1 ||
-        body.expectedBytes > 20 * 1024 * 1024 ||
+        body.expectedBytes > 40 * 1024 * 1024 ||
         typeof body.message !== "string" ||
         body.message.length < 1 ||
         body.message.length > 1000

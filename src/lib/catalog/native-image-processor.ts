@@ -5,6 +5,7 @@ import {
   type DerivativeVariantName,
 } from "./media-variants.ts";
 import { privateMetadataFreeJpeg } from "./jpeg-privacy.ts";
+import { MAX_PHOTO_BYTES } from "./upload-limits.ts";
 
 export type NativeProcessorErrorCode =
   "processor_unavailable" | "invalid_input" | "invalid_output" | "output_too_large";
@@ -29,7 +30,7 @@ export interface NativeImagesBinding {
   info(bytes: ReadableStream<Uint8Array>): Promise<unknown>;
 }
 
-const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
+const MAX_SOURCE_BYTES = MAX_PHOTO_BYTES;
 const MAX_WATERMARK_BYTES = 5 * 1024 * 1024;
 const MAX_DERIVATIVE_BYTES = 8 * 1024 * 1024;
 const MAX_PIXELS = 60_000_000;

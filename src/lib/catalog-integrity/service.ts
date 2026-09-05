@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Sql } from "../db.ts";
 import { CatalogError } from "../catalog/errors.ts";
+import { MAX_PHOTO_BYTES } from "../catalog/upload-limits.ts";
 
 export const integrityInput = z.object({ photoId: z.string().uuid() }).strict();
 export type IntegrityObject = { size: number; body: ReadableStream<Uint8Array> };
@@ -12,7 +13,7 @@ export type IntegrityResult = {
   expectedBytes: number;
   message: string;
 };
-const MAX_BYTES = 20 * 1024 * 1024;
+const MAX_BYTES = MAX_PHOTO_BYTES;
 export async function readVerifiedOriginal(
   object: IntegrityObject,
   expectedBytes: number,

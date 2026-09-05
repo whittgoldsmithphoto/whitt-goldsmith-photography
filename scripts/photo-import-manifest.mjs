@@ -4,7 +4,7 @@ import { lstat, open, readdir, realpath, writeFile } from "node:fs/promises";
 import { basename, extname, resolve, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
-export const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
+export const MAX_IMPORT_BYTES = 40 * 1024 * 1024;
 const MAX_FILES = 10000;
 const suffixes = new Set([".jpg", ".jpeg", ".png"]);
 

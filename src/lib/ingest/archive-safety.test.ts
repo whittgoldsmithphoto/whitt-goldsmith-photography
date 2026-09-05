@@ -27,7 +27,7 @@ test("rejects compression bombs and archive budgets before extraction", () => {
   assert.throws(() => validateArchiveEntries([entry("frame.jpg", { compressedSize: 1, uncompressedSize: 101 })]), /compression/);
   assert.throws(() => validateArchiveEntries([entry("frame.jpg", { compressedSize: 0 })]), /compression/);
   assert.throws(() => validateArchiveEntries([entry("frame.jpg", { compressedSize: 101, uncompressedSize: 101 })], { maxArchiveBytes: 100 }), /compressed/);
-  assert.throws(() => validateArchiveEntries([entry("frame.jpg", { uncompressedSize: 20 * 1024 * 1024 + 1 })]), /uncompressed/);
+  assert.throws(() => validateArchiveEntries([entry("frame.jpg", { uncompressedSize: 40 * 1024 * 1024 + 1 })]), /uncompressed/);
 });
 
 test("rejects malformed sizes, unsupported formats, and collisions", () => {

@@ -335,21 +335,26 @@ export function CommercePricing() {
   }
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-5 py-8">
-      <header className="space-y-3">
-        <h1 className="text-3xl font-semibold">Selling</h1>
-        <p className="max-w-3xl text-muted-foreground">
-          Prices, discounts, and orders in one place.
+      <header className="space-y-2">
+        <h1 className="text-xl font-semibold">Selling</h1>
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          Digital files only for now. Checkout is {sandboxAvailable ? "available in sandbox" : "still off"}
+          — live charges stay disabled until you turn them on.
         </p>
-        <details className="border-l-2 border-border pl-4 text-sm">
-          <summary className="cursor-pointer py-2 font-medium">
-            {sandboxAvailable ? "Owner sandbox checkout is enabled" : "Checkout is disabled"}
-          </summary>
-          <p className="max-w-3xl pb-2 text-muted-foreground">
-            These are configuration and quote tools, not a live store. Stripe, tax assessment, print
-            shipping, and fulfillment still require acceptance testing.
-          </p>
-        </details>
       </header>
+      {error && (
+        <div role="alert" className="rounded border border-border p-4">
+          {error}{" "}
+          <button className="underline" onClick={() => void reload()}>
+            Retry
+          </button>
+        </div>
+      )}
+      {notice && <p role="status">{notice}</p>}
+      {data && <SellingDesk data={data} busy={busy} onSave={save} galleries={galleries} />}
+      <details className="border-t border-border pt-4">
+        <summary className="cursor-pointer py-2 text-sm font-medium">Advanced price lists, coupons, and test quotes</summary>
+        <div className="pt-4">
       <div
         role="tablist"
         aria-label="Selling tools"
@@ -1049,6 +1054,158 @@ export function CommercePricing() {
           </section>
         </>
       )}
+        </div>
+      </details>
+    </div>
+  );
+}
+
+function dollars(cents: number) {
+  return (cents / 100).toFixed(2);
+}
+
+function SellingDesk({
+  data,
+  busy,
+  galleries,
+  onSave,
+}: {
+  data: Pricing;
+  busy: boolean;
+  galleries: GalleryOption[];
+  onSave: (
+    event: FormEvent<HTMLFormElement>,
+    op: string,
+    make: (form: FormData) => unknown,
+  ) => Promise<void>;
+}) {
+  const digital = data.products.find((item) => item.kind === "digital_photo") || data.products[0];
+  const list = data.priceLists.find((item) => item.is_default) || data.priceLists[0];
+  const price =
+    digital && list
+      ? data.prices.find((item) => item.product_id === digital.id && item.price_list_id === list.id)
+      : undefined;
+  return (
+    <div className="grid gap-8 border-b border-border pb-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(16rem,1fr)]">
+      <section className="space-y-4">
+        <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Digital download
+        </h2>
+        {digital && list ? (
+          <>
+            <form
+              className="max-w-lg space-y-4"
+              onSubmit={(event) =>
+                void onSave(event, "product", (fields) => ({
+                  id: digital.id,
+                  name: String(fields.get("name")),
+                  license: String(fields.get("license")),
+                  active: true,
+                  kind: digital.kind,
+                }))
+              }
+            >
+              <label className="block text-sm">
+                Name
+                <input
+                  name="name"
+                  required
+                  maxLength={160}
+                  defaultValue={digital.name}
+                  className={fieldClass}
+                />
+              </label>
+              <label className="block text-sm">
+                License
+                <textarea
+                  name="license"
+                  required
+                  maxLength={4000}
+                  rows={3}
+                  defaultValue={digital.license}
+                  className={fieldClass}
+                />
+              </label>
+              <button disabled={busy} className={buttonClass}>
+                Save name & license
+              </button>
+            </form>
+            <form
+              className="max-w-lg space-y-4"
+              onSubmit={(event) =>
+                void onSave(event, "price", (fields) => ({
+                  priceListId: list.id,
+                  productId: digital.id,
+                  unitCents: Math.round(Number(fields.get("price")) * 100),
+                }))
+              }
+            >
+              <label className="block text-sm">
+                Price (USD)
+                <input
+                  name="price"
+                  type="number"
+                  required
+                  min="0.5"
+                  step="0.01"
+                  defaultValue={price ? dollars(price.unit_cents) : "4.95"}
+                  className={fieldClass}
+                />
+              </label>
+              <button disabled={busy} className={buttonClass}>
+                Save price
+              </button>
+            </form>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No digital product is saved yet. Open Advanced below to create one, then it will appear
+            here.
+          </p>
+        )}
+        {list && (
+          <form
+            className="max-w-lg space-y-3"
+            onSubmit={(event) =>
+              void onSave(event, "gallery-price", (fields) => ({
+                galleryId: String(fields.get("gallery")),
+                priceListId: list.id,
+              }))
+            }
+          >
+            <label className="block text-sm">
+              Use this price on a gallery
+              <select name="gallery" required className={fieldClass} aria-label="Gallery">
+                <option value="">Choose gallery</option>
+                {galleries.map((gallery) => (
+                  <option key={gallery.id} value={gallery.id}>
+                    {gallery.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button disabled={busy || !galleries.length} className={buttonClass}>
+              Apply to gallery
+            </button>
+          </form>
+        )}
+      </section>
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Orders
+        </h2>
+        {data.orders.length ? (
+          <ul className="mt-3 space-y-2 text-sm">
+            {data.orders.map((order) => (
+              <li key={order.id}>
+                {order.status} · ${dollars(order.total_cents)}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-3 text-sm text-muted-foreground">No orders yet.</p>
+        )}
+      </section>
     </div>
   );
 }

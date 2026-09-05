@@ -1,8 +1,9 @@
 import { z } from "zod";
 import type { Sql } from "../db.ts";
 import { createCommerce } from "./service.ts";
+import { MAX_PHOTO_BYTES } from "../catalog/upload-limits.ts";
 
-const maxOriginalBytes = 20 * 1024 * 1024;
+const maxOriginalBytes = MAX_PHOTO_BYTES;
 export class CustomerDownloadError extends Error {
   status: number;
   constructor(message = "Download unavailable", status = 404) {

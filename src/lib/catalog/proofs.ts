@@ -12,10 +12,13 @@ import {
 type ProofRow = {
   id: string;
   gallery_id: string;
+  customer_id: string;
   note: string;
   revision: number;
   reviewed_revision: number;
   updated_at: string | Date;
+  customer_name?: string | null;
+  customer_email?: string | null;
 };
 type Access = (galleryId: string, token?: string) => Promise<{ access_version: number }>;
 const schema = z
@@ -158,6 +161,8 @@ export function createProofService(sql: Sql, access: Access) {
           id: p.id,
           galleryId: p.gallery_id,
           galleryTitle: p.gallery_title,
+          customerName: undefined,
+          customerEmail: p.customer_id?.includes("@") ? p.customer_id : undefined,
           note: p.note,
           revision: p.revision,
           reviewedRevision: p.reviewed_revision,

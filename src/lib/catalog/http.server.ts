@@ -6,6 +6,7 @@ import { assertCatalogOwner } from "./owner";
 import { proofQuerySchema } from "./proof-query";
 import { createFolderService } from "./folders";
 import { dispatchMediaJob } from "./media-queue.server";
+import { MAX_PHOTO_BYTES } from "./upload-limits";
 
 const headers = {
   "Cache-Control": "private, no-store",
@@ -162,7 +163,7 @@ export async function catalogRequest(request: Request): Promise<Response> {
         const actor = await owner();
         const uploaded = await catalog.uploadOriginal(
           id,
-          await readLimited(request, 20 * 1024 * 1024),
+          await readLimited(request, MAX_PHOTO_BYTES),
           actor,
         );
         if (await dispatchMediaJob(uploaded.jobId))
