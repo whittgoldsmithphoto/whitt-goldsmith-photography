@@ -20,6 +20,7 @@ async function fetch(request: Request, env: unknown, ctx: ExecutionContext): Pro
   const contentType = response.headers.get("content-type") ?? "";
   if (contentType.includes("text/html")) {
     const headers = new Headers(response.headers);
+    headers.set("x-wgp-revision", import.meta.env.VITE_BUILD_REVISION || "development");
     headers.set("cache-control", "no-cache, no-store, must-revalidate");
     headers.set("pragma", "no-cache");
     headers.set("expires", "0");

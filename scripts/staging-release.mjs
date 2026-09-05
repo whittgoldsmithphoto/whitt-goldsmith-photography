@@ -10,6 +10,11 @@ function run(command, args) {
   // would resolve it again and append a second '-staging' suffix.
   const buildOrDeploy = args[0] === "scripts/with-app-env.mjs";
   const env = stagingEnvironment(buildOrDeploy);
+  if (buildOrDeploy) {
+    const revision = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" });
+    if (revision.status !== 0) throw new Error("Cannot identify release revision");
+    env.VITE_BUILD_REVISION = revision.stdout.trim();
+  }
   const r = spawnSync(command, args, {
     stdio: "inherit",
     env,
