@@ -7,7 +7,7 @@ export interface R2MultipartBinding {
     key: string,
     options?: { httpMetadata?: { contentType?: string } },
   ): Promise<R2MultipartUpload>;
-  resumeMultipartUpload(uploadId: string, key: string): R2MultipartUpload;
+  resumeMultipartUpload(key: string, uploadId: string): R2MultipartUpload;
   get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
 }
 interface R2MultipartUpload {
@@ -36,21 +36,23 @@ export function createR2MultipartStore(bucket: R2MultipartBinding): MultipartTra
       return { uploadId: upload.uploadId };
     },
     async uploadPart({ uploadId, objectKey, number, bytes }) {
-      const uploaded = await bucket.resumeMultipartUpload(uploadId, objectKey).uploadPart(number, bytes);
+      const uploaded = await bucket
+        .resumeMultipartUpload(objectKey, uploadId)
+        .uploadPart(number, bytes);
       if (!uploaded?.etag) throw new Error("R2 multipart part did not return an ETag");
       return { etag: uploaded.etag };
     },
     async complete({ uploadId, objectKey, parts }) {
-      await bucket.resumeMultipartUpload(uploadId, objectKey).complete(
-        parts.map(({ number, etag }) => ({ partNumber: number, etag })),
-      );
+      await bucket
+        .resumeMultipartUpload(objectKey, uploadId)
+        .complete(parts.map(({ number, etag }) => ({ partNumber: number, etag })));
       const object = await bucket.get(objectKey);
       if (!object) throw new Error("R2 multipart object is missing after completion");
       const bytes = new Uint8Array(await object.arrayBuffer());
       return { bytes: bytes.byteLength, checksum: await sha256(bytes) };
     },
     async abort({ uploadId, objectKey }) {
-      await bucket.resumeMultipartUpload(uploadId, objectKey).abort();
+      await bucket.resumeMultipartUpload(objectKey, uploadId).abort();
     },
   };
 }

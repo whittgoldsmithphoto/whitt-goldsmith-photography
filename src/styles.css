@@ -1,41 +1,41 @@
+@import url("https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
-@import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Source+Serif+4:opsz,ital,wght@8..60,0,400;8..60,0,600;8..60,1,400&display=swap");
 
 @theme {
   --font-sans: "IBM Plex Sans", "Segoe UI", sans-serif;
-  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-display: "Oswald", "Arial Narrow", sans-serif;
   --font-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
 
-  --color-background: #f3ead6;
-  --color-foreground: #1c1610;
-  --color-card: #f7f1e3;
-  --color-card-foreground: #1c1610;
-  --color-popover: #f7f1e3;
-  --color-popover-foreground: #1c1610;
-  --color-primary: #c94b12;
-  --color-primary-foreground: #fff7ee;
-  --color-secondary: #e6d9bf;
-  --color-secondary-foreground: #1c1610;
-  --color-muted: #e6d9bf;
-  --color-muted-foreground: #5e5549;
-  --color-accent: #ecdfc6;
-  --color-accent-foreground: #1c1610;
-  --color-destructive: #9b2c14;
-  --color-destructive-foreground: #fff7ee;
-  --color-border: #cfc0a4;
-  --color-input: #7d7162;
-  --color-ring: #c94b12;
-  --color-scrim: rgb(28 22 16 / 0.55);
+  --color-background: #101418;
+  --color-foreground: #f1f3f5;
+  --color-card: #181e24;
+  --color-card-foreground: #f1f3f5;
+  --color-popover: #1c232b;
+  --color-popover-foreground: #f1f3f5;
+  --color-primary: #0866e6;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #242d37;
+  --color-secondary-foreground: #f1f3f5;
+  --color-muted: #202831;
+  --color-muted-foreground: #aab5c1;
+  --color-accent: #303d4b;
+  --color-accent-foreground: #ffffff;
+  --color-destructive: #ee707b;
+  --color-destructive-foreground: #101418;
+  --color-border: #35414e;
+  --color-input: #647588;
+  --color-ring: #6eafff;
+  --color-scrim: rgb(0 0 0 / 0.78);
 
-  --radius-sm: 2px;
-  --radius-md: 2px;
-  --radius-lg: 2px;
-  --radius-xl: 2px;
-  --radius-2xl: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 8px;
+  --radius-2xl: 8px;
 
-  --shadow-border: 0 0 0 1px rgb(28 22 16 / 0.16);
-  --shadow-border-hover: 0 0 0 1px rgb(28 22 16 / 0.32);
+  --shadow-border: 0 0 0 1px var(--color-border);
+  --shadow-border-hover: 0 0 0 1px var(--color-input);
 }
 
 @layer base {
@@ -44,6 +44,7 @@
   }
 
   html {
+    color-scheme: dark;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     background: var(--color-background);
@@ -71,7 +72,7 @@
     font-weight: 700;
     letter-spacing: -0.02em;
     text-transform: uppercase;
-    line-height: 0.92;
+    line-height: 1.08;
   }
 
   p {
@@ -84,7 +85,7 @@
   }
 
   ::selection {
-    background: rgb(201 75 18 / 0.28);
+    background: rgb(22 119 255 / 0.35);
     color: var(--color-foreground);
   }
 
@@ -111,8 +112,8 @@
 }
 
 .lede {
-  font-family: var(--font-serif);
-  font-style: italic;
+  font-family: var(--font-sans);
+  font-style: normal;
   font-weight: 400;
   line-height: 1.35;
 }
@@ -127,18 +128,10 @@
 }
 
 .public-card img {
-  filter: saturate(0.92) contrast(1.04);
-  transition: filter 240ms ease;
+  transition: transform 220ms ease;
 }
 .public-card:hover img {
-  filter: saturate(1) contrast(1.06);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .public-card img,
-  .public-card:hover img {
-    filter: none;
-  }
+  transform: scale(1.015);
 }
 
 .management-shell h1,
@@ -176,11 +169,50 @@
 }
 
 .catalog-frame {
-  background: #1a1712;
+  background: #090c10;
 }
 
 .owner-workspace h1 {
-  font-size: 1.15rem;
+  font-size: 1.5rem;
+}
+
+.studio-rail a {
+  border-left: 2px solid transparent;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+.studio-rail a:hover {
+  background: var(--color-secondary);
+}
+.studio-rail a[aria-current="page"] {
+  border-left-color: var(--color-ring);
+  background: var(--color-secondary);
+  color: var(--color-foreground);
+}
+
+select,
+input,
+textarea {
+  accent-color: var(--color-primary);
+}
+
+.owner-workspace [role="alert"] {
+  border-left: 3px solid var(--color-destructive);
+  padding: 0.75rem 1rem;
+  background: var(--color-card);
+}
+
+@media (forced-colors: active) {
+  button,
+  input,
+  select,
+  textarea {
+    border: 1px solid ButtonText;
+  }
+  .studio-rail a[aria-current="page"] {
+    border-left: 3px solid Highlight;
+  }
 }
 
 .owner-workspace input:not([type="checkbox"]):not([type="radio"]),

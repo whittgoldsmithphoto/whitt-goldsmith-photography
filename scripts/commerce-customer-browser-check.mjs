@@ -158,10 +158,7 @@ try {
   await page.getByRole("heading", { name: "Your purchases", exact: true }).waitFor();
   await page.getByText(`Order ${order.id}`, { exact: true }).click();
   await page.getByRole("heading", { name: "pending", exact: true }).waitFor();
-  assert.equal(
-    await page.getByRole("button", { name: "Download original", exact: true }).count(),
-    0,
-  );
+  assert.equal(await page.getByRole("button", { name: /^Download original / }).count(), 0);
   await page.goto(`${origin}/checkout/cancel?orderId=${order.id}`);
   await page.getByRole("heading", { name: "Checkout closed", exact: true }).waitFor();
   await page.getByRole("heading", { name: "pending", exact: true }).waitFor();
@@ -174,7 +171,9 @@ try {
   await commerce.applyVerifiedPayment(event);
   await page.getByRole("heading", { name: "paid", exact: true }).waitFor({ timeout: 15000 });
   const downloadEvent = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download original", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Download original synthetic-purchase.jpg", exact: true })
+    .click();
   const download = await downloadEvent;
   assert.equal(download.suggestedFilename(), "synthetic-purchase.jpg");
   assert.deepEqual(new Uint8Array(await readFile(await download.path())), original);
@@ -195,10 +194,7 @@ try {
   });
   await page.getByRole("button", { name: "Refresh order status", exact: true }).click();
   await page.getByRole("heading", { name: "refunded", exact: true }).waitFor();
-  assert.equal(
-    await page.getByRole("button", { name: "Download original", exact: true }).count(),
-    0,
-  );
+  assert.equal(await page.getByRole("button", { name: /^Download original / }).count(), 0);
   const revoked = await customer.request.post(`${origin}/api/commerce-download`, {
     headers: { Origin: origin },
     data: { op: "issue", entitlementId: entitlement.id },
@@ -213,6 +209,9 @@ try {
   console.log("Checking owner pricing editor");
   ownerPage.on("pageerror", (error) => errors.push(error.message));
   await ownerPage.goto(`${origin}/sell`);
+  await ownerPage
+    .getByText("Advanced price lists, coupons, and test quotes", { exact: true })
+    .click();
   const tabs = ownerPage.getByRole("tab");
   await tabs.first().waitFor();
   assert.equal(await tabs.count(), 4, "Selling exposes four accessible tabs");
@@ -223,7 +222,11 @@ try {
   assert.equal(await tabs.nth(3).getAttribute("aria-selected"), "true");
   await tabs.nth(3).press("Home");
   assert.equal(await tabs.first().getAttribute("aria-selected"), "true");
-  assert.equal(await ownerPage.getByLabel("Gallery", { exact: true }).count(), 1);
+  assert.equal(
+    await ownerPage.getByLabel("Gallery", { exact: true }).count(),
+    2,
+    "Simple gallery assignment and advanced pricing gallery remain available",
+  );
   assert.equal(await ownerPage.getByLabel("Gallery ID", { exact: true }).count(), 0);
   assert.equal(await ownerPage.getByLabel("Photo ID", { exact: true }).count(), 0);
   await ownerPage.getByRole("tab", { name: "Test quote", exact: true }).click();
@@ -232,9 +235,7 @@ try {
   const quotePhoto = quotePanel.getByLabel("Photo", { exact: true });
   await quoteGallery.selectOption({ label: "SYNTHETIC COMMERCE FIXTURE" });
   assert.equal(
-    await quoteGallery
-      .getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true })
-      .count(),
+    await quoteGallery.getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true }).count(),
     0,
     "Later gallery page is initially absent",
   );
@@ -251,7 +252,9 @@ try {
     .getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true })
     .waitFor({ state: "attached" });
   assert.equal(
-    await pricingGallery.getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true }).count(),
+    await pricingGallery
+      .getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true })
+      .count(),
     1,
     "Pricing gallery selector exposes later page",
   );
@@ -262,7 +265,9 @@ try {
     .getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true })
     .waitFor({ state: "attached" });
   assert.equal(
-    await couponGallery.getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true }).count(),
+    await couponGallery
+      .getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true })
+      .count(),
     1,
     "Discount gallery selector exposes later page",
   );
@@ -318,6 +323,9 @@ try {
     .getByRole("button", { name: "Edit price for 8x10 browser print in Fixture", exact: true })
     .waitFor();
   await ownerPage.reload();
+  await ownerPage
+    .getByText("Advanced price lists, coupons, and test quotes", { exact: true })
+    .click();
   await ownerPage
     .getByRole("button", { name: "Edit price for 8x10 browser print in Fixture", exact: true })
     .click();

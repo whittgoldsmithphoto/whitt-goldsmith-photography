@@ -3,6 +3,7 @@ import { apiFetch } from "@/lib/auth/api-fetch";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { Button } from "@/components/ui/button";
 import type { QuoteItem } from "@/lib/catalog-commerce/service";
+import { entitlementsForItem } from "@/lib/catalog-commerce/order-items";
 import { useResourcePage } from "@/lib/catalog/resource-client";
 
 type OrderSummary = {
@@ -56,7 +57,7 @@ function CustomerGate({ children }: { children: ReactNode }) {
 }
 function Frame({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <main className="mx-auto max-w-3xl px-5 py-12 sm:py-20">
+    <section className="mx-auto max-w-3xl px-5 py-12 sm:py-20">
       <p className="mb-3 text-xs uppercase tracking-[0.2em] text-muted-foreground">
         Whitt Goldsmith Photography
       </p>
@@ -70,7 +71,7 @@ function Frame({ title, children }: { title: string; children: ReactNode }) {
           Your purchases
         </a>
       </nav>
-    </main>
+    </section>
   );
 }
 export function PurchasesPage() {
@@ -237,10 +238,7 @@ function OrderDetail({ orderId }: { orderId: string }) {
       </div>
       <ul className="divide-y rounded-lg border">
         {order.items.map((item, index) => {
-          const entitlements =
-            item.kind === "gallery_download"
-              ? order.entitlements || []
-              : order.entitlements?.filter((entry) => entry.photo_id === item.photoId) || [];
+          const entitlements = entitlementsForItem(item, order.entitlements);
           return (
             <li key={`${item.photoId}:${item.productId}:${index}`} className="space-y-2 p-4">
               <p className="break-words font-medium">{item.filename}</p>
@@ -344,12 +342,18 @@ function Download({
   }
   return (
     <div className="space-y-2 pt-2">
+      <p className="break-words text-sm font-medium">{filename}</p>
       <p className="text-xs text-muted-foreground">
         {entitlement.revoked_at
           ? "Download authorization revoked."
           : `${remaining} download attempts remaining · Expires ${date(entitlement.expires_at)}`}
       </p>
-      <Button variant="outline" disabled={!eligible || busy} onClick={() => void download()}>
+      <Button
+        variant="outline"
+        aria-label={`Download original ${filename}`}
+        disabled={!eligible || busy}
+        onClick={() => void download()}
+      >
         {busy ? "Preparing file…" : "Download original"}
       </Button>
       {complete && (

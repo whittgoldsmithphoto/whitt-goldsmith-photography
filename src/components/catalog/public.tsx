@@ -42,7 +42,7 @@ function Card({ gallery }: { gallery: GallerySummary }) {
       params={{ galleryId: gallery.id }}
       className="public-card group grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-4 sm:grid-cols-1 sm:items-stretch sm:gap-0"
     >
-      <div className="overflow-hidden bg-[#1a1712]">
+      <div className="overflow-hidden bg-card">
         {cover ? (
           <ProtectedPhoto
             src={cover.thumbSrc}
@@ -64,7 +64,7 @@ function Card({ gallery }: { gallery: GallerySummary }) {
           {gallery.category || "Gallery"}
           {gallery.photoCount ? ` · ${gallery.photoCount}` : ""}
         </p>
-        <h2 className="mt-1 text-[1.65rem] leading-none group-hover:text-primary sm:text-[1.85rem]">
+        <h2 className="mt-1 text-[1.65rem] leading-none group-hover:text-ring sm:text-[1.85rem]">
           {gallery.title}
         </h2>
       </div>
@@ -131,20 +131,20 @@ export function CatalogIndex({
             <Link
               to="/galleries/$galleryId"
               params={{ galleryId: listed[0].id }}
-              className="public-card relative min-h-[42vh] bg-[#1a1712] lg:min-h-full"
+              className="public-card relative min-h-[42vh] overflow-hidden bg-card lg:min-h-full"
             >
               <ProtectedPhoto
                 src={featured.src}
                 alt={featured.caption || listed[0].title}
                 className="h-full max-h-[78vh] w-full object-cover lg:max-h-none lg:absolute lg:inset-0"
               />
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent px-4 py-5 text-[#f3ead6] sm:px-6">
-                <p className="kicker text-[#f3ead6]/70">{listed[0].category || "Gallery"}</p>
+              <div className="absolute inset-x-0 bottom-0 bg-black/80 px-4 py-5 text-white sm:px-6">
+                <p className="kicker text-white/80">{listed[0].category || "Gallery"}</p>
                 <p className="masthead mt-1 text-3xl sm:text-4xl">{listed[0].title}</p>
               </div>
             </Link>
           ) : (
-            <div className="min-h-[32vh] bg-[#1a1712]" />
+            <div className="min-h-[32vh] bg-card" />
           )}
         </section>
       ) : (
@@ -161,110 +161,110 @@ export function CatalogIndex({
         </div>
       )}
       <div className="mx-auto max-w-[1440px] px-4 pb-24 sm:px-6 lg:px-10">
-      {page === "galleries" && (
-        <section
-          aria-label="Public gallery discovery"
-          className="my-10 space-y-10 border-y border-border py-10"
-        >
-          <div>
-            <h2 className="font-display text-3xl">Search galleries</h2>
-            <form
-              className="mt-5 flex max-w-xl flex-col gap-3 sm:flex-row sm:items-center"
-              onSubmit={(event) => {
-                event.preventDefault();
-                setSubmittedQuery(draftQuery.trim());
-              }}
-            >
-              <label htmlFor="gallery-search" className="sr-only">
-                Gallery title search
-              </label>
-              <Input
-                id="gallery-search"
-                className="min-h-12"
-                value={draftQuery}
-                onChange={(e) => setDraftQuery(e.target.value)}
-                placeholder="Event, team, or sport"
-              />
-              <Button className="min-h-12" type="submit">
-                Search
-              </Button>
-              {(draftQuery || submittedQuery) && (
+        {page === "galleries" && (
+          <section
+            aria-label="Public gallery discovery"
+            className="my-10 space-y-10 border-y border-border py-10"
+          >
+            <div>
+              <h2 className="font-display text-3xl">Search galleries</h2>
+              <form
+                className="mt-5 flex max-w-xl flex-col gap-3 sm:flex-row sm:items-center"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  setSubmittedQuery(draftQuery.trim());
+                }}
+              >
+                <label htmlFor="gallery-search" className="sr-only">
+                  Gallery title search
+                </label>
+                <Input
+                  id="gallery-search"
+                  className="min-h-12"
+                  value={draftQuery}
+                  onChange={(e) => setDraftQuery(e.target.value)}
+                  placeholder="Event, team, or sport"
+                />
+                <Button className="min-h-12" type="submit">
+                  Search
+                </Button>
+                {(draftQuery || submittedQuery) && (
+                  <Button
+                    variant="outline"
+                    className="min-h-12"
+                    type="button"
+                    onClick={() => {
+                      setDraftQuery("");
+                      setSubmittedQuery("");
+                    }}
+                  >
+                    Reset
+                  </Button>
+                )}
+              </form>
+              <p className="mt-3 text-sm text-muted-foreground" role="status">
+                {state.loading
+                  ? "Searching…"
+                  : `${listed.length} ${listed.length === 1 ? "gallery" : "galleries"}${visiblePage.page.hasMore ? " loaded" : ""}`}
+              </p>
+              {state.error && submittedQuery && (
+                <div role="alert" className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                  <span>Galleries are temporarily unavailable.</span>
+                  <Button type="button" variant="outline" onClick={state.reload}>
+                    Retry search
+                  </Button>
+                </div>
+              )}
+            </div>
+            {sportsSearch}
+          </section>
+        )}
+        {page !== "about" &&
+          ((home ? rest : listed).length ? (
+            <div className="grid gap-x-8 gap-y-8 pt-10 sm:grid-cols-2 sm:gap-y-12 lg:grid-cols-3">
+              {(home ? rest : listed).map((g) => (
+                <Card key={g.id} gallery={g} />
+              ))}
+            </div>
+          ) : home ? null : (
+            <div className="border-t border-border py-16">
+              <h2 className="font-display text-3xl">
+                {submittedQuery ? "No matching galleries" : "Galleries appear after each event"}
+              </h2>
+              <p className="mt-4 max-w-lg text-muted-foreground">
+                {submittedQuery
+                  ? "Try a team name, school, or a shorter search."
+                  : "When a collection is published, you can search it here, save favorites, and buy the files."}
+              </p>
+              {submittedQuery && (
                 <Button
                   variant="outline"
-                  className="min-h-12"
-                  type="button"
+                  className="mt-5"
                   onClick={() => {
                     setDraftQuery("");
                     setSubmittedQuery("");
                   }}
                 >
-                  Reset
+                  Reset search
                 </Button>
               )}
-            </form>
-            <p className="mt-3 text-sm text-muted-foreground" role="status">
-              {state.loading
-                ? "Searching…"
-                : `${listed.length} ${listed.length === 1 ? "gallery" : "galleries"}${visiblePage.page.hasMore ? " loaded" : ""}`}
-            </p>
-            {state.error && submittedQuery && (
-              <div role="alert" className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-                <span>Galleries are temporarily unavailable.</span>
-                <Button type="button" variant="outline" onClick={state.reload}>
-                  Retry search
-                </Button>
-              </div>
-            )}
-          </div>
-          {sportsSearch}
-        </section>
-      )}
-      {page !== "about" &&
-        ((home ? rest : listed).length ? (
-          <div className="grid gap-x-8 gap-y-8 pt-10 sm:grid-cols-2 sm:gap-y-12 lg:grid-cols-3">
-            {(home ? rest : listed).map((g) => (
-              <Card key={g.id} gallery={g} />
-            ))}
-          </div>
-        ) : home ? null : (
-          <div className="border-t border-border py-16">
-            <h2 className="font-display text-3xl">
-              {submittedQuery ? "No matching galleries" : "Galleries appear after each event"}
-            </h2>
-            <p className="mt-4 max-w-lg text-muted-foreground">
-              {submittedQuery
-                ? "Try a team name, school, or a shorter search."
-                : "When a collection is published, you can search it here, save favorites, and buy the files."}
-            </p>
-            {submittedQuery && (
-              <Button
-                variant="outline"
-                className="mt-5"
-                onClick={() => {
-                  setDraftQuery("");
-                  setSubmittedQuery("");
-                }}
-              >
-                Reset search
-              </Button>
-            )}
-          </div>
-        ))}
-      {page !== "about" && visiblePage.page.hasMore && (
-        <Button
-          variant="outline"
-          className="mt-8"
-          disabled={state.loading || state.loadingMore}
-          onClick={() => void state.loadMore()}
-        >
-          {state.loadingMore ? "Loading…" : "Load more galleries"}
-        </Button>
-      )}
-      {state.error && (
-        <p role="alert" className="mt-4">
-          Galleries are temporarily unavailable. Retry using Load more galleries.
-        </p>
-      )}
+            </div>
+          ))}
+        {page !== "about" && visiblePage.page.hasMore && (
+          <Button
+            variant="outline"
+            className="mt-8"
+            disabled={state.loading || state.loadingMore}
+            onClick={() => void state.loadMore()}
+          >
+            {state.loadingMore ? "Loading…" : "Load more galleries"}
+          </Button>
+        )}
+        {state.error && (
+          <p role="alert" className="mt-4">
+            Galleries are temporarily unavailable. Retry using Load more galleries.
+          </p>
+        )}
       </div>
     </div>
   );

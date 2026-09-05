@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 
 const PUBLIC_NAV = [
   { to: "/galleries" as const, label: "Find your photos" },
+  { to: "/purchases" as const, label: "Purchases" },
   { to: "/about" as const, label: "About" },
 ];
 
@@ -84,7 +85,9 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
 
   return (
     <TooltipProvider delayDuration={250}>
-      <div className={cn("min-h-svh bg-background text-foreground", inStudio && "management-shell")}>
+      <div
+        className={cn("min-h-svh bg-background text-foreground", inStudio && "management-shell")}
+      >
         <a
           href="#main-content"
           className="fixed left-4 top-2 z-[100] -translate-y-24 bg-primary px-4 py-3 text-primary-foreground focus:translate-y-0"
@@ -104,19 +107,22 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
               aria-label={inStudio ? "Studio shortcuts" : "Main navigation"}
               className="hidden items-center gap-5 md:flex"
             >
-              {nav.map((item) => (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className={cn(
-                    "kicker inline-flex h-12 items-center",
-                    active(item.to) ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-                  )}
-                  aria-current={active(item.to) ? "page" : undefined}
-                >
-                  {item.label}
-                </Link>
-              ))}
+              {!inStudio &&
+                nav.map((item) => (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    className={cn(
+                      "kicker inline-flex h-12 items-center",
+                      active(item.to)
+                        ? "text-foreground"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                    aria-current={active(item.to) ? "page" : undefined}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
               {isOwner && (
                 <Link
                   to={inStudio ? "/galleries" : "/organize"}
@@ -147,25 +153,29 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
                     aria-label={inStudio ? "Owner workspace" : "Main navigation"}
                     className="mt-8 flex flex-col gap-1"
                   >
-                    {(inStudio ? [...STUDIO_NAV, { to: "/galleries" as const, label: "View site" }] : PUBLIC_NAV).map(
-                      (item) => (
-                        <SheetClose key={item.to} asChild>
-                          <Link
-                            to={item.to}
-                            aria-current={active(item.to) ? "page" : undefined}
-                            className={cn(
-                              "flex min-h-12 items-center px-1 text-lg",
-                              active(item.to) && "font-semibold",
-                            )}
-                          >
-                            {item.label}
-                          </Link>
-                        </SheetClose>
-                      ),
-                    )}
+                    {(inStudio
+                      ? [...STUDIO_NAV, { to: "/galleries" as const, label: "View site" }]
+                      : PUBLIC_NAV
+                    ).map((item) => (
+                      <SheetClose key={item.to} asChild>
+                        <Link
+                          to={item.to}
+                          aria-current={active(item.to) ? "page" : undefined}
+                          className={cn(
+                            "flex min-h-12 items-center px-1 text-lg",
+                            active(item.to) && "font-semibold",
+                          )}
+                        >
+                          {item.label}
+                        </Link>
+                      </SheetClose>
+                    ))}
                     {isOwner && !inStudio && (
                       <SheetClose asChild>
-                        <Link to="/organize" className="mt-4 flex min-h-12 items-center border-t px-1">
+                        <Link
+                          to="/organize"
+                          className="mt-4 flex min-h-12 items-center border-t px-1"
+                        >
                           Studio
                         </Link>
                       </SheetClose>
@@ -182,10 +192,33 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
+        {inStudio && (
+          <aside className="studio-rail fixed bottom-0 left-0 top-16 z-30 hidden w-[184px] border-r bg-card px-3 py-7 md:block">
+            <p className="mb-4 px-3 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Your studio
+            </p>
+            <nav aria-label="Studio sections" className="space-y-1">
+              {STUDIO_NAV.map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  aria-current={active(item.to) ? "page" : undefined}
+                  className="flex min-h-11 items-center px-3 text-sm font-medium text-muted-foreground"
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
+          </aside>
+        )}
+
         <main
           id="main-content"
           tabIndex={-1}
-          className={cn("pt-14 sm:pt-16", inStudio && "owner-workspace pb-[4.75rem] md:pb-0")}
+          className={cn(
+            "pt-14 sm:pt-16",
+            inStudio && "owner-workspace pb-[4.75rem] md:pb-0 md:pl-[184px]",
+          )}
         >
           {legacyPage && (
             <SignedIn>
@@ -225,7 +258,7 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
                 aria-current={active(item.to) ? "page" : undefined}
                 className={cn(
                   "flex min-h-12 items-center justify-center text-[11px] font-semibold uppercase tracking-[0.12em]",
-                  active(item.to) ? "text-primary" : "text-muted-foreground",
+                  active(item.to) ? "text-ring" : "text-muted-foreground",
                 )}
               >
                 {item.label}
@@ -237,7 +270,7 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
         {pathname === "/login" || ownerPage ? null : <SiteFooter />}
 
         <Toaster
-          theme="light"
+          theme="dark"
           position="bottom-right"
           toastOptions={{
             className: "font-sans",

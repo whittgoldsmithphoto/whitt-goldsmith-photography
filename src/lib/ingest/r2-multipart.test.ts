@@ -23,7 +23,9 @@ test("R2 multipart adapter maps parts and verifies the completed object", async 
       calls.push(`create:${key}`);
       return upload;
     },
-    resumeMultipartUpload(uploadId: string, key: string) {
+    resumeMultipartUpload(key: string, uploadId: string) {
+      assert.equal(key, "o", "Cloudflare expects object key first");
+      assert.equal(uploadId, "u", "Cloudflare expects upload ID second");
       calls.push(`resume:${uploadId}:${key}`);
       return upload;
     },
@@ -33,14 +35,27 @@ test("R2 multipart adapter maps parts and verifies the completed object", async 
     },
   };
   const store = createR2MultipartStore(bucket);
-  assert.deepEqual(await store.create({ idempotencyKey: "i", objectKey: "o", mime: "image/jpeg" }), {
-    uploadId: "opaque-upload",
-  });
   assert.deepEqual(
-    await store.uploadPart({ uploadId: "u", objectKey: "o", number: 1, bytes: data, checksum: "ignored" }),
+    await store.create({ idempotencyKey: "i", objectKey: "o", mime: "image/jpeg" }),
+    {
+      uploadId: "opaque-upload",
+    },
+  );
+  assert.deepEqual(
+    await store.uploadPart({
+      uploadId: "u",
+      objectKey: "o",
+      number: 1,
+      bytes: data,
+      checksum: "ignored",
+    }),
     { etag: "etag-1" },
   );
-  const complete = await store.complete({ uploadId: "u", objectKey: "o", parts: [{ number: 1, etag: "etag-1" }] });
+  const complete = await store.complete({
+    uploadId: "u",
+    objectKey: "o",
+    parts: [{ number: 1, etag: "etag-1" }],
+  });
   assert.equal(complete.bytes, data.byteLength);
   assert.match(complete.checksum, /^[a-f0-9]{64}$/);
   await store.abort({ uploadId: "u", objectKey: "o" });

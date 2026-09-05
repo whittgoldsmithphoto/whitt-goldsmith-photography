@@ -25,7 +25,9 @@ try {
   assert.equal(Boolean(runtime.databaseConnectionString()), false, "Only local PGlite is allowed");
   const { getSql } = await server.ssrLoadModule("/src/lib/db.ts");
   const { createCatalog, digest } = await server.ssrLoadModule("/src/lib/catalog/repository.ts");
-  const { DERIVATIVE_VARIANT_NAMES } = await server.ssrLoadModule("/src/lib/catalog/media-variants.ts");
+  const { DERIVATIVE_VARIANT_NAMES } = await server.ssrLoadModule(
+    "/src/lib/catalog/media-variants.ts",
+  );
   const objects = new Map();
   const bytes = new Uint8Array([255, 216, 255, 1, 2, 3]);
   const catalog = createCatalog(await getSql(), {
@@ -39,9 +41,7 @@ try {
     process: async () => ({
       width: 600,
       height: 400,
-      variants: Object.fromEntries(
-        DERIVATIVE_VARIANT_NAMES.map((name) => [name, bytes]),
-      ),
+      variants: Object.fromEntries(DERIVATIVE_VARIANT_NAMES.map((name) => [name, bytes])),
     }),
   });
   let gallery = await catalog.saveGallery(
@@ -101,9 +101,7 @@ try {
   try {
     await warmupPage.goto(`${origin}/`, { waitUntil: "domcontentloaded" });
     await warmupPage.waitForLoadState("load");
-    await warmupPage
-      .getByRole("heading", { name: "Whitt Goldsmith Photography", exact: true })
-      .waitFor();
+    await warmupPage.getByRole("heading", { name: "Whitt Goldsmith", exact: true }).waitFor();
     assert.equal(
       warmupErrors.every((error) => error === transientOptimizerError),
       true,
@@ -112,9 +110,7 @@ try {
     warmupErrors.length = 0;
     await warmupPage.reload({ waitUntil: "domcontentloaded" });
     await warmupPage.waitForLoadState("load");
-    await warmupPage
-      .getByRole("heading", { name: "Whitt Goldsmith Photography", exact: true })
-      .waitFor();
+    await warmupPage.getByRole("heading", { name: "Whitt Goldsmith", exact: true }).waitFor();
     await warmupPage.setViewportSize({ width: 375, height: 900 });
     await warmupPage.getByRole("button", { name: "Open menu", exact: true }).click();
     await warmupPage.getByRole("dialog").waitFor();
@@ -233,8 +229,8 @@ try {
   );
   await ownerPage.goto(`${origin}/favorites`);
   await ownerPage.getByText("Please review this frame.", { exact: true }).waitFor();
-  await ownerPage.getByRole("button", { name: "Mark this version reviewed", exact: true }).click();
-  await ownerPage.getByRole("heading", { name: /SYNTHETIC LOCAL PROOF TEST · Reviewed/ }).waitFor();
+  await ownerPage.getByRole("button", { name: "Mark done", exact: true }).click();
+  await ownerPage.getByRole("button", { name: "Done", exact: true }).waitFor();
   await firstPage.getByLabel("Note to Whitt").fill("Updated from the first device.");
   await firstPage.getByRole("button", { name: "Save selection", exact: true }).click();
   await firstPage
@@ -249,7 +245,7 @@ try {
   );
   await ownerPage.getByRole("button", { name: "Refresh inbox", exact: true }).click();
   await ownerPage.getByText("Updated from the first device.", { exact: true }).waitFor();
-  await ownerPage.getByRole("heading", { name: /New or updated/ }).waitFor();
+  await ownerPage.getByRole("button", { name: "Mark done", exact: true }).waitFor();
   assert.equal(
     (await anonymous.request.get(`${origin}/api/catalog?op=owner-proof-page`)).status(),
     401,

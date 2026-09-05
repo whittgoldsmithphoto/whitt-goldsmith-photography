@@ -21,7 +21,12 @@ export function ProofInbox() {
   const [busy, setBusy] = useState(false);
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
-      <h1>Proofs</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1>Proofs</h1>
+        <Button variant="outline" size="sm" disabled={busy || state.loading} onClick={state.reload}>
+          Refresh inbox
+        </Button>
+      </div>
       <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
         Favorites parents and players saved from a gallery. Mark a set done when you have seen it.
         Email alerts are not on yet.
@@ -84,7 +89,10 @@ export function ProofInbox() {
                   </p>
                   <h2 className="mt-1 text-lg font-semibold">
                     {who(item)}
-                    <span className="font-normal text-muted-foreground"> · {item.galleryTitle}</span>
+                    <span className="font-normal text-muted-foreground">
+                      {" "}
+                      · {item.galleryTitle}
+                    </span>
                   </h2>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {item.updatedAt && new Date(item.updatedAt).toLocaleString()}
@@ -110,9 +118,7 @@ export function ProofInbox() {
                         });
                         state.reload();
                       } catch (error) {
-                        setMessage(
-                          error instanceof Error ? error.message : "Could not mark done",
-                        );
+                        setMessage(error instanceof Error ? error.message : "Could not mark done");
                       } finally {
                         setBusy(false);
                       }
