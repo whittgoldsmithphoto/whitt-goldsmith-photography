@@ -71,3 +71,7 @@ Still required: bind the core to durable archive jobs and immutable paid snapsho
 3. Independent backup destination selection, followed by indefinite-retention setup and a restore drill.
 
 The broader backlog above remains open. Production, prints, live checkout and custom-domain cutover have not been enabled by this repair pass.
+
+### Post-release verification
+
+Release `be682c062bb8f533d300b2a1e40c0eebc3d3aa51` passed 441 tests, typecheck and lint (zero errors; seven existing warnings). Cloudflare staging version `0044a432-2e4e-4567-ad95-a9a5b8a58679` was deployed and its revision plus 15 application assets verified. An authenticated browser reload confirmed the processing-pause notice. The organizer now displays eight visible football photos: several queued items completed before the pause took effect. The full 131-photo import and original-by-original acceptance are still unfinished.
