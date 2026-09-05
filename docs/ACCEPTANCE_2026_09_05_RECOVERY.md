@@ -20,6 +20,13 @@
 
 ## Remaining acceptance work
 
+### Subsequent customer ZIP integration
+
+- Staging migration 0032 committed with a gallery/environment guard, advisory lock and short transaction timeouts; no production migration was performed.
+- Customer album preparation/status controls, same-origin native form download and gated scheduled ZIP processing are now connected in source. Native form delivery avoids a browser-sized `blob()` buffer.
+- `node scripts/album-browser-check.mjs` passed with real local authentication/database/routes/UI and exact ZIP byte verification, one allowance consumed and cross-origin form denied. Payment and storage are synthetic in this test; hosted ZIP acceptance remains separate.
+- 465 automated tests passed before hosted rollout. New-window download behavior was corrected to same-window native attachment delivery during browser verification.
+
 1. Finish the active 131-photo upload, reconcile processing, verify final public previews and original checksums. Preserve duplicate originals until reviewed.
 2. Connect archive route, scheduler and bounded-memory customer download UI; apply migration safely; run hosted whole-album acceptance and independent-connection reservation/refund race tests.
 3. Run hosted single-photo checkout, duplicate webhook replay, failed/unpaid and refunded-order denial, expired-access denial and hostile fourth-request denial.

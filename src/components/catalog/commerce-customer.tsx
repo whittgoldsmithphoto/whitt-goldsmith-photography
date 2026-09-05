@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import type { QuoteItem } from "@/lib/catalog-commerce/service";
 import { entitlementsForItem } from "@/lib/catalog-commerce/order-items";
 import { useResourcePage } from "@/lib/catalog/resource-client";
+import { AlbumDownload } from "./album-download";
 
 type OrderSummary = {
   id: string;
@@ -249,9 +250,23 @@ function OrderDetail({ orderId }: { orderId: string }) {
               {order.status === "paid" && entitlements.length ? (
                 <div className="space-y-3">
                   {item.kind === "gallery_download" && (
-                    <p className="text-sm text-muted-foreground">
-                      {entitlements.length} photographs included in this gallery download.
-                    </p>
+                    <>
+                      <p className="text-sm text-muted-foreground">
+                        {entitlements.length} photographs included in this gallery download.
+                      </p>
+                      {order.items.length === 1 && (
+                        <AlbumDownload
+                          key={`${order.id}:${retry}`}
+                          orderId={order.id}
+                          eligible={entitlements.every(
+                            (e) =>
+                              !e.revoked_at &&
+                              e.downloads < e.max_downloads &&
+                              Date.parse(e.expires_at) > Date.now(),
+                          )}
+                        />
+                      )}
+                    </>
                   )}
                   {entitlements.map((entitlement) => (
                     <Download

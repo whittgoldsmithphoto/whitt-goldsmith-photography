@@ -34,3 +34,24 @@ test("archive requests require same-origin JSON and authenticated customers", as
   );
   assert.equal(calls, 1);
 });
+
+test("native form downloads reject duplicate fields and non-delivery operations", async () => {
+  const handler = createArchiveHandler(true, { user: async () => "buyer" } as never);
+  const post = (body: string) =>
+    handler(
+      new Request("https://photos.example/api/commerce-archive", {
+        method: "POST",
+        headers: {
+          origin: "https://photos.example",
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body,
+      }),
+    );
+  assert.equal((await post("op=request&orderId=018bcd19-0dc9-4795-b925-0f781e66dc54")).status, 400);
+  assert.equal(
+    (await post("op=deliver&op=deliver&jobId=018bcd19-0dc9-4795-b925-0f781e66dc54")).status,
+    400,
+  );
+  assert.equal((await post("x=" + "a".repeat(4097))).status, 413);
+});

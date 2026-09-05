@@ -197,12 +197,17 @@ test("archive access uses only the paid album snapshot and rejects changed acces
         };
       },
     });
-    const request = (op: string) =>
+    const request = (op: string, form = false) =>
       handler(
         new Request("https://photos.example/api/commerce-archive", {
           method: "POST",
-          headers: { origin: "https://photos.example", "content-type": "application/json" },
-          body: JSON.stringify({ op, jobId: job.id }),
+          headers: {
+            origin: "https://photos.example",
+            "content-type": form ? "application/x-www-form-urlencoded" : "application/json",
+          },
+          body: form
+            ? new URLSearchParams({ op, jobId: job.id }).toString()
+            : JSON.stringify({ op, jobId: job.id }),
         }),
       );
     identity = "intruder";
@@ -214,7 +219,7 @@ test("archive access uses only the paid album snapshot and rejects changed acces
     assert.equal((await request("deliver")).status, 503);
     corrupt = false;
     for (let i = 0; i < 3; i++) {
-      const response = await request("deliver");
+      const response = await request("deliver", i === 1);
       assert.equal(response.status, 200);
       assert.equal(response.headers.get("cache-control"), "private, no-store");
       assert.deepEqual(new Uint8Array(await response.arrayBuffer()), zipBytes);

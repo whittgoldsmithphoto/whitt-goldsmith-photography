@@ -29,6 +29,7 @@ import { Route as UploadRouteImport } from './routes/upload'
 import { Route as ApiCatalogRouteImport } from './routes/api/catalog'
 import { Route as ApiCatalogIntegrityRouteImport } from './routes/api/catalog-integrity'
 import { Route as ApiCommerceRouteImport } from './routes/api/commerce'
+import { Route as ApiCommerceArchiveRouteImport } from './routes/api/commerce-archive'
 import { Route as ApiCommerceDownloadRouteImport } from './routes/api/commerce-download'
 import { Route as ApiCommerceWebhookRouteImport } from './routes/api/commerce-webhook'
 import { Route as ApiSportsRouteImport } from './routes/api/sports'
@@ -146,6 +147,11 @@ const ApiCommerceRoute = ApiCommerceRouteImport.update({
   path: '/api/commerce',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCommerceArchiveRoute = ApiCommerceArchiveRouteImport.update({
+  id: '/api/commerce-archive',
+  path: '/api/commerce-archive',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCommerceDownloadRoute = ApiCommerceDownloadRouteImport.update({
   id: '/api/commerce-download',
   path: '/api/commerce-download',
@@ -248,6 +254,7 @@ export interface FileRoutesByFullPath {
   '/api/catalog': typeof ApiCatalogRoute
   '/api/catalog-integrity': typeof ApiCatalogIntegrityRoute
   '/api/commerce': typeof ApiCommerceRoute
+  '/api/commerce-archive': typeof ApiCommerceArchiveRoute
   '/api/commerce-download': typeof ApiCommerceDownloadRoute
   '/api/commerce-webhook': typeof ApiCommerceWebhookRoute
   '/api/sports': typeof ApiSportsRoute
@@ -284,6 +291,7 @@ export interface FileRoutesByTo {
   '/api/catalog': typeof ApiCatalogRoute
   '/api/catalog-integrity': typeof ApiCatalogIntegrityRoute
   '/api/commerce': typeof ApiCommerceRoute
+  '/api/commerce-archive': typeof ApiCommerceArchiveRoute
   '/api/commerce-download': typeof ApiCommerceDownloadRoute
   '/api/commerce-webhook': typeof ApiCommerceWebhookRoute
   '/api/sports': typeof ApiSportsRoute
@@ -323,6 +331,7 @@ export interface FileRoutesById {
   '/api/catalog': typeof ApiCatalogRoute
   '/api/catalog-integrity': typeof ApiCatalogIntegrityRoute
   '/api/commerce': typeof ApiCommerceRoute
+  '/api/commerce-archive': typeof ApiCommerceArchiveRoute
   '/api/commerce-download': typeof ApiCommerceDownloadRoute
   '/api/commerce-webhook': typeof ApiCommerceWebhookRoute
   '/api/sports': typeof ApiSportsRoute
@@ -363,6 +372,7 @@ export interface FileRouteTypes {
     | '/api/catalog'
     | '/api/catalog-integrity'
     | '/api/commerce'
+    | '/api/commerce-archive'
     | '/api/commerce-download'
     | '/api/commerce-webhook'
     | '/api/sports'
@@ -399,6 +409,7 @@ export interface FileRouteTypes {
     | '/api/catalog'
     | '/api/catalog-integrity'
     | '/api/commerce'
+    | '/api/commerce-archive'
     | '/api/commerce-download'
     | '/api/commerce-webhook'
     | '/api/sports'
@@ -437,6 +448,7 @@ export interface FileRouteTypes {
     | '/api/catalog'
     | '/api/catalog-integrity'
     | '/api/commerce'
+    | '/api/commerce-archive'
     | '/api/commerce-download'
     | '/api/commerce-webhook'
     | '/api/sports'
@@ -476,6 +488,7 @@ export interface RootRouteChildren {
   ApiCatalogRoute: typeof ApiCatalogRoute
   ApiCatalogIntegrityRoute: typeof ApiCatalogIntegrityRoute
   ApiCommerceRoute: typeof ApiCommerceRoute
+  ApiCommerceArchiveRoute: typeof ApiCommerceArchiveRoute
   ApiCommerceDownloadRoute: typeof ApiCommerceDownloadRoute
   ApiCommerceWebhookRoute: typeof ApiCommerceWebhookRoute
   ApiSportsRoute: typeof ApiSportsRoute
@@ -629,6 +642,13 @@ declare module '@tanstack/react-router' {
       path: '/api/commerce'
       fullPath: '/api/commerce'
       preLoaderRoute: typeof ApiCommerceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/commerce-archive': {
+      id: '/api/commerce-archive'
+      path: '/api/commerce-archive'
+      fullPath: '/api/commerce-archive'
+      preLoaderRoute: typeof ApiCommerceArchiveRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/commerce-download': {
@@ -807,6 +827,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCatalogRoute: ApiCatalogRoute,
   ApiCatalogIntegrityRoute: ApiCatalogIntegrityRoute,
   ApiCommerceRoute: ApiCommerceRoute,
+  ApiCommerceArchiveRoute: ApiCommerceArchiveRoute,
   ApiCommerceDownloadRoute: ApiCommerceDownloadRoute,
   ApiCommerceWebhookRoute: ApiCommerceWebhookRoute,
   ApiSportsRoute: ApiSportsRoute,

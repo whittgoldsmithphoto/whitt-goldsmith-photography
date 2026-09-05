@@ -31,8 +31,10 @@ export function createArchiveHandler(enabled: boolean, deps: Dependencies) {
     if (request.headers.get("origin") !== url.origin)
       return json({ error: "Same-origin request required" }, 403);
     if (url.search) return json({ error: "Query parameters are not supported" }, 400);
-    if (!(request.headers.get("content-type") || "").startsWith("application/json"))
-      return json({ error: "JSON required" }, 415);
+    const mediaType = request.headers.get("content-type")?.split(";")[0].trim();
+    const isForm = mediaType === "application/x-www-form-urlencoded";
+    if (mediaType !== "application/json" && !isForm)
+      return json({ error: "JSON or download form required" }, 415);
     let delivery: StoredArchive | undefined;
     try {
       const customer = await deps.user();
@@ -57,7 +59,15 @@ export function createArchiveHandler(enabled: boolean, deps: Dependencies) {
       }
       let raw: unknown;
       try {
-        raw = JSON.parse(body);
+        if (isForm) {
+          const fields = new URLSearchParams(body);
+          if (
+            [...fields.keys()].some((key) => fields.getAll(key).length !== 1) ||
+            fields.get("op") !== "deliver"
+          )
+            return json({ error: "Invalid download form" }, 400);
+          raw = Object.fromEntries(fields);
+        } else raw = JSON.parse(body);
       } catch {
         return json({ error: "Invalid JSON" }, 400);
       }

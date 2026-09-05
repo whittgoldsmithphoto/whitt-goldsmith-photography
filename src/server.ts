@@ -7,6 +7,7 @@ import { processMediaQueueBatch } from "./lib/catalog/media-queue";
 import { dispatchMediaJob } from "./lib/catalog/media-queue.server";
 import { cleanupExpiredUploads } from "./lib/catalog/upload-cleanup";
 import { runScheduledMaintenance } from "./lib/ops/scheduled-maintenance";
+import { processScheduledArchive } from "./lib/catalog-commerce/archive.server";
 
 type WorkerQueueBatch = Parameters<typeof processMediaQueueBatch>[0];
 
@@ -58,8 +59,10 @@ export default {
     const sql = await getSql();
     const result = await runScheduledMaintenance({
       cleanupExpiredUploads: () => cleanupExpiredUploads(sql, catalogMedia(), 25),
-      listDispatchableJobs: () => runtimeSetting("CATALOG_MEDIA_PROCESSING_PAUSED") === "true"
-        ? Promise.resolve([]) : listDispatchableMediaJobs(sql, 50),
+      listDispatchableJobs: () =>
+        runtimeSetting("CATALOG_MEDIA_PROCESSING_PAUSED") === "true"
+          ? Promise.resolve([])
+          : listDispatchableMediaJobs(sql, 50),
       dispatchMediaJob,
     });
     if (result.cleanupFailed || result.dispatchListFailed || result.dispatchFailed)
@@ -68,5 +71,12 @@ export default {
         dispatchListFailed: result.dispatchListFailed,
         dispatchFailed: result.dispatchFailed,
       });
+    try {
+      const archive = await processScheduledArchive();
+      if (archive === "retry")
+        console.error("Album archive will retry; no download was published.");
+    } catch {
+      console.error("Scheduled album processing failed; private job remains recoverable.");
+    }
   },
 };
