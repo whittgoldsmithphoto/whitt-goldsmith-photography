@@ -15,6 +15,14 @@ export function clearPhotoSelection(): string[] {
   return [];
 }
 
+export function resetSelectionOnGalleryChange(
+  previousGalleryId: string | null,
+  nextGalleryId: string | null,
+  selected: string[],
+): string[] {
+  return previousGalleryId === nextGalleryId ? selected : clearPhotoSelection();
+}
+
 export function selectedPhotoCount(
   selected: string[],
   photos: OwnerCatalogPhoto[],
@@ -37,8 +45,8 @@ export function planBulkPhotoAction(
       id: photo.id,
       revision: photo.revision,
       caption: photo.caption,
-      hidden: action === "hide" ? true : false,
-      archived: action === "archive" ? true : false,
+      hidden: action === "hide" ? true : action === "unhide" ? false : photo.hidden,
+      archived: action === "archive" ? true : action === "restore" ? false : photo.archived,
       displayOrder: photo.displayOrder,
     }));
 }

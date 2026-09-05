@@ -21,6 +21,7 @@ import {
 import {
   clearPhotoSelection,
   planBulkPhotoAction,
+  resetSelectionOnGalleryChange,
   selectAllVisiblePhotos,
   selectedPhotoCount,
   togglePhotoSelection,
@@ -158,6 +159,7 @@ export function CatalogOrganizer() {
         {libraryOpen && (
           <LibrarySearch
             onOpenGallery={(galleryId, photoId) => {
+              setSelectedPhotoIds((ids) => resetSelectionOnGalleryChange(selected, galleryId, ids));
               setSelected(galleryId);
               const photo = photos.find((item) => item.id === photoId);
               setPhotoDraft(
@@ -225,6 +227,7 @@ export function CatalogOrganizer() {
                 type="button"
                 disabled={busy}
                 onClick={() => {
+                  setSelectedPhotoIds((ids) => resetSelectionOnGalleryChange(selected, g.id, ids));
                   setSelected(g.id);
                   setPhotoDraft(null);
                 }}
