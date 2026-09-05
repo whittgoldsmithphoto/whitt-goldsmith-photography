@@ -89,6 +89,39 @@ try {
   ]);
   assert.match(invariant.stdout, /dev and build agree: sign-in on/);
   browser = await chromium.launch({ headless: true });
+  // Prime Vite's client dependency graph before the real proof pages attach their
+  // pageerror listeners. A fresh optimizer may emit this one known transient while
+  // the first disposable load is fetching the client entry; every other error is a
+  // failure. The reload must be clean and exercise hydrated client behavior.
+  const warmupContext = await browser.newContext();
+  const warmupPage = await warmupContext.newPage();
+  const warmupErrors = [];
+  warmupPage.on("pageerror", (error) => warmupErrors.push(error.message));
+  const transientOptimizerError = `Failed to fetch dynamically imported module: ${origin}/node_modules/@tanstack/react-start/dist/plugin/default-entry/client.tsx`;
+  try {
+    await warmupPage.goto(`${origin}/`, { waitUntil: "domcontentloaded" });
+    await warmupPage.waitForLoadState("load");
+    await warmupPage
+      .getByRole("heading", { name: "Whitt Goldsmith Photography", exact: true })
+      .waitFor();
+    assert.equal(
+      warmupErrors.every((error) => error === transientOptimizerError),
+      true,
+      `Unexpected Vite warmup browser error: ${warmupErrors.join("; ")}`,
+    );
+    warmupErrors.length = 0;
+    await warmupPage.reload({ waitUntil: "domcontentloaded" });
+    await warmupPage.waitForLoadState("load");
+    await warmupPage
+      .getByRole("heading", { name: "Whitt Goldsmith Photography", exact: true })
+      .waitFor();
+    await warmupPage.setViewportSize({ width: 375, height: 900 });
+    await warmupPage.getByRole("button", { name: "Open menu", exact: true }).click();
+    await warmupPage.getByRole("dialog").waitFor();
+    assert.deepEqual(warmupErrors, [], "Stable Vite client warmup has no browser errors");
+  } finally {
+    await warmupContext.close();
+  }
   const customer = await browser.newContext();
   const second = await browser.newContext();
   const owner = await browser.newContext();
