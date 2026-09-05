@@ -41,6 +41,14 @@ This is same-tab recovery, not persistent access to local files after a browser 
 
 ## Remaining sequence
 
+### Gallery layout checkpoint
+
+- Added persisted compact/comfortable layouts to the existing owner settings dialog. Compact remains the default for existing galleries; older clients that omit the field preserve its current value. No change to passwords, publication, purchases or original access.
+- Migration 0033 uses a constant default and a database constraint; no media backfill or external call is performed while changing the schema. This follows the database skill's short-lock guidance.
+- RED: the focused test failed because layout was undefined. GREEN: persistence, older-client preservation and invalid-layout rejection passed. Full suite: 479 tests passed; typecheck/build passed; lint zero errors and seven existing warnings.
+- Mounted browser verification saved the setting, reloaded the owner page, then verified one-column narrow and three-column desktop public rendering. Synthetic local media only. Hosted migration/deployment is still pending; named reusable presets are not yet implemented.
+- Recovery tab now reports 131/131 checked with one failed transfer (SWG01920.jpg). Retried that single failed transfer through the existing UI; final readiness remains to be checked. Existing batch processing labels are not a verified ready count.
+
 1. Complete Phase 0 visual baselines and record final checks for each commit.
 2. Finish hosted gallery/ZIP recovery and payment acceptance separately; current pending details are in ACCEPTANCE_2026_09_05_RECOVERY.md.
 3. Inventory existing gallery settings, folders, proofs and commerce before adding Phase 1 models. Prioritize missing behavior instead of parallel duplicate settings.

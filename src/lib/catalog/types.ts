@@ -5,6 +5,7 @@ export type CatalogGallery = {
   description: string;
   customerInstructions: string;
   downloadPolicy: "none" | "purchased_only";
+  layout?: "compact" | "comfortable";
   category: string;
   visibility: "private" | "public" | "unlisted";
   published: boolean;
@@ -66,6 +67,7 @@ export type GalleryInput = {
   description: string;
   customerInstructions?: string;
   downloadPolicy?: CatalogGallery["downloadPolicy"];
+  layout?: CatalogGallery["layout"];
   category: string;
   folderId: string | null;
   visibility: CatalogGallery["visibility"];

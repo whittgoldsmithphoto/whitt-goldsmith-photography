@@ -398,7 +398,13 @@ export function CatalogGalleryPage({ id }: { id: string }) {
         {photos.length} {photos.length === 1 ? "photograph" : "photographs"}
         {resource.data?.page.hasMore ? " loaded" : ""}
       </p>
-      <div className="grid grid-cols-2 gap-1 sm:gap-2 md:grid-cols-3 lg:grid-cols-4">
+      <div
+        className={
+          gallery.layout === "comfortable"
+            ? "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            : "grid grid-cols-2 gap-1 sm:gap-2 md:grid-cols-3 lg:grid-cols-4"
+        }
+      >
         {photos.map((p, i) => (
           <div key={p.id} className="min-w-0">
             <button

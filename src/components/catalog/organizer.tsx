@@ -151,6 +151,7 @@ export function CatalogOrganizer() {
             description: g.description,
             customerInstructions: g.customerInstructions,
             downloadPolicy: g.downloadPolicy,
+            layout: g.layout ?? "compact",
             category: g.category,
             folderId: g.folderId,
             visibility: g.visibility,
@@ -941,6 +942,20 @@ export function CatalogOrganizer() {
                   <option value="private">Private — only you</option>
                   <option value="unlisted">Unlisted — anyone with the link</option>
                   <option value="public">Public</option>
+                </select>
+              </label>
+              <label className="block text-sm">
+                Photo layout
+                <select
+                  aria-label="Photo layout"
+                  className="mt-1 block w-full rounded bg-secondary p-2"
+                  value={draft.layout ?? "compact"}
+                  onChange={(event) =>
+                    setDraft({ ...draft, layout: event.target.value as GalleryInput["layout"] })
+                  }
+                >
+                  <option value="compact">Compact — more photographs per row</option>
+                  <option value="comfortable">Comfortable — larger previews</option>
                 </select>
               </label>
               {draft.id && (

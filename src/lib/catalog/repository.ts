@@ -40,6 +40,7 @@ const gallerySchema = z
     description: z.string().trim().max(4000),
     customerInstructions: z.string().trim().max(4000).optional(),
     downloadPolicy: z.enum(["none", "purchased_only"]).optional(),
+    layout: z.enum(["compact", "comfortable"]).optional(),
     category: z.string().trim().min(1).max(100),
     folderId: idSchema.nullable(),
     visibility: z.enum(["private", "public", "unlisted"]),
@@ -53,11 +54,7 @@ const reservationSchema = z
     galleryId: idSchema,
     filename: z.string().trim().min(1).max(255),
     mime: z.enum(["image/jpeg", "image/png"]),
-    bytes: z
-      .number()
-      .int()
-      .positive()
-      .max(MAX_PHOTO_BYTES),
+    bytes: z.number().int().positive().max(MAX_PHOTO_BYTES),
     checksum: z.string().regex(/^[a-f0-9]{64}$/),
     idempotencyKey: idSchema.optional(),
   })
@@ -69,6 +66,7 @@ export type GalleryRow = {
   description: string;
   customer_instructions: string;
   download_policy: CatalogGallery["downloadPolicy"];
+  layout: CatalogGallery["layout"];
   category: string;
   visibility: CatalogGallery["visibility"];
   published: boolean;
@@ -147,6 +145,7 @@ export function galleryView(row: GalleryRow): CatalogGallery {
     description: row.description,
     customerInstructions: row.customer_instructions ?? "",
     downloadPolicy: row.download_policy ?? "none",
+    layout: row.layout ?? "compact",
     category: row.category,
     visibility: row.visibility,
     published: row.published,
@@ -373,6 +372,7 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
           await sql`update catalog_galleries set title=${data.title}, description=${data.description}, category=${data.category},
           folder_id=${data.folderId},visibility=${data.visibility},published=${data.published},password_hash=${hash === undefined ? current.password_hash : hash},
           customer_instructions=${data.customerInstructions ?? current.customer_instructions},download_policy=${data.downloadPolicy ?? current.download_policy},
+          layout=${data.layout ?? current.layout ?? "compact"},
           access_version=access_version+${invalidate ? 1 : 0},revision=revision+1,updated_at=now() where id=${id} and revision=${data.revision || 0} returning id`;
         if (!changed.length)
           throw new CatalogError(
@@ -380,8 +380,8 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
             409,
           );
       } else {
-        await sql`insert into catalog_galleries(id,folder_id,title,description,category,visibility,published,password_hash,customer_instructions,download_policy)
-          values(${id},${data.folderId},${data.title},${data.description},${data.category},${data.visibility},false,${hash || null},${data.customerInstructions ?? ""},${data.downloadPolicy ?? "none"})`;
+        await sql`insert into catalog_galleries(id,folder_id,title,description,category,visibility,published,password_hash,customer_instructions,download_policy,layout)
+          values(${id},${data.folderId},${data.title},${data.description},${data.category},${data.visibility},false,${hash || null},${data.customerInstructions ?? ""},${data.downloadPolicy ?? "none"},${data.layout ?? "compact"})`;
       }
       await audit(owner, "gallery.saved", id);
       return galleryView(await gallery(id));

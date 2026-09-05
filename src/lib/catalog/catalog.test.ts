@@ -33,6 +33,9 @@ async function fixture() {
     ),
   );
   await db.exec(
+    await readFile(new URL("../../../migrations/0033_gallery_layout.sql", import.meta.url), "utf8"),
+  );
+  await db.exec(
     await readFile(new URL("../../../migrations/0023_media_jobs.sql", import.meta.url), "utf8"),
   );
   await db.exec(
@@ -143,6 +146,33 @@ async function fixture() {
     },
   };
 }
+test("gallery layout persists, rejects unknown layouts, and survives older clients", async () => {
+  const f = await fixture();
+  try {
+    const g = await f.create();
+    assert.equal(g.layout, "compact");
+    const updated = await f.catalog.saveGallery(
+      { ...f.input, id: g.id, revision: g.revision, layout: "comfortable" },
+      "owner",
+    );
+    assert.equal(updated.layout, "comfortable");
+    const retained = await f.catalog.saveGallery(
+      { ...f.input, id: g.id, revision: updated.revision },
+      "owner",
+    );
+    assert.equal(retained.layout, "comfortable");
+    assert.equal((await f.catalog.ownerIndex()).galleries[0].layout, "comfortable");
+    await assert.rejects(
+      f.catalog.saveGallery(
+        { ...f.input, layout: "arbitrary-css" } as unknown as GalleryInput,
+        "owner",
+      ),
+    );
+    assert.equal((await f.catalog.publicIndex()).galleries.length, 0);
+  } finally {
+    await f.db.close();
+  }
+});
 test("gallery customer instructions and restrictive download policies persist without granting originals", async () => {
   const f = await fixture();
   try {
@@ -563,7 +593,14 @@ test("owner photo JSON includes ISO updatedAt from the catalog row", async () =>
     assert.equal(ownerPhoto?.updatedAt, "2024-02-03T04:05:06.000Z");
 
     const saved = await f.catalog.savePhoto(
-      { id: r.id, revision: ownerPhoto!.revision, caption: "changed", hidden: false, archived: false, displayOrder: 0 },
+      {
+        id: r.id,
+        revision: ownerPhoto!.revision,
+        caption: "changed",
+        hidden: false,
+        archived: false,
+        displayOrder: 0,
+      },
       "owner",
     );
     assert.match(saved.updatedAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);

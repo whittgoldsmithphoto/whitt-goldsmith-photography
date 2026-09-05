@@ -164,10 +164,20 @@ try {
   await page.getByRole("button", { name: "Publish & settings", exact: true }).click();
   const settings = page.getByRole("dialog");
   await settings.getByLabel("Visibility", { exact: true }).selectOption("unlisted");
+  await settings.getByLabel("Photo layout", { exact: true }).selectOption("comfortable");
   await settings
     .getByRole("checkbox", { name: "Published — needs a ready photograph", exact: true })
     .check();
   await settings.getByRole("button", { name: "Save", exact: true }).click();
+  await settings.waitFor({ state: "hidden" });
+  await page.reload();
+  await page.getByRole("button", { name: /SYNTHETIC BATCH TEST/ }).click();
+  await page.getByRole("button", { name: "Publish & settings", exact: true }).click();
+  assert.equal(
+    await settings.getByLabel("Photo layout", { exact: true }).inputValue(),
+    "comfortable",
+  );
+  await settings.getByRole("button", { name: "Cancel", exact: true }).click();
   const downloaded = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download QR code", exact: true }).click();
   const qr = await downloaded;
@@ -179,6 +189,23 @@ try {
     .waitFor();
   console.log(
     "PASS: draft has no QR action; real local settings publish an unlisted gallery; browser downloads the correctly named SVG and confirms unchanged access rules.",
+  );
+  await page.goto(`${origin}/galleries/${galleryId}`);
+  const photoButton = page.getByRole("button", { name: "Open healthy.jpg", exact: true });
+  await photoButton.waitFor();
+  for (const [width, columns] of [
+    [390, 1],
+    [1440, 3],
+  ]) {
+    await page.setViewportSize({ width, height: 900 });
+    const actual = await photoButton.evaluate(
+      (button) =>
+        getComputedStyle(button.parentElement.parentElement).gridTemplateColumns.split(" ").length,
+    );
+    assert.equal(actual, columns, "Saved comfortable layout controls the public photo wall");
+  }
+  console.log(
+    "PASS: gallery layout survives owner reload and controls narrow/desktop public rendering.",
   );
   if (process.env.WGP_VISUAL_BASELINE === "true") {
     const directory = mkdtempSync(join(tmpdir(), "wgp-astra-visual-"));
