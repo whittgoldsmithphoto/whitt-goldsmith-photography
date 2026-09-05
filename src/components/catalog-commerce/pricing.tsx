@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import { apiFetch } from "@/lib/auth/api-fetch";
 import type { Quote } from "@/lib/catalog-commerce/service";
 
@@ -76,13 +83,15 @@ export function CommercePricing() {
   const [galleries, setGalleries] = useState<GalleryOption[]>([]);
   const [galleryLoading, setGalleryLoading] = useState(true);
   const [galleryError, setGalleryError] = useState("");
-  const [galleryHasMore, setGalleryHasMore] = useState(false);
+  const [galleryCursor, setGalleryCursor] = useState<string | null>(null);
   const [selectedGalleryId, setSelectedGalleryId] = useState("");
   const [photos, setPhotos] = useState<PhotoOption[]>([]);
   const [photoLoading, setPhotoLoading] = useState(false);
   const [photoError, setPhotoError] = useState("");
-  const [photoHasMore, setPhotoHasMore] = useState(false);
+  const [photoCursor, setPhotoCursor] = useState<string | null>(null);
   const [selectedPhotoId, setSelectedPhotoId] = useState("");
+  const selectedGalleryRef = useRef("");
+  const photoRequestVersion = useRef(0);
   const [editingProduct, setEditingProduct] = useState<Product>();
   const [productKind, setProductKind] = useState<Product["kind"]>("digital_photo");
   const [priceListId, setPriceListId] = useState("");
@@ -106,21 +115,69 @@ export function CommercePricing() {
         page?: { nextCursor?: string | null };
       }>("/api/catalog/galleries?owner=1&limit=50");
       setGalleries(result.data);
-      setGalleryHasMore(Boolean(result.page?.nextCursor));
+      setGalleryCursor(result.page?.nextCursor || null);
     } catch (e) {
       setGalleryError((e as Error).message);
     } finally {
       setGalleryLoading(false);
     }
   }, []);
+  async function loadMoreGalleries() {
+    if (!galleryCursor || galleryLoading) return;
+    setGalleryLoading(true);
+    setGalleryError("");
+    try {
+      const result = await catalogRequest<{
+        data: GalleryOption[];
+        page?: { nextCursor?: string | null };
+      }>(`/api/catalog/galleries?owner=1&limit=50&cursor=${encodeURIComponent(galleryCursor)}`);
+      setGalleries((current) => {
+        const seen = new Set(current.map((gallery) => gallery.id));
+        return [...current, ...result.data.filter((gallery) => !seen.has(gallery.id))];
+      });
+      setGalleryCursor(result.page?.nextCursor || null);
+    } catch (e) {
+      setGalleryError((e as Error).message);
+    } finally {
+      setGalleryLoading(false);
+    }
+  }
   useEffect(() => {
     void reload();
   }, [reload]);
+  function galleryPagingControls() {
+    return (
+      <>
+        {galleryCursor && (
+          <button
+            type="button"
+            className={buttonClass}
+            disabled={galleryLoading}
+            onClick={() => void loadMoreGalleries()}
+          >
+            {galleryLoading ? "Loading more galleries…" : "Load more galleries"}
+          </button>
+        )}
+        <p role="status" className="text-xs text-muted-foreground">
+          Showing {galleries.length} galleries{galleryCursor ? "; more available" : "."}
+        </p>
+      </>
+    );
+  }
+  function selectGallery(id: string) {
+    selectedGalleryRef.current = id;
+    photoRequestVersion.current += 1;
+    setSelectedGalleryId(id);
+  }
   useEffect(() => {
+    selectedGalleryRef.current = selectedGalleryId;
+    photoRequestVersion.current += 1;
+    const requestVersion = photoRequestVersion.current;
     if (!selectedGalleryId) {
       setPhotos([]);
       setSelectedPhotoId("");
       setPhotoError("");
+      setPhotoCursor(null);
       return;
     }
     let active = true;
@@ -128,25 +185,77 @@ export function CommercePricing() {
     setPhotoError("");
     setPhotos([]);
     setSelectedPhotoId("");
+    setPhotoCursor(null);
     void catalogRequest<{ data: PhotoOption[]; page?: { nextCursor?: string | null } }>(
       `/api/catalog/galleries/${encodeURIComponent(selectedGalleryId)}/photos?owner=1&limit=50`,
     )
       .then((result) => {
-        if (active) {
+        if (
+          active &&
+          selectedGalleryRef.current === selectedGalleryId &&
+          photoRequestVersion.current === requestVersion
+        ) {
           setPhotos(result.data);
-          setPhotoHasMore(Boolean(result.page?.nextCursor));
+          setPhotoCursor(result.page?.nextCursor || null);
         }
       })
       .catch((e) => {
-        if (active) setPhotoError((e as Error).message);
+        if (
+          active &&
+          selectedGalleryRef.current === selectedGalleryId &&
+          photoRequestVersion.current === requestVersion
+        )
+          setPhotoError((e as Error).message);
       })
       .finally(() => {
-        if (active) setPhotoLoading(false);
+        if (
+          active &&
+          selectedGalleryRef.current === selectedGalleryId &&
+          photoRequestVersion.current === requestVersion
+        )
+          setPhotoLoading(false);
       });
     return () => {
       active = false;
     };
   }, [selectedGalleryId]);
+  async function loadMorePhotos() {
+    if (!selectedGalleryId || !photoCursor || photoLoading) return;
+    const galleryId = selectedGalleryId;
+    const requestVersion = photoRequestVersion.current;
+    setPhotoLoading(true);
+    setPhotoError("");
+    try {
+      const result = await catalogRequest<{
+        data: PhotoOption[];
+        page?: { nextCursor?: string | null };
+      }>(
+        `/api/catalog/galleries/${encodeURIComponent(galleryId)}/photos?owner=1&limit=50&cursor=${encodeURIComponent(photoCursor)}`,
+      );
+      if (
+        selectedGalleryRef.current !== galleryId ||
+        photoRequestVersion.current !== requestVersion
+      )
+        return;
+      setPhotos((current) => {
+        const seen = new Set(current.map((photo) => photo.id));
+        return [...current, ...result.data.filter((photo) => !seen.has(photo.id))];
+      });
+      setPhotoCursor(result.page?.nextCursor || null);
+    } catch (e) {
+      if (
+        selectedGalleryRef.current === galleryId &&
+        photoRequestVersion.current === requestVersion
+      )
+        setPhotoError((e as Error).message);
+    } finally {
+      if (
+        selectedGalleryRef.current === galleryId &&
+        photoRequestVersion.current === requestVersion
+      )
+        setPhotoLoading(false);
+    }
+  }
   function onSectionKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
     const current = sellingSections.findIndex((item) => item.id === section);
     let next = current;
@@ -599,6 +708,7 @@ export function CommercePricing() {
                     ))}
                   </select>
                 </label>
+                {galleryPagingControls()}
                 <p className="text-xs text-muted-foreground">
                   Choose a gallery by title. A missing price in an override list is unavailable,
                   never silently replaced by a different price.
@@ -746,6 +856,7 @@ export function CommercePricing() {
                     ))}
                   </select>
                 </label>
+                {galleryPagingControls()}
                 <label className="block">
                   Expires (your local time)
                   <input required name="expires" type="datetime-local" className={fieldClass} />
@@ -816,8 +927,11 @@ export function CommercePricing() {
                   aria-label="Gallery"
                   className={fieldClass}
                   value={selectedGalleryId}
-                  onChange={(event) => setSelectedGalleryId(event.target.value)}
-                  disabled={galleryLoading || Boolean(galleryError)}
+                  onChange={(event) => selectGallery(event.target.value)}
+                  disabled={
+                    (galleryLoading && galleries.length === 0) ||
+                    (Boolean(galleryError) && galleries.length === 0)
+                  }
                 >
                   <option value="">
                     {galleryLoading ? "Loading galleries…" : "Choose a gallery"}
@@ -829,6 +943,7 @@ export function CommercePricing() {
                   ))}
                 </select>
               </label>
+              {galleryPagingControls()}
               <label className="block">
                 Photo
                 <select
@@ -838,7 +953,11 @@ export function CommercePricing() {
                   className={fieldClass}
                   value={selectedPhotoId}
                   onChange={(event) => setSelectedPhotoId(event.target.value)}
-                  disabled={!selectedGalleryId || photoLoading || Boolean(photoError)}
+                  disabled={
+                    !selectedGalleryId ||
+                    (photoLoading && photos.length === 0) ||
+                    (Boolean(photoError) && photos.length === 0)
+                  }
                 >
                   <option value="">
                     {photoLoading ? "Loading photos…" : "Choose a ready photo"}
@@ -852,15 +971,27 @@ export function CommercePricing() {
                     ))}
                 </select>
               </label>
+              {photoCursor && (
+                <button
+                  type="button"
+                  className={buttonClass}
+                  disabled={photoLoading}
+                  onClick={() => void loadMorePhotos()}
+                >
+                  {photoLoading ? "Loading more photos…" : "Load more photos"}
+                </button>
+              )}
+              {selectedGalleryId && (
+                <p role="status" className="text-xs text-muted-foreground">
+                  Showing{" "}
+                  {photos.filter((photo) => !photo.status || photo.status === "ready").length} ready
+                  photos from {photos.length} loaded{photoCursor ? "; more available" : "."}
+                </p>
+              )}
               {(galleryError || photoError) && (
                 <p role="alert" className="text-sm text-muted-foreground">
                   {galleryError || photoError} Selectors are unavailable; your other form values are
                   preserved.
-                </p>
-              )}
-              {(galleryHasMore || photoHasMore) && (
-                <p role="status" className="text-sm text-muted-foreground">
-                  Showing the first 50 matching records. Narrow the catalog to find another record.
                 </p>
               )}
               <label className="block">

@@ -73,6 +73,30 @@ try {
       "insert into catalog_derivatives(photo_id,kind,object_key,bytes,checksum) values($1,$2,$3,6,'fixture')",
       [photoId, kind, `synthetic-${kind}`],
     );
+  for (let index = 1; index <= 51; index++) {
+    await sql.query(
+      "insert into catalog_galleries(id,title,published,visibility,download_policy) values($1,$2,true,'public','purchased_only')",
+      [randomUUID(), `SYNTHETIC Z ARCHIVE ${String(index).padStart(2, "0")}`],
+    );
+    const laterPhotoId = randomUUID();
+    await sql.query(
+      "insert into catalog_photos(id,gallery_id,owner_id,filename,mime,bytes,checksum,original_key,status,width,height,display_order) values($1,$2,'fixture-owner',$3,'image/jpeg',$4,$5,$7,'ready',600,400,$6)",
+      [
+        laterPhotoId,
+        galleryId,
+        `synthetic-later-${index}.jpg`,
+        original.length,
+        createHash("sha256").update(original).update(String(index)).digest("hex"),
+        index,
+        `synthetic-private-original-${index}`,
+      ],
+    );
+    for (const kind of ["thumb", "preview"])
+      await sql.query(
+        "insert into catalog_derivatives(photo_id,kind,object_key,bytes,checksum) values($1,$2,$3,6,'fixture')",
+        [laterPhotoId, kind, `synthetic-later-${index}-${kind}`],
+      );
+  }
   await server.listen();
   browser = await chromium.launch({ headless: true });
   const customer = await browser.newContext({ acceptDownloads: true }),
@@ -206,6 +230,59 @@ try {
   await ownerPage
     .getByLabel("Gallery", { exact: true })
     .selectOption({ label: "SYNTHETIC COMMERCE FIXTURE" });
+  assert.equal(
+    await ownerPage.getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true }).count(),
+    0,
+    "Later gallery page is initially absent",
+  );
+  assert.equal(
+    await ownerPage.getByRole("option", { name: "synthetic-later-51.jpg", exact: true }).count(),
+    0,
+    "Later photo page is initially absent",
+  );
+  await ownerPage.getByRole("tab", { name: "Pricing", exact: true }).click();
+  await ownerPage
+    .getByRole("tabpanel", { name: "Pricing" })
+    .getByRole("button", { name: "Load more galleries", exact: true })
+    .click();
+  assert.equal(
+    await ownerPage
+      .getByLabel("Gallery to override", { exact: true })
+      .getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true })
+      .count(),
+    1,
+    "Pricing gallery selector exposes later page",
+  );
+  await ownerPage.getByRole("tab", { name: "Discounts", exact: true }).click();
+  assert.equal(
+    await ownerPage
+      .getByLabel("Coupon gallery", { exact: true })
+      .getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true })
+      .count(),
+    1,
+    "Discount gallery selector exposes later page",
+  );
+  await ownerPage.getByRole("tab", { name: "Test quote", exact: true }).click();
+  assert.equal(
+    await ownerPage.getByRole("option", { name: "SYNTHETIC Z ARCHIVE 51", exact: true }).count(),
+    1,
+    "Quote gallery selector exposes later page",
+  );
+  await ownerPage
+    .getByLabel("Gallery", { exact: true })
+    .selectOption({ label: "SYNTHETIC Z ARCHIVE 51" });
+  await ownerPage
+    .getByLabel("Gallery", { exact: true })
+    .selectOption({ label: "SYNTHETIC COMMERCE FIXTURE" });
+  await ownerPage.getByRole("button", { name: "Load more photos", exact: true }).click();
+  assert.equal(
+    await ownerPage.getByRole("option", { name: "synthetic-later-51.jpg", exact: true }).count(),
+    1,
+    "Quote photo selector exposes later page",
+  );
+  await ownerPage
+    .getByLabel("Photo", { exact: true })
+    .selectOption({ label: "synthetic-later-51.jpg" });
   await ownerPage
     .getByLabel("Photo", { exact: true })
     .selectOption({ label: "synthetic-purchase.jpg" });
