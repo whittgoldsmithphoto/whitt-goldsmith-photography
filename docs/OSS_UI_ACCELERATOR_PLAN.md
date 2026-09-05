@@ -1,7 +1,7 @@
 # OSS gallery UI accelerator plan
 
-**Branch:** `feature/oss-gallery-ui-accelerator`  
-**Base:** `2e3a14013da0e60f1fe796fcf862e563bb50410a` (`origin/backend/resource-foundation`)  
+**Branch:** `feature/oss-gallery-ui-accelerator`
+**Base:** `2e3a14013da0e60f1fe796fcf862e563bb50410a` (`origin/backend/resource-foundation`)
 **Safety:** This branch stays separate from `main`, `ui/consolidated-workspace`, and `backend/resource-foundation`. No deployment or merge is part of this plan.
 
 ## Product direction
