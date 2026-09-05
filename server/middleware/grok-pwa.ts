@@ -53,6 +53,11 @@ function injectHeadStreaming(response: Response, host: string): Response {
   );
   const headers = new Headers(response.headers);
   headers.delete("content-length");
+  // The document contains content-hashed module URLs. Keep the HTML revalidated
+  // so a deployment can never leave the browser pointing at an old bundle.
+  headers.set("cache-control", "no-cache, no-store, must-revalidate");
+  headers.set("pragma", "no-cache");
+  headers.set("expires", "0");
   return new Response(transformed, {
     status: response.status,
     statusText: response.statusText,
