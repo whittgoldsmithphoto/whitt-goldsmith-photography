@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import { apiFetch } from "@/lib/auth/api-fetch";
 import type { Quote } from "@/lib/catalog-commerce/service";
 
@@ -14,6 +21,8 @@ type Product = {
   minimum_dpi?: number;
 };
 type PriceList = { id: string; name: string; is_default: boolean };
+type GalleryOption = { id: string; title: string };
+type PhotoOption = { id: string; filename: string; status?: string };
 type Pricing = {
   products: Product[];
   priceLists: PriceList[];
@@ -40,6 +49,15 @@ async function request<T>(op: string, body?: unknown): Promise<T> {
   if (!response.ok) throw new Error(data.error || "Pricing request failed");
   return data;
 }
+async function catalogRequest<T>(path: string): Promise<T> {
+  const response = await apiFetch(path, {
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error?.message || data.error || "Catalog request failed");
+  return data;
+}
 const fieldClass =
   "min-h-12 min-w-0 max-w-full w-full rounded-lg border border-input bg-background px-3 py-2 text-base text-foreground";
 const buttonClass =
@@ -62,6 +80,18 @@ export function CommercePricing() {
   const [quote, setQuote] = useState<Quote>();
   const [sandboxAvailable, setSandboxAvailable] = useState(false);
   const [section, setSection] = useState<SellingSection>("pricing");
+  const [galleries, setGalleries] = useState<GalleryOption[]>([]);
+  const [galleryLoading, setGalleryLoading] = useState(true);
+  const [galleryError, setGalleryError] = useState("");
+  const [galleryCursor, setGalleryCursor] = useState<string | null>(null);
+  const [selectedGalleryId, setSelectedGalleryId] = useState("");
+  const [photos, setPhotos] = useState<PhotoOption[]>([]);
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const [photoError, setPhotoError] = useState("");
+  const [photoCursor, setPhotoCursor] = useState<string | null>(null);
+  const [selectedPhotoId, setSelectedPhotoId] = useState("");
+  const selectedGalleryRef = useRef("");
+  const photoRequestVersion = useRef(0);
   const [editingProduct, setEditingProduct] = useState<Product>();
   const [productKind, setProductKind] = useState<Product["kind"]>("digital_photo");
   const [priceListId, setPriceListId] = useState("");
@@ -77,10 +107,170 @@ export function CommercePricing() {
     } catch (e) {
       setError((e as Error).message);
     }
+    setGalleryLoading(true);
+    setGalleryError("");
+    try {
+      const result = await catalogRequest<{
+        data: GalleryOption[];
+        page?: { nextCursor?: string | null };
+      }>("/api/catalog/galleries?owner=1&limit=50");
+      setGalleries(result.data);
+      setGalleryCursor(result.page?.nextCursor || null);
+    } catch (e) {
+      setGalleryError((e as Error).message);
+    } finally {
+      setGalleryLoading(false);
+    }
   }, []);
+  async function loadMoreGalleries() {
+    if (!galleryCursor || galleryLoading) return;
+    setGalleryLoading(true);
+    setGalleryError("");
+    try {
+      const result = await catalogRequest<{
+        data: GalleryOption[];
+        page?: { nextCursor?: string | null };
+      }>(`/api/catalog/galleries?owner=1&limit=50&cursor=${encodeURIComponent(galleryCursor)}`);
+      setGalleries((current) => {
+        const seen = new Set(current.map((gallery) => gallery.id));
+        return [...current, ...result.data.filter((gallery) => !seen.has(gallery.id))];
+      });
+      setGalleryCursor(result.page?.nextCursor || null);
+    } catch (e) {
+      setGalleryError((e as Error).message);
+    } finally {
+      setGalleryLoading(false);
+    }
+  }
   useEffect(() => {
     void reload();
   }, [reload]);
+  function galleryPagingControls() {
+    return (
+      <>
+        {galleryCursor && (
+          <button
+            type="button"
+            className={buttonClass}
+            disabled={galleryLoading}
+            onClick={() => void loadMoreGalleries()}
+          >
+            {galleryLoading ? "Loading more galleries…" : "Load more galleries"}
+          </button>
+        )}
+        <p role="status" className="text-xs text-muted-foreground">
+          Showing {galleries.length} galleries{galleryCursor ? "; more available" : "."}
+        </p>
+      </>
+    );
+  }
+  function selectGallery(id: string) {
+    selectedGalleryRef.current = id;
+    photoRequestVersion.current += 1;
+    setSelectedGalleryId(id);
+  }
+  useEffect(() => {
+    selectedGalleryRef.current = selectedGalleryId;
+    photoRequestVersion.current += 1;
+    const requestVersion = photoRequestVersion.current;
+    if (!selectedGalleryId) {
+      setPhotos([]);
+      setSelectedPhotoId("");
+      setPhotoError("");
+      setPhotoCursor(null);
+      return;
+    }
+    let active = true;
+    setPhotoLoading(true);
+    setPhotoError("");
+    setPhotos([]);
+    setSelectedPhotoId("");
+    setPhotoCursor(null);
+    void catalogRequest<{ data: PhotoOption[]; page?: { nextCursor?: string | null } }>(
+      `/api/catalog/galleries/${encodeURIComponent(selectedGalleryId)}/photos?owner=1&limit=50`,
+    )
+      .then((result) => {
+        if (
+          active &&
+          selectedGalleryRef.current === selectedGalleryId &&
+          photoRequestVersion.current === requestVersion
+        ) {
+          setPhotos(result.data);
+          setPhotoCursor(result.page?.nextCursor || null);
+        }
+      })
+      .catch((e) => {
+        if (
+          active &&
+          selectedGalleryRef.current === selectedGalleryId &&
+          photoRequestVersion.current === requestVersion
+        )
+          setPhotoError((e as Error).message);
+      })
+      .finally(() => {
+        if (
+          active &&
+          selectedGalleryRef.current === selectedGalleryId &&
+          photoRequestVersion.current === requestVersion
+        )
+          setPhotoLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedGalleryId]);
+  async function loadMorePhotos() {
+    if (!selectedGalleryId || !photoCursor || photoLoading) return;
+    const galleryId = selectedGalleryId;
+    const requestVersion = photoRequestVersion.current;
+    setPhotoLoading(true);
+    setPhotoError("");
+    try {
+      const result = await catalogRequest<{
+        data: PhotoOption[];
+        page?: { nextCursor?: string | null };
+      }>(
+        `/api/catalog/galleries/${encodeURIComponent(galleryId)}/photos?owner=1&limit=50&cursor=${encodeURIComponent(photoCursor)}`,
+      );
+      if (
+        selectedGalleryRef.current !== galleryId ||
+        photoRequestVersion.current !== requestVersion
+      )
+        return;
+      setPhotos((current) => {
+        const seen = new Set(current.map((photo) => photo.id));
+        return [...current, ...result.data.filter((photo) => !seen.has(photo.id))];
+      });
+      setPhotoCursor(result.page?.nextCursor || null);
+    } catch (e) {
+      if (
+        selectedGalleryRef.current === galleryId &&
+        photoRequestVersion.current === requestVersion
+      )
+        setPhotoError((e as Error).message);
+    } finally {
+      if (
+        selectedGalleryRef.current === galleryId &&
+        photoRequestVersion.current === requestVersion
+      )
+        setPhotoLoading(false);
+    }
+  }
+  function onSectionKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    const current = sellingSections.findIndex((item) => item.id === section);
+    let next = current;
+    if (event.key === "ArrowRight") next = (current + 1) % sellingSections.length;
+    else if (event.key === "ArrowLeft")
+      next = (current - 1 + sellingSections.length) % sellingSections.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = sellingSections.length - 1;
+    else return;
+    event.preventDefault();
+    setSection(sellingSections[next].id);
+    requestAnimationFrame(() =>
+      document.getElementById(`selling-tab-${sellingSections[next].id}`)?.focus(),
+    );
+  }
   async function save(
     event: FormEvent<HTMLFormElement>,
     op: string,
@@ -158,14 +348,21 @@ export function CommercePricing() {
           </p>
         </details>
       </header>
-      <nav aria-label="Selling tools" className="flex flex-wrap gap-2 border-b border-border pb-3">
+      <div
+        role="tablist"
+        aria-label="Selling tools"
+        className="flex flex-wrap gap-2 border-b border-border pb-3"
+      >
         {sellingSections.map((item) => (
           <button
             key={item.id}
-            type="button"
-            aria-pressed={section === item.id}
+            id={`selling-tab-${item.id}`}
+            role="tab"
+            tabIndex={section === item.id ? 0 : -1}
+            aria-selected={section === item.id}
             aria-controls={`selling-${item.id}`}
             onClick={() => setSection(item.id)}
+            onKeyDown={onSectionKeyDown}
             className={`min-h-12 rounded-lg border px-4 py-2 text-sm font-medium ${
               section === item.id
                 ? "border-foreground bg-muted text-foreground underline underline-offset-4"
@@ -175,7 +372,7 @@ export function CommercePricing() {
             {item.label}
           </button>
         ))}
-      </nav>
+      </div>
       {error && (
         <div role="alert" className="rounded border border-red-500 p-4">
           {error}{" "}
@@ -189,7 +386,13 @@ export function CommercePricing() {
         <p role="status">{error ? "Pricing data is unavailable." : "Loading saved pricing…"}</p>
       ) : (
         <>
-          <section id="selling-pricing" aria-label="Pricing" hidden={section !== "pricing"}>
+          <section
+            id="selling-pricing"
+            role="tabpanel"
+            aria-labelledby="selling-tab-pricing"
+            aria-label="Pricing"
+            hidden={section !== "pricing"}
+          >
             <p className="mb-6 text-sm text-muted-foreground">
               Prices are integer US cents; for example, 2500 means $25.00.
             </p>
@@ -490,12 +693,25 @@ export function CommercePricing() {
               >
                 <h2 className="text-lg font-semibold">Gallery price override</h2>
                 <label className="block">
-                  Gallery ID
-                  <input required name="gallery" maxLength={150} className={fieldClass} />
+                  Gallery
+                  <select
+                    required
+                    name="gallery"
+                    aria-label="Gallery to override"
+                    className={fieldClass}
+                  >
+                    <option value="">Choose a gallery</option>
+                    {galleries.map((gallery) => (
+                      <option key={gallery.id} value={gallery.id}>
+                        {gallery.title}
+                      </option>
+                    ))}
+                  </select>
                 </label>
+                {galleryPagingControls()}
                 <p className="text-xs text-muted-foreground">
-                  Copy the gallery ID from its gallery URL. A missing price in an override list is
-                  unavailable, never silently replaced by a different price.
+                  Choose a gallery by title. A missing price in an override list is unavailable,
+                  never silently replaced by a different price.
                 </p>
                 <label className="block">
                   Price list
@@ -560,7 +776,13 @@ export function CommercePricing() {
               </section>
             </div>
           </section>
-          <section id="selling-discounts" aria-label="Discounts" hidden={section !== "discounts"}>
+          <section
+            id="selling-discounts"
+            role="tabpanel"
+            aria-labelledby="selling-tab-discounts"
+            aria-label="Discounts"
+            hidden={section !== "discounts"}
+          >
             <div className="grid gap-8 md:grid-cols-2">
               <form
                 className={panelClass}
@@ -624,9 +846,17 @@ export function CommercePricing() {
                   />
                 </label>
                 <label className="block">
-                  Gallery ID (optional)
-                  <input name="gallery" className={fieldClass} />
+                  Gallery (optional)
+                  <select name="gallery" aria-label="Coupon gallery" className={fieldClass}>
+                    <option value="">All galleries</option>
+                    {galleries.map((gallery) => (
+                      <option key={gallery.id} value={gallery.id}>
+                        {gallery.title}
+                      </option>
+                    ))}
+                  </select>
                 </label>
+                {galleryPagingControls()}
                 <label className="block">
                   Expires (your local time)
                   <input required name="expires" type="datetime-local" className={fieldClass} />
@@ -654,7 +884,13 @@ export function CommercePricing() {
               </section>
             </div>
           </section>
-          <section id="selling-orders" aria-label="Orders" hidden={section !== "orders"}>
+          <section
+            id="selling-orders"
+            role="tabpanel"
+            aria-labelledby="selling-tab-orders"
+            aria-label="Orders"
+            hidden={section !== "orders"}
+          >
             <div className={panelClass}>
               <h2 className="text-lg font-semibold">Latest orders</h2>
               {data.orders.length ? (
@@ -670,6 +906,8 @@ export function CommercePricing() {
           </section>
           <section
             id="selling-quote"
+            role="tabpanel"
+            aria-labelledby="selling-tab-quote"
             aria-label="Test quote"
             hidden={section !== "quote"}
             className="max-w-2xl"
@@ -682,13 +920,80 @@ export function CommercePricing() {
                 a use for 15 minutes.
               </p>
               <label className="block">
-                Gallery ID
-                <input required name="gallery" className={fieldClass} />
+                Gallery
+                <select
+                  required
+                  name="gallery"
+                  aria-label="Gallery"
+                  className={fieldClass}
+                  value={selectedGalleryId}
+                  onChange={(event) => selectGallery(event.target.value)}
+                  disabled={
+                    (galleryLoading && galleries.length === 0) ||
+                    (Boolean(galleryError) && galleries.length === 0)
+                  }
+                >
+                  <option value="">
+                    {galleryLoading ? "Loading galleries…" : "Choose a gallery"}
+                  </option>
+                  {galleries.map((gallery) => (
+                    <option key={gallery.id} value={gallery.id}>
+                      {gallery.title}
+                    </option>
+                  ))}
+                </select>
               </label>
+              {galleryPagingControls()}
               <label className="block">
-                Photo ID
-                <input required name="photo" className={fieldClass} />
+                Photo
+                <select
+                  required
+                  name="photo"
+                  aria-label="Photo"
+                  className={fieldClass}
+                  value={selectedPhotoId}
+                  onChange={(event) => setSelectedPhotoId(event.target.value)}
+                  disabled={
+                    !selectedGalleryId ||
+                    (photoLoading && photos.length === 0) ||
+                    (Boolean(photoError) && photos.length === 0)
+                  }
+                >
+                  <option value="">
+                    {photoLoading ? "Loading photos…" : "Choose a ready photo"}
+                  </option>
+                  {photos
+                    .filter((photo) => !photo.status || photo.status === "ready")
+                    .map((photo) => (
+                      <option key={photo.id} value={photo.id}>
+                        {photo.filename}
+                      </option>
+                    ))}
+                </select>
               </label>
+              {photoCursor && (
+                <button
+                  type="button"
+                  className={buttonClass}
+                  disabled={photoLoading}
+                  onClick={() => void loadMorePhotos()}
+                >
+                  {photoLoading ? "Loading more photos…" : "Load more photos"}
+                </button>
+              )}
+              {selectedGalleryId && (
+                <p role="status" className="text-xs text-muted-foreground">
+                  Showing{" "}
+                  {photos.filter((photo) => !photo.status || photo.status === "ready").length} ready
+                  photos from {photos.length} loaded{photoCursor ? "; more available" : "."}
+                </p>
+              )}
+              {(galleryError || photoError) && (
+                <p role="alert" className="text-sm text-muted-foreground">
+                  {galleryError || photoError} Selectors are unavailable; your other form values are
+                  preserved.
+                </p>
+              )}
               <label className="block">
                 Product
                 <select aria-label="Product" required name="product" className={fieldClass}>

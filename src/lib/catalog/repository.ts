@@ -287,6 +287,7 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
           .filter((p) => p.status === "ready")
           .map((p) => ({
             ...photoView(p),
+            updatedAt: new Date(p.updated_at).toISOString(),
             hidden: p.hidden,
             archived: p.archived,
             displayOrder: p.display_order,
@@ -337,6 +338,7 @@ export function createCatalog(sql: Sql, media: CatalogMedia) {
       const p = rows[0];
       return {
         ...photoView(p),
+        updatedAt: new Date(p.updated_at).toISOString(),
         hidden: p.hidden,
         archived: p.archived,
         displayOrder: p.display_order,

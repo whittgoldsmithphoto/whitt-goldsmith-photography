@@ -43,7 +43,7 @@ try {
       [
         id,
         main,
-        `synthetic-${String(i).padStart(3, "0")}.jpg`,
+        i === 0 ? "synthetic-zzz.jpg" : i === 1 ? "synthetic-aaa.jpg" : `synthetic-${String(i).padStart(3, "0")}.jpg`,
         `synthetic-hash-${i}`,
         `private-synthetic-${i}`,
         i,
@@ -55,6 +55,7 @@ try {
         [id, kind, `private-synthetic-${i}-${kind}`],
       );
   }
+
   await server.listen();
   browser = await chromium.launch({ headless: true });
   const anonymous = await browser.newContext(),
@@ -133,6 +134,32 @@ try {
     }),
   );
   await studio.goto(`${origin}/organize`);
+  await studio.getByRole("button", { name: /^SYNTHETIC EVENT 000\b/ }).click();
+  const allPhotos = studio.getByRole("button", { name: "Photo status: All (52)", exact: true });
+  const archivedPhotos = studio.getByRole("button", { name: "Photo status: Archived (0)", exact: true });
+  await allPhotos.waitFor();
+  await studio.getByLabel("Photo sort", { exact: true }).waitFor();
+  await studio.getByRole("status").filter({ hasText: /52 of 52 photographs/ }).waitFor();
+  await archivedPhotos.click();
+  await studio.getByRole("status").filter({ hasText: /0 of 52 photographs/ }).waitFor();
+  assert.equal(await studio.getByRole("button", { name: /^synthetic-/ }).count(), 0);
+  assert.equal(await studio.getByText("synthetic-zzz.jpg", { exact: true }).count(), 0);
+  await allPhotos.click();
+  await studio.getByRole("status").filter({ hasText: /52 of 52 photographs/ }).waitFor();
+  const photoButtons = studio.getByRole("button", { name: /^synthetic-/ });
+  assert.equal(await photoButtons.count(), 52);
+  assert.equal(await studio.getByText("synthetic-zzz.jpg", { exact: true }).count(), 1);
+  const displayOrderFirst = await photoButtons.first().innerText();
+  await studio.getByLabel("Photo sort", { exact: true }).selectOption("filename");
+  const filenameFirst = await photoButtons.first().innerText();
+  assert.notEqual(filenameFirst, displayOrderFirst, "Filename sorting changes the first tile");
+  assert.match(filenameFirst, /synthetic-002\.jpg/);
+  await studio.getByLabel("Photo sort", { exact: true }).selectOption("display-order");
+  assert.match(await photoButtons.first().innerText(), /synthetic-zzz\.jpg/);
+  for (const width of [375, 768, 1440]) {
+    await studio.setViewportSize({ width, height: 900 });
+    assert.equal(await studio.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, `No horizontal overflow at ${width}px`);
+  }
   await studio.getByText("Search all photographs", { exact: true }).click();
   const library = studio.getByRole("region", { name: "Library search", exact: true });
   await library.getByLabel("Filename or caption", { exact: true }).fill("synthetic-051");
@@ -141,7 +168,12 @@ try {
   await library
     .getByRole("button", { name: "Open synthetic-051.jpg in Organizer", exact: true })
     .click();
-  await studio.getByRole("heading", { name: "Edit photograph", exact: true }).waitFor();
+  await studio.getByRole("heading", { name: "Editing synthetic-051.jpg", exact: true }).waitFor();
+  assert.equal(
+    await studio.getByRole("button", { name: /^synthetic-051\.jpg/ }).getAttribute("aria-pressed"),
+    "true",
+    "Selected photo remains selected while inspector is open",
+  );
   await studio.getByRole("button", { name: "Use as gallery cover", exact: true }).click();
   await studio
     .getByText("Gallery cover saved. Publication settings were not changed.", { exact: true })
@@ -154,6 +186,10 @@ try {
   const page = await anonymous.newPage();
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  const gallerySearchRequests = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/api/catalog/galleries?")) gallerySearchRequests.push(request.url());
+  });
   await page.route("**/api/catalog?op=media&**", (route) =>
     route.fulfill({
       contentType: "image/svg+xml",
@@ -168,7 +204,23 @@ try {
     await page.getByRole("button", { name: "Load more galleries", exact: true }).count(),
     0,
   );
-  await page.getByLabel("Search galleries", { exact: true }).fill("EVENT 051");
+  const searchInput = page.getByLabel("Gallery title search", { exact: true });
+  const requestsBeforeTyping = gallerySearchRequests.length;
+  await searchInput.fill("EVENT 051");
+  await page.waitForTimeout(200);
+  assert.equal(
+    gallerySearchRequests.length,
+    requestsBeforeTyping,
+    "Typing a gallery query does not request results before submit",
+  );
+  const filtered = page.waitForResponse(
+    (response) => {
+      const url = new URL(response.url());
+      return url.pathname === "/api/catalog/galleries" && url.searchParams.get("q") === "EVENT 051" && response.status() === 200;
+    },
+  );
+  await page.getByRole("button", { name: "Search galleries", exact: true }).click();
+  await filtered;
   await page
     .getByRole("status")
     .filter({ hasText: /^1 gallery$/ })

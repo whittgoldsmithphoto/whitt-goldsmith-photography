@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { catalogFetch } from "@/lib/catalog/client";
 import { useResourcePage } from "@/lib/catalog/resource-client";
@@ -22,12 +22,13 @@ export function CatalogStatus({
   error?: Error;
   reload: () => void;
 }) {
+  const message = error ? "Galleries are temporarily unavailable." : "Loading galleries…";
   return (
     <div className="mx-auto max-w-3xl px-6 py-24" role={error ? "alert" : "status"}>
-      <p>{loading ? "Loading galleries…" : error?.message}</p>
+      <p>{loading ? "Loading galleries…" : message}</p>
       {error && (
         <Button className="mt-4" onClick={reload}>
-          Try again
+          Retry
         </Button>
       )}
     </div>
@@ -41,13 +42,20 @@ function Card({ gallery, photos }: { gallery: CatalogGallery; photos: CatalogPho
       params={{ galleryId: gallery.id }}
       className="group min-w-0 focus-visible:outline-2 focus-visible:outline-offset-4"
     >
-      {cover && (
+      {cover ? (
         <ProtectedPhoto
           src={cover.thumbSrc}
           alt=""
           loading="lazy"
           className="aspect-[3/2] w-full rounded-sm object-cover"
         />
+      ) : (
+        <div
+          className="flex aspect-[3/2] w-full items-center justify-center rounded-sm border border-dashed border-border bg-muted/30 text-sm text-muted-foreground"
+          aria-label="Cover pending"
+        >
+          <span>Cover pending</span>
+        </div>
       )}
       <div className={`border-b border-border pb-5 pt-4 ${cover ? "" : "border-t"}`}>
         <p className="text-sm text-muted-foreground">{gallery.category}</p>
@@ -66,17 +74,25 @@ function Card({ gallery, photos }: { gallery: CatalogGallery; photos: CatalogPho
 export function CatalogIndex({
   page,
   folderId,
+  sportsSearch,
 }: {
   page: "home" | "galleries" | "about";
   folderId?: string;
+  sportsSearch?: ReactNode;
 }) {
-  const [query, setQuery] = useState("");
+  const [draftQuery, setDraftQuery] = useState("");
+  const [submittedQuery, setSubmittedQuery] = useState("");
   const state = useResourcePage<GallerySummary>(
-    `/api/catalog/galleries?limit=50&q=${encodeURIComponent(query)}${folderId ? `&folder=${encodeURIComponent(folderId)}` : ""}`,
+    `/api/catalog/galleries?limit=50&q=${encodeURIComponent(submittedQuery)}${folderId ? `&folder=${encodeURIComponent(folderId)}` : ""}`,
     true,
   );
-  if (!state.data) return <CatalogStatus {...state} />;
-  const listed = state.data.data;
+  const lastSuccessfulPage = useRef<typeof state.data>(undefined);
+  useEffect(() => {
+    if (state.data) lastSuccessfulPage.current = state.data;
+  }, [state.data]);
+  const visiblePage = state.data ?? lastSuccessfulPage.current;
+  if (!visiblePage) return <CatalogStatus {...state} />;
+  const listed = visiblePage.data;
   const photos = listed.flatMap((g) => (g.cover ? [g.cover] : []));
   const home = page === "home";
   return (
@@ -120,30 +136,62 @@ export function CatalogIndex({
         </Link>
       )}
       {page === "galleries" && (
-        <div className="my-8 border-b border-border pb-6">
-          <label htmlFor="gallery-search" className="mb-2 block text-sm font-medium">
-            Search galleries
-          </label>
-          <div className="flex max-w-xl items-center gap-3">
-            <Input
-              id="gallery-search"
-              className="min-h-12"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Event, team, or sport"
-            />
-            {query && (
-              <Button variant="outline" className="min-h-12" onClick={() => setQuery("")}>
-                Clear
+        <section
+          aria-label="Public gallery discovery"
+          className="my-8 space-y-10 border-y border-border py-8"
+        >
+          <div>
+            <h2 className="font-display text-2xl">Search galleries</h2>
+            <form
+              className="mt-4 flex max-w-xl items-center gap-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setSubmittedQuery(draftQuery.trim());
+              }}
+            >
+              <label htmlFor="gallery-search" className="sr-only">
+                Gallery title search
+              </label>
+              <Input
+                id="gallery-search"
+                className="min-h-12"
+                value={draftQuery}
+                onChange={(e) => setDraftQuery(e.target.value)}
+                placeholder="Event, team, or sport"
+              />
+              <Button className="min-h-12" type="submit">
+                Search galleries
               </Button>
+              {(draftQuery || submittedQuery) && (
+                <Button
+                  variant="outline"
+                  className="min-h-12"
+                  type="button"
+                  onClick={() => {
+                    setDraftQuery("");
+                    setSubmittedQuery("");
+                  }}
+                >
+                  Reset
+                </Button>
+              )}
+            </form>
+            <p className="mt-3 text-sm text-muted-foreground" role="status">
+              {state.loading
+                ? "Searching…"
+                : `${listed.length} ${listed.length === 1 ? "gallery" : "galleries"}${visiblePage.page.hasMore ? " loaded" : ""}`}
+            </p>
+            {state.error && submittedQuery && (
+              <div role="alert" className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                <span>Galleries are temporarily unavailable.</span>
+                <Button type="button" variant="outline" onClick={state.reload}>
+                  Retry search
+                </Button>
+              </div>
             )}
           </div>
-          <p className="mt-3 text-sm text-muted-foreground" role="status">
-            {state.loading
-              ? "Searching…"
-              : `${listed.length} ${listed.length === 1 ? "gallery" : "galleries"}${state.data.page.hasMore ? " loaded" : ""}`}
-          </p>
-        </div>
+          {sportsSearch}
+        </section>
       )}
       {page !== "about" &&
         (listed.length ? (
@@ -155,19 +203,28 @@ export function CatalogIndex({
         ) : (
           <div className="border-t border-border py-12">
             <h2 className="font-display text-2xl">
-              {query ? "No matching galleries" : "No public galleries yet"}
+              {submittedQuery ? "No matching galleries" : "No public galleries yet"}
             </h2>
             <p className="mt-3 text-muted-foreground">
-              {query ? "Try a different search." : "Published collections will appear here."}
+              {submittedQuery
+                ? "Try a different search."
+                : "Published collections will appear here."}
             </p>
-            {query && (
-              <Button variant="outline" className="mt-4" onClick={() => setQuery("")}>
-                Clear search
+            {submittedQuery && (
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => {
+                  setDraftQuery("");
+                  setSubmittedQuery("");
+                }}
+              >
+                Reset search
               </Button>
             )}
           </div>
         ))}
-      {page !== "about" && state.data.page.hasMore && (
+      {page !== "about" && visiblePage.page.hasMore && (
         <Button
           variant="outline"
           className="mt-8"
@@ -179,10 +236,40 @@ export function CatalogIndex({
       )}
       {state.error && (
         <p role="alert" className="mt-4">
-          {state.error.message} Retry using Load more galleries.
+          Galleries are temporarily unavailable. Retry using Load more galleries.
         </p>
       )}
     </div>
+  );
+}
+export function AboutPage() {
+  return (
+    <main className="mx-auto max-w-3xl px-6 py-16 sm:py-24">
+      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+        {defaultStudio.location}
+      </p>
+      <h1 className="font-display mt-4 text-4xl font-normal leading-tight sm:text-6xl">
+        {defaultStudio.name}
+      </h1>
+      <p className="mt-6 text-xl leading-relaxed">{defaultStudio.about}</p>
+      <section className="mt-12 border-t border-border pt-8" aria-labelledby="about-practice">
+        <h2 id="about-practice" className="font-display text-2xl">
+          The practice
+        </h2>
+        <p className="mt-4 leading-relaxed text-muted-foreground">
+          {defaultStudio.tagline} Coverage is built around the people and places that make a game,
+          school day, or event worth remembering.
+        </p>
+      </section>
+      <a
+        className="mt-10 inline-flex min-h-11 items-center underline underline-offset-4"
+        href="https://www.instagram.com/whittgoldsmithphotography/"
+        target="_blank"
+        rel="noreferrer"
+      >
+        Contact Whitt on Instagram
+      </a>
+    </main>
   );
 }
 export function CatalogGalleryPage({ id }: { id: string }) {

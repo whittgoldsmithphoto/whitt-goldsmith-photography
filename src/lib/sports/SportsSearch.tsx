@@ -15,7 +15,6 @@ export function SportsSearch() {
     if (!searchTerm) return;
     if (!offset) {
       submitted.current = searchTerm;
-      setResults([]);
     }
     setBusy(true);
     setError("");
@@ -29,14 +28,22 @@ export function SportsSearch() {
       setResults((previous) => (offset ? [...previous, ...data.results] : data.results));
       setNextOffset(data.nextOffset);
       setSearched(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Search unavailable");
+    } catch {
+      setError("Sports photo search is temporarily unavailable.");
     } finally {
       setBusy(false);
     }
   }
   return (
-    <section aria-label="Search approved sports photos" className="space-y-4">
+    <section aria-labelledby="sports-search-heading" className="space-y-4">
+      <div>
+        <h2 id="sports-search-heading" className="font-display text-2xl">
+          Search approved sports photos
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Find a photograph by details recorded by the studio.
+        </p>
+      </div>
       <form
         className="flex flex-wrap gap-2"
         onSubmit={(event) => {
@@ -67,9 +74,12 @@ export function SportsSearch() {
         Search covers owner-approved details on public galleries only.
       </p>
       {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
+        <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive">
+          <span>{error}</span>
+          <button type="button" className="underline" onClick={() => void search()}>
+            Retry
+          </button>
+        </div>
       )}
       {searched && !results.length && !busy && !error && (
         <p role="status">No matching public photos.</p>

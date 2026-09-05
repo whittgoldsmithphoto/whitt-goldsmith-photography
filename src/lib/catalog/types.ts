@@ -23,6 +23,7 @@ export type CatalogPhoto = {
   caption: string;
 };
 export type OwnerCatalogPhoto = CatalogPhoto & {
+  updatedAt: string;
   hidden: boolean;
   archived: boolean;
   displayOrder: number;

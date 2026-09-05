@@ -25,6 +25,7 @@ try {
   assert.equal(Boolean(runtime.databaseConnectionString()), false, "Only local PGlite is allowed");
   const { getSql } = await server.ssrLoadModule("/src/lib/db.ts");
   const { createCatalog, digest } = await server.ssrLoadModule("/src/lib/catalog/repository.ts");
+  const { DERIVATIVE_VARIANT_NAMES } = await server.ssrLoadModule("/src/lib/catalog/media-variants.ts");
   const objects = new Map();
   const bytes = new Uint8Array([255, 216, 255, 1, 2, 3]);
   const catalog = createCatalog(await getSql(), {
@@ -35,7 +36,13 @@ try {
     putDerivative: async (key, value) => {
       objects.set(key, value);
     },
-    process: async () => ({ width: 600, height: 400, preview: bytes, thumb: bytes }),
+    process: async () => ({
+      width: 600,
+      height: 400,
+      variants: Object.fromEntries(
+        DERIVATIVE_VARIANT_NAMES.map((name) => [name, bytes]),
+      ),
+    }),
   });
   let gallery = await catalog.saveGallery(
     {
@@ -58,7 +65,9 @@ try {
     },
     "fixture-owner",
   );
-  await catalog.upload(reservation.id, bytes, "fixture-owner");
+  await catalog.uploadOriginal(reservation.id, bytes, "fixture-owner");
+  const processed = await catalog.process(reservation.id, "fixture-owner");
+  assert.equal(processed.status, "ready");
   gallery = await catalog.saveGallery(
     {
       id: gallery.id,
@@ -80,6 +89,39 @@ try {
   ]);
   assert.match(invariant.stdout, /dev and build agree: sign-in on/);
   browser = await chromium.launch({ headless: true });
+  // Prime Vite's client dependency graph before the real proof pages attach their
+  // pageerror listeners. A fresh optimizer may emit this one known transient while
+  // the first disposable load is fetching the client entry; every other error is a
+  // failure. The reload must be clean and exercise hydrated client behavior.
+  const warmupContext = await browser.newContext();
+  const warmupPage = await warmupContext.newPage();
+  const warmupErrors = [];
+  warmupPage.on("pageerror", (error) => warmupErrors.push(error.message));
+  const transientOptimizerError = `Failed to fetch dynamically imported module: ${origin}/node_modules/@tanstack/react-start/dist/plugin/default-entry/client.tsx`;
+  try {
+    await warmupPage.goto(`${origin}/`, { waitUntil: "domcontentloaded" });
+    await warmupPage.waitForLoadState("load");
+    await warmupPage
+      .getByRole("heading", { name: "Whitt Goldsmith Photography", exact: true })
+      .waitFor();
+    assert.equal(
+      warmupErrors.every((error) => error === transientOptimizerError),
+      true,
+      `Unexpected Vite warmup browser error: ${warmupErrors.join("; ")}`,
+    );
+    warmupErrors.length = 0;
+    await warmupPage.reload({ waitUntil: "domcontentloaded" });
+    await warmupPage.waitForLoadState("load");
+    await warmupPage
+      .getByRole("heading", { name: "Whitt Goldsmith Photography", exact: true })
+      .waitFor();
+    await warmupPage.setViewportSize({ width: 375, height: 900 });
+    await warmupPage.getByRole("button", { name: "Open menu", exact: true }).click();
+    await warmupPage.getByRole("dialog").waitFor();
+    assert.deepEqual(warmupErrors, [], "Stable Vite client warmup has no browser errors");
+  } finally {
+    await warmupContext.close();
+  }
   const customer = await browser.newContext();
   const second = await browser.newContext();
   const owner = await browser.newContext();
@@ -508,6 +550,7 @@ try {
   await ownerPage.getByText("Synthetic pricing read failure", { exact: false }).waitFor();
   await ownerPage.getByRole("button", { name: "Retry loading", exact: true }).click();
   await ownerPage.getByText("No price lists have been saved.", { exact: true }).waitFor();
+  await ownerPage.getByRole("tab", { name: "Pricing", exact: true }).click();
   const listForm = ownerPage.locator("form").filter({
     has: ownerPage.getByRole("heading", {
       name: "1. Create or update a price list",
@@ -539,9 +582,10 @@ try {
   );
   await listForm.getByRole("button", { name: "Save price list", exact: true }).click();
   await ownerPage.getByText(`ID: ${listId}`, { exact: true }).waitFor();
+  await ownerPage.getByRole("tab", { name: "Pricing", exact: true }).click();
   const productForm = ownerPage.locator("form").filter({
     has: ownerPage.getByRole("heading", {
-      name: "2. Create or update a digital product",
+      name: "2. Product details",
       exact: true,
     }),
   });
@@ -554,7 +598,7 @@ try {
   await productForm.getByLabel("Available for quote previews", { exact: true }).check();
   await productForm.getByRole("button", { name: "Save product", exact: true }).click();
   await ownerPage
-    .getByText(`${productId} · Browser digital product · quotable`, { exact: true })
+    .getByText(`${productId} · Browser digital product · digital photo · quotable`, { exact: true })
     .waitFor();
   for (const width of [375, 768, 1440]) {
     await ownerPage.setViewportSize({ width, height: 900 });
@@ -564,6 +608,7 @@ try {
       `Selling overflow at ${width}`,
     );
   }
+  await ownerPage.getByRole("tab", { name: "Pricing", exact: true }).click();
   const priceForm = ownerPage.locator("form").filter({
     has: ownerPage.getByRole("heading", { name: "3. Set a product price", exact: true }),
   });
@@ -571,25 +616,26 @@ try {
   await priceForm.getByLabel("Product", { exact: true }).selectOption(productId);
   await priceForm.getByLabel("Price in cents", { exact: true }).fill("2500");
   await priceForm.getByRole("button", { name: "Save price", exact: true }).click();
-  await ownerPage.getByText("Browser digital product: $25.00", { exact: true }).waitFor();
-  await ownerPage.getByRole("button", { name: "Test quote", exact: true }).click();
+  await ownerPage.getByText("Browser digital product: $25.00", { exact: false }).waitFor();
+  await ownerPage.getByRole("tab", { name: "Test quote", exact: true }).click();
   assert.equal(await priceForm.isVisible(), false, "Inactive selling sections are hidden");
   const quoteForm = ownerPage.locator("form").filter({
     has: ownerPage.getByRole("heading", { name: "Quote preview — no payment", exact: true }),
   });
-  await quoteForm.getByLabel("Gallery ID", { exact: true }).fill(gallery.id);
-  await quoteForm.getByLabel("Photo ID", { exact: true }).fill(reservation.id);
+  await quoteForm.getByLabel("Gallery", { exact: true }).selectOption(gallery.id);
+  await quoteForm.getByLabel("Photo", { exact: true }).waitFor();
+  await quoteForm.getByLabel("Photo", { exact: true }).selectOption(reservation.id);
   await quoteForm.getByLabel("Product", { exact: true }).selectOption(productId);
   await quoteForm.getByRole("button", { name: "Preview server quote", exact: true }).click();
   await quoteForm.getByText("Pre-tax preview: $25.00 USD", { exact: true }).waitFor();
-  await ownerPage.getByRole("button", { name: "Pricing", exact: true }).click();
+  await ownerPage.getByRole("tab", { name: "Pricing", exact: true }).click();
   const overrideForm = ownerPage.locator("form").filter({
     has: ownerPage.getByRole("heading", { name: "Gallery price override", exact: true }),
   });
-  await overrideForm.getByLabel("Gallery ID", { exact: true }).fill(gallery.id);
+  await overrideForm.getByLabel("Gallery to override", { exact: true }).selectOption(gallery.id);
   await overrideForm.getByLabel("Price list", { exact: true }).selectOption(listId);
   await overrideForm.getByRole("button", { name: "Save gallery pricing", exact: true }).click();
-  await ownerPage.getByRole("button", { name: "Discounts", exact: true }).click();
+  await ownerPage.getByRole("tab", { name: "Discounts", exact: true }).click();
   const couponForm = ownerPage
     .locator("form")
     .filter({ has: ownerPage.getByRole("heading", { name: "Create a coupon", exact: true }) });
@@ -597,13 +643,13 @@ try {
   await couponForm.getByLabel("Percent off", { exact: true }).fill("10");
   await couponForm.getByLabel("Maximum uses", { exact: true }).fill("5");
   await couponForm.getByLabel("Minimum subtotal in cents", { exact: true }).fill("0");
-  await couponForm.getByLabel("Gallery ID (optional)", { exact: true }).fill(gallery.id);
+  await couponForm.getByLabel("Coupon gallery", { exact: true }).selectOption(gallery.id);
   await couponForm
     .getByLabel("Expires (your local time)", { exact: true })
     .fill(new Date(Date.now() + 86400000).toISOString().slice(0, 16));
   await couponForm.getByRole("button", { name: "Create coupon", exact: true }).click();
   await ownerPage.getByText(/BROWSER10: 10%/).waitFor();
-  await ownerPage.getByRole("button", { name: "Test quote", exact: true }).click();
+  await ownerPage.getByRole("tab", { name: "Test quote", exact: true }).click();
   await quoteForm.getByLabel("Coupon (optional)", { exact: true }).fill("BROWSER10");
   await quoteForm.getByRole("button", { name: "Preview server quote", exact: true }).click();
   await quoteForm.getByText("Pre-tax preview: $22.50 USD", { exact: true }).waitFor();

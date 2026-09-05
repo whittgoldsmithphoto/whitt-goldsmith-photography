@@ -13,10 +13,27 @@ import { IntegrityPanel } from "@/lib/catalog-integrity/IntegrityPanel";
 import { FolderManager } from "./folder-manager";
 import { LibrarySearch } from "./library-search";
 import { apiFetch } from "@/lib/auth/api-fetch";
+import {
+  filterAndSortOwnerPhotos,
+  type OrganizerPhotoFilter,
+  type OrganizerPhotoSort,
+} from "@/lib/catalog/organizer-photo-view";
+import {
+  clearPhotoSelection,
+  executeBulkPhotoActionWithReload,
+  formatBulkPhotoSuccessMessage,
+  planBulkPhotoAction,
+  resetSelectionOnGalleryChange,
+  selectAllVisiblePhotos,
+  selectedPhotoCount,
+  togglePhotoSelection,
+  type BulkPhotoAction,
+} from "@/lib/catalog/bulk-photo-workbench";
 
 export function CatalogOrganizer() {
   const state = useCatalog<OwnerCatalog>("op=owner");
   const [selected, setSelected] = useState<string | null>(null);
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [foldersOpen, setFoldersOpen] = useState(false);
@@ -27,12 +44,17 @@ export function CatalogOrganizer() {
   const [batchItems, setBatchItems] = useState<UploadItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const [stopRequested, setStopRequested] = useState(false);
+  const [photoFilter, setPhotoFilter] = useState<OrganizerPhotoFilter>("all");
+  const [photoSort, setPhotoSort] = useState<OrganizerPhotoSort>("display-order");
   const stopBatch = useRef(false);
   const retryBatch = useRef<{ galleryId: string; files: File[] } | null>(null);
   if (!state.data) return <CatalogStatus {...state} />;
   const { galleries, folders, photos, jobs } = state.data;
   const active = galleries.find((g) => g.id === selected) || galleries[0];
-  const activePhotoCount = photos.filter((photo) => photo.galleryId === active?.id).length;
+  const activePhotos = photos.filter((photo) => photo.galleryId === active?.id);
+  const activePhotoCount = activePhotos.length;
+  const visiblePhotos = filterAndSortOwnerPhotos(photos, active?.id, photoFilter, photoSort);
+  const selectedCount = selectedPhotoCount(selectedPhotoIds, photos, active?.id);
   const edit = (g?: CatalogGallery) =>
     setDraft(
       g
@@ -67,6 +89,29 @@ export function CatalogOrganizer() {
       state.reload();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Request failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function bulkAction(bulkActionName: BulkPhotoAction) {
+    const inputs = planBulkPhotoAction(photos, selectedPhotoIds, active?.id, bulkActionName);
+    if (!inputs.length) {
+      setMessage("Select at least one photograph first.");
+      return;
+    }
+    setBusy(true);
+    setMessage("");
+    try {
+      await executeBulkPhotoActionWithReload(
+        inputs,
+        (input) => catalogFetch("op=photo", input),
+        state.reload,
+      );
+      setSelectedPhotoIds(clearPhotoSelection());
+      setMessage(formatBulkPhotoSuccessMessage(inputs.length, bulkActionName));
+      state.reload();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : `Could not ${bulkActionName} photographs.`);
     } finally {
       setBusy(false);
     }
@@ -120,6 +165,7 @@ export function CatalogOrganizer() {
         {libraryOpen && (
           <LibrarySearch
             onOpenGallery={(galleryId, photoId) => {
+              setSelectedPhotoIds((ids) => resetSelectionOnGalleryChange(selected, galleryId, ids));
               setSelected(galleryId);
               const photo = photos.find((item) => item.id === photoId);
               setPhotoDraft(
@@ -187,6 +233,7 @@ export function CatalogOrganizer() {
                 type="button"
                 disabled={busy}
                 onClick={() => {
+                  setSelectedPhotoIds((ids) => resetSelectionOnGalleryChange(selected, g.id, ids));
                   setSelected(g.id);
                   setPhotoDraft(null);
                 }}
@@ -300,43 +347,78 @@ export function CatalogOrganizer() {
                   </ul>
                 </section>
               )}
-              <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
-                {photos
-                  .filter((p) => p.galleryId === active.id)
-                  .map((p) => (
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]">
+              <div className="mb-4 flex flex-col gap-3 border-y border-border py-3 sm:flex-row sm:items-center sm:justify-between lg:col-span-2">
+                <div className="flex flex-wrap gap-2" aria-label="Photo status filters">
+                  {([
+                    ["all", `All (${activePhotoCount})`],
+                    ["visible", `Visible (${activePhotos.filter((photo) => !photo.hidden && !photo.archived).length})`],
+                    ["hidden", `Hidden (${activePhotos.filter((photo) => photo.hidden && !photo.archived).length})`],
+                    ["archived", `Archived (${activePhotos.filter((photo) => photo.archived).length})`],
+                  ] as const).map(([value, label]) => (
+                    <Button key={value} type="button" size="sm" variant={photoFilter === value ? "default" : "outline"} aria-pressed={photoFilter === value} aria-label={`Photo status: ${label}`} onClick={() => setPhotoFilter(value)}>
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+                <label className="flex shrink-0 items-center gap-2 text-sm">
+                  Sort
+                  <select aria-label="Photo sort" className="min-h-10 rounded border border-input bg-secondary px-2" value={photoSort} onChange={(event) => setPhotoSort(event.target.value as OrganizerPhotoSort)}>
+                    <option value="display-order">Display order</option>
+                    <option value="filename">Filename</option>
+                    <option value="newest-updated">Newest updated</option>
+                  </select>
+                </label>
+              </div>
+              <p className="mb-3 text-sm text-muted-foreground" role="status">
+                {visiblePhotos.length} of {activePhotoCount} photographs
+              </p>
+              <div className="mb-4 flex flex-wrap items-center gap-2 rounded border border-border p-3" aria-label="Bulk photograph actions">
+                <span className="text-sm font-medium">{selectedCount} selected</span>
+                <Button type="button" size="sm" variant="outline" disabled={busy || !visiblePhotos.length} onClick={() => setSelectedPhotoIds((ids) => selectAllVisiblePhotos(ids, visiblePhotos))}>
+                  Select all visible
+                </Button>
+                <Button type="button" size="sm" variant="outline" disabled={busy || !selectedPhotoIds.length} onClick={() => setSelectedPhotoIds(clearPhotoSelection())}>
+                  Clear selection
+                </Button>
+                {(["hide", "unhide", "archive", "restore"] as BulkPhotoAction[]).map((bulkActionName) => (
+                  <Button key={bulkActionName} type="button" size="sm" variant="outline" disabled={busy || !selectedCount} onClick={() => void bulkAction(bulkActionName)}>
+                    {bulkActionName[0].toUpperCase() + bulkActionName.slice(1)} selected
+                  </Button>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-3 xl:grid-cols-3 lg:col-start-1 lg:row-start-2">
+                {visiblePhotos.map((p) => (
+                  <div key={p.id} className="catalog-frame min-w-0 border border-border p-2">
+                    <label className="mb-2 flex min-h-10 items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${p.filename}`}
+                        checked={selectedPhotoIds.includes(p.id)}
+                        disabled={busy}
+                        onChange={(event) => setSelectedPhotoIds((ids) => togglePhotoSelection(ids, p.id, event.target.checked))}
+                      />
+                      Select photograph
+                    </label>
                     <button
-                      key={p.id}
                       type="button"
                       disabled={busy}
-                      className="catalog-frame min-w-0 border border-border p-2 text-left"
+                      className="w-full text-left"
                       aria-pressed={photoDraft?.id === p.id}
-                      onClick={() =>
-                        setPhotoDraft({
-                          id: p.id,
-                          revision: p.revision,
-                          caption: p.caption,
-                          hidden: p.hidden,
-                          archived: p.archived,
-                          displayOrder: p.displayOrder,
-                        })
-                      }
+                      onClick={() => setPhotoDraft({ id: p.id, revision: p.revision, caption: p.caption, hidden: p.hidden, archived: p.archived, displayOrder: p.displayOrder })}
                     >
-                      <img
-                        src={`${p.thumbSrc}&owner=1`}
-                        alt={p.caption || p.filename}
-                        className="aspect-[4/3] w-full rounded object-cover"
-                      />
+                      <img src={`${p.thumbSrc}&owner=1`} alt={p.caption || p.filename} className="aspect-[4/3] w-full rounded object-cover" />
                       <span className="mt-2 block break-all text-sm">{p.filename}</span>
                       <span className="block text-xs text-muted-foreground">
-                        {p.archived ? "Archived" : p.hidden ? "Hidden" : "In gallery"} · Order{" "}
-                        {p.displayOrder} · Edit
+                        {p.archived ? "Archived" : p.hidden ? "Hidden" : "In gallery"} · Order {p.displayOrder} · {photoDraft?.id === p.id ? "Selected" : "Edit"}
                       </span>
                     </button>
-                  ))}
+                  </div>
+                ))}
               </div>
               {photoDraft && (
                 <form
-                  className="mt-6 space-y-4 rounded border border-border p-4"
+                  className="mt-6 space-y-4 rounded border border-border p-4 lg:col-start-2 lg:row-start-2 lg:mt-0"
                   onSubmit={(e) => {
                     e.preventDefault();
                     void action(async () => {
@@ -345,7 +427,9 @@ export function CatalogOrganizer() {
                     });
                   }}
                 >
-                  <h3 className="font-display text-2xl">Edit photograph</h3>
+                  <h3 className="font-display text-2xl">
+                    Editing {photos.find((photo) => photo.id === photoDraft.id)?.filename || "photograph"}
+                  </h3>
                   <Button
                     type="button"
                     variant="outline"
@@ -454,6 +538,7 @@ export function CatalogOrganizer() {
                   <IntegrityPanel photoId={photoDraft.id} />
                 </details>
               )}
+              </div>
               <details className="mt-8 border-y border-border">
                 <summary className="cursor-pointer py-3 text-sm font-medium">
                   Upload history
