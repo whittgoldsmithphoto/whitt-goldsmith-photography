@@ -551,6 +551,27 @@ test("owner access rejects anonymous users, arbitrary accounts, and missing conf
   assert.equal(assertCatalogOwner("owner", "another, owner"), "owner");
 });
 
+test("owner photo JSON includes ISO updatedAt from the catalog row", async () => {
+  const f = await fixture();
+  try {
+    const g = await f.create();
+    const r = await f.reserve(g.id);
+    await f.catalog.upload(r.id, f.bytes, "owner");
+    await f.sql`update catalog_photos set updated_at='2024-02-03T04:05:06.000Z' where id=${r.id}`;
+
+    const ownerPhoto = (await f.catalog.ownerIndex()).photos.find((photo) => photo.id === r.id);
+    assert.equal(ownerPhoto?.updatedAt, "2024-02-03T04:05:06.000Z");
+
+    const saved = await f.catalog.savePhoto(
+      { id: r.id, revision: ownerPhoto!.revision, caption: "changed", hidden: false, archived: false, displayOrder: 0 },
+      "owner",
+    );
+    assert.match(saved.updatedAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  } finally {
+    await f.db.close();
+  }
+});
+
 test("expired processing attempts cannot overwrite a successful retry", async () => {
   const f = await fixture();
   try {

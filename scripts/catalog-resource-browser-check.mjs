@@ -43,7 +43,7 @@ try {
       [
         id,
         main,
-        `synthetic-${String(i).padStart(3, "0")}.jpg`,
+        i === 0 ? "synthetic-zzz.jpg" : i === 1 ? "synthetic-aaa.jpg" : `synthetic-${String(i).padStart(3, "0")}.jpg`,
         `synthetic-hash-${i}`,
         `private-synthetic-${i}`,
         i,
@@ -141,6 +141,11 @@ try {
   await studio.getByRole("status").filter({ hasText: /0 of 52 photographs/ }).waitFor();
   assert.equal(await studio.getByRole("button", { name: /^synthetic-/ }).count(), 0);
   await studio.getByRole("button", { name: "Photo status: All", exact: true }).click();
+  const photoButtons = studio.getByRole("button", { name: /^synthetic-/ });
+  await studio.getByLabel("Photo sort", { exact: true }).selectOption("filename");
+  assert.match(await photoButtons.first().innerText(), /synthetic-aaa\.jpg/);
+  await studio.getByLabel("Photo sort", { exact: true }).selectOption("display-order");
+  assert.match(await photoButtons.first().innerText(), /synthetic-zzz\.jpg/);
   for (const width of [375, 768, 1440]) {
     await studio.setViewportSize({ width, height: 900 });
     assert.equal(await studio.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, `No horizontal overflow at ${width}px`);

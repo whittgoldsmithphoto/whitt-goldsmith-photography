@@ -2,7 +2,7 @@ import type { OwnerCatalogPhoto } from "./types";
 
 export type OrganizerPhotoFilter = "all" | "visible" | "hidden" | "archived";
 export type OrganizerPhotoSort = "display-order" | "filename" | "newest-updated";
-type OrganizerPhoto = OwnerCatalogPhoto & { updatedAt?: string | number | Date | null };
+type OrganizerPhoto = OwnerCatalogPhoto;
 
 const compareFilename = (left: string, right: string) => {
   const a = left.toLowerCase();
@@ -11,8 +11,7 @@ const compareFilename = (left: string, right: string) => {
 };
 
 const timestamp = (value: OrganizerPhoto["updatedAt"]) => {
-  if (value == null) return null;
-  const result = value instanceof Date ? value.getTime() : typeof value === "number" ? value : Date.parse(value);
+  const result = Date.parse(value);
   return Number.isFinite(result) ? result : null;
 };
 
