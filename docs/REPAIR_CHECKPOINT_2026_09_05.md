@@ -2,7 +2,8 @@
 
 The subsequent metadata/smart-collection source work and all eight requested
 feature groups are tracked in [Photographer feature program](PHOTOGRAPHER_FEATURE_PROGRAM.md).
-They have not been activated on the deployed site.
+Metadata and private smart collections are now enabled on Cloudflare staging;
+see that document's activation section for live evidence and remaining gates.
 
 This checkpoint supersedes old decision requests and deployment claims, not the unfinished engineering backlog in `BACKEND_REVISION_REMAINING.md`.
 

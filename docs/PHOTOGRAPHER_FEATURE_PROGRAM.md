@@ -1,5 +1,33 @@
 # Photographer feature program
 
+## Cloudflare staging activation — September 5
+
+This activation supersedes the source-only deployment notes below for metadata
+and smart collections. Neon project WGP Catalog Staging was verified in the
+signed-in console, then migrations 0029, 0030 and 0031 were applied together in
+a guarded transaction. Photo records stayed at 51 and orders at two.
+
+Release `d09ddc7156d8acb39892aaee099a1d941edd7690` is deployed to
+`https://wgp-catalog-staging.whittgoldsmithmedia.workers.dev` with
+`CATALOG_LIBRARY_METADATA_ENABLED=true`. Cloudflare version
+`36d3f4b0-9978-4ae2-bf7b-5bbc0b00d89b` and 15 application assets were verified.
+The release passed 456 tests, typecheck and lint (zero errors/seven warnings).
+
+Live acceptance: owner metadata loads; a temporary keyword on the exact
+synthetic PAYMENT-TEST-NOT-FOR-SALE.png saved and persisted after reload, then
+was removed through the UI. The private collection
+“CCES Football @ St. Joes — library” saved and reopened after reload. Anonymous
+metadata and collection API requests both returned 401.
+
+Archive database infrastructure is installed but customer ZIP delivery remains
+unfinished and disabled. Cloudflare still displays Workers Free, so photo
+processing remains paused. Live checkout/download gates, the production Worker
+and SmugMug/custom-domain routing were not changed.
+
+During verification, the existing unlisted payment-test gallery also contained
+real football filenames, including three ready photos. No photos were moved or
+deleted. Full-shoot recovery must reconcile gallery assignment as well as job status.
+
 This tracks the owner's eight requested feature groups. Source implementation,
 local acceptance and live activation are different milestones. No group is
 complete merely because a table or UI control exists.
