@@ -190,6 +190,7 @@ try {
   ownerPage.on("pageerror", (error) => errors.push(error.message));
   await ownerPage.goto(`${origin}/sell`);
   const tabs = ownerPage.getByRole("tab");
+  await tabs.first().waitFor();
   assert.equal(await tabs.count(), 4, "Selling exposes four accessible tabs");
   assert.equal(await tabs.first().getAttribute("aria-selected"), "true");
   await tabs.first().press("ArrowRight");
