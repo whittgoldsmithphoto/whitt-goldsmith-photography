@@ -9,7 +9,14 @@
 - The customer requested the full album ZIP. Preparation is pending hosted verification; no successful hosted ZIP delivery is claimed yet.
 - Production and the SmugMug domain remain unchanged. No backups were removed.
 
-The sections below preserve earlier checkpoints; the latest checkpoint supersedes their upload and archive-wiring pending notes.
+## Subsequent checks — 17:12 EDT
+
+- Production owner access is confirmed in the browser. Its separate catalog contains three draft photos, zero orders and zero entitlements; production schema is still at `0022_payment_recovery.sql`. Earlier notes saying owner setup is pending are superseded. No production write was performed.
+- The hosted 131-photo ZIP job was claimed by the cron processor but its first attempt failed and entered retry. It did not publish a download. Successful payment is **not** successful album delivery; live acceptance remains blocked.
+- Safe failure-category reporting was added after a failing regression test, then its six focused tests and typecheck passed. The canonical staging release passed its full checks and deployed source `fac8c20e91f22f93bca54c78559c54c7059cb45d`, version `c8ab74d4-4865-4401-89b0-7ebc0c7b0359`, with revision and 15 assets verified.
+- Added `python3 scripts/verify-album-zip.py DOWNLOAD.zip ORIGINAL_FOLDER`: bounded-memory, read-only ZIP verification of every original size and SHA256 without extracting files. Its synthetic exact/mutated-byte regression passed. Running it on a real hosted download is still pending. The verifier test requires Python 3.
+
+The sections below preserve earlier checkpoints; newer checkpoints supersede their upload, owner setup, and archive-wiring pending notes.
 
 ## Verified hosted behavior
 
