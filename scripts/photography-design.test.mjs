@@ -18,3 +18,8 @@ test("studio navigation has a desktop rail and preserves mobile controls", () =>
   assert.match(shell, /md:pl-\[184px\]/);
   assert.match(shell, /aria-label="Owner workspace"/);
 });
+
+test("file picker snapshots the live FileList before resetting the input", () => {
+  const organizer = readFileSync(new URL("../src/components/catalog/organizer.tsx", import.meta.url), "utf8");
+  assert.match(organizer, /const list = Array\.from\(event\.target\.files \?\? \[\]\);\s*event\.target\.value = "";/);
+});

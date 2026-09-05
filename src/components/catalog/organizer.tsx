@@ -456,7 +456,8 @@ export function CatalogOrganizer() {
                   multiple
                   disabled={busy}
                   onChange={(event) => {
-                    const list = event.target.files;
+                    // FileList is live: clearing the input also empties it.
+                    const list = Array.from(event.target.files ?? []);
                     event.target.value = "";
                     void ingest(list);
                   }}
