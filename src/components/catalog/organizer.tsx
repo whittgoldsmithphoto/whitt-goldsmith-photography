@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { uploadBatch, reconcileProcessing, type UploadItem } from "@/lib/catalog/upload-batch";
+import {
+  uploadBatch,
+  retryUploadBatch,
+  reconcileProcessing,
+  type UploadItem,
+} from "@/lib/catalog/upload-batch";
 import { collectUploadFiles } from "@/lib/catalog/ingest-files";
 import { MAX_PHOTO_LABEL } from "@/lib/catalog/upload-limits";
 import { Link } from "@tanstack/react-router";
@@ -200,24 +205,27 @@ export function CatalogOrganizer() {
     }
   }
 
-  async function upload(files: File[], galleryId = active?.id) {
+  async function upload(files: File[], galleryId = active?.id, previous?: UploadItem[]) {
     if (!galleryId || !files.length) return;
     stopBatch.current = false;
     setStopRequested(false);
     setUploading(true);
-    setBatchItems(files.map((file, index) => ({ index, filename: file.name, state: "queued" })));
+    if (!previous)
+      setBatchItems(files.map((file, index) => ({ index, filename: file.name, state: "queued" })));
     try {
-      const results = await uploadBatch({
+      const options = {
         galleryId,
         files,
         shouldStop: () => stopBatch.current,
-        onItem: (item) =>
+        onItem: (item: UploadItem) =>
           setBatchItems((items) => items.map((old, index) => (index === item.index ? item : old))),
-      });
-      retryBatch.current = {
-        galleryId,
-        files: files.filter((_, index) => ["failed", "cancelled"].includes(results[index].state)),
       };
+      const results = previous
+        ? await retryUploadBatch({ ...options, items: previous })
+        : await uploadBatch(options);
+      retryBatch.current = results.some((item) => ["failed", "cancelled"].includes(item.state))
+        ? { galleryId, files }
+        : null;
       const count = (status: UploadItem["state"]) =>
         results.filter((item) => item.state === status).length;
       setMessage(
@@ -514,10 +522,10 @@ export function CatalogOrganizer() {
                         variant="outline"
                         onClick={() => {
                           const retry = retryBatch.current;
-                          if (retry) void upload(retry.files, retry.galleryId);
+                          if (retry) void upload(retry.files, retry.galleryId, batchItems);
                         }}
                       >
-                        Retry failed
+                        Retry failed or unstarted files
                       </Button>
                     )
                   )}
@@ -708,7 +716,7 @@ export function CatalogOrganizer() {
                                 })
                               }
                             >
-                              Retry
+                              Retry processing
                             </Button>
                           )}
                         </li>

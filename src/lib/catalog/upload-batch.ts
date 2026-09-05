@@ -21,6 +21,41 @@ export function reconcileProcessing(items: UploadItem[], result: { id: string; s
 type Reservation = { id: string; status: string; duplicate: boolean };
 type Transport = (query: string, body: unknown, raw?: boolean) => Promise<unknown>;
 
+/** Retry only unfinished transfers, retaining the original batch's identity and history. */
+export async function retryUploadBatch(options: {
+  galleryId: string;
+  files: UploadFile[];
+  items: UploadItem[];
+  transport?: Transport;
+  onItem: (item: UploadItem) => void;
+  shouldStop?: () => boolean;
+}): Promise<UploadItem[]> {
+  const { items, files } = options;
+  if (
+    items.length !== files.length ||
+    items.some((item, index) => item.index !== index || item.filename !== files[index].name)
+  )
+    throw new Error("Upload batch changed. Select the original files again.");
+  const indexes = items
+    .filter((item) => ["failed", "cancelled"].includes(item.state))
+    .map((item) => item.index);
+  const merged = [...items];
+  for (const index of indexes) {
+    merged[index] = { index, filename: files[index].name, state: "queued" };
+    options.onItem(merged[index]);
+  }
+  await uploadBatch({
+    ...options,
+    files: indexes.map((index) => files[index]),
+    onItem: (item) => {
+      const index = indexes[item.index];
+      merged[index] = { ...item, index };
+      options.onItem(merged[index]);
+    },
+  });
+  return merged;
+}
+
 export async function uploadRequest(query: string, body: unknown, raw = false): Promise<unknown> {
   const controller = new AbortController();
   // A timed-out response may have committed remotely. Retry re-reserves by checksum;

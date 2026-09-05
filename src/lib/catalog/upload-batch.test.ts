@@ -3,9 +3,40 @@ import assert from "node:assert/strict";
 import {
   uploadBatch,
   reconcileProcessing,
+  retryUploadBatch,
   type UploadFile,
   type UploadItem,
 } from "./upload-batch.ts";
+
+test("retry preserves completed rows and original indexes including identical filenames", async () => {
+  const files = [file("same.jpg"), file("same.jpg"), file("last.jpg")];
+  const items: UploadItem[] = [
+    { index: 0, filename: "same.jpg", state: "ready", photoId: "stored" },
+    { index: 1, filename: "same.jpg", state: "failed", error: "Network" },
+    { index: 2, filename: "last.jpg", state: "cancelled" },
+  ];
+  const updates: UploadItem[] = [];
+  let reservations = 0;
+  const results = await retryUploadBatch({
+    galleryId: "gallery",
+    files,
+    items,
+    onItem: (item) => updates.push(item),
+    transport: async () => ({ id: `retry-${++reservations}`, status: "ready" }),
+  });
+  assert.equal(reservations, 2);
+  assert.equal(results.length, 3);
+  assert.equal(results[0], items[0]);
+  assert.deepEqual(
+    results.map((item) => item.index),
+    [0, 1, 2],
+  );
+  assert.deepEqual(
+    results.map((item) => item.state),
+    ["ready", "duplicate", "duplicate"],
+  );
+  assert.ok(updates.every((item) => item.index !== 0));
+});
 
 test("processing recovery updates the exact photo without matching duplicate filenames", () => {
   const items: UploadItem[] = [
@@ -17,6 +48,33 @@ test("processing recovery updates the exact photo without matching duplicate fil
   assert.equal(updated[1], items[1]);
   assert.equal(reconcileProcessing(items, { id: "a", status: "unknown" }), items);
   assert.equal(reconcileProcessing(items, { id: "a", status: "needs_review" })[0].state, "review");
+});
+
+test("retry rejects mismatched file indexes before network work", async () => {
+  await assert.rejects(
+    retryUploadBatch({
+      galleryId: "gallery",
+      files: [file("one.jpg")],
+      items: [{ index: 1, filename: "one.jpg", state: "failed" }],
+      onItem: () => assert.fail("Must validate before emitting"),
+      transport: async () => assert.fail("Must not reserve a different file"),
+    }),
+    /batch changed/,
+  );
+});
+
+test("stopped retry preserves ready rows and leaves unfinished files retryable", async () => {
+  const ready: UploadItem = { index: 0, filename: "first.jpg", state: "ready" };
+  const result = await retryUploadBatch({
+    galleryId: "gallery",
+    files: [file("first.jpg"), file("second.jpg")],
+    items: [ready, { index: 1, filename: "second.jpg", state: "failed" }],
+    shouldStop: () => true,
+    onItem: () => {},
+    transport: async () => assert.fail("Stopped retry must not upload"),
+  });
+  assert.equal(result[0], ready);
+  assert.equal(result[1].state, "cancelled");
 });
 
 function file(name = "photo.jpg", type = "image/jpeg"): UploadFile {

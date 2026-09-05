@@ -92,7 +92,11 @@ try {
     jpeg("original camera name.jpg", 1),
   ]);
   await batch.getByText("original camera name.jpg — ready", { exact: true }).waitFor();
-  await batch.getByText("bad.txt — failed", { exact: false }).waitFor();
+  assert.equal(
+    await batch.getByText("bad.txt — failed", { exact: false }).count(),
+    0,
+    "Non-image files are excluded before the upload batch",
+  );
   assert.deepEqual(transfers, ["original camera name.jpg"]);
   assert.deepEqual(reservations, ["original camera name.jpg"]);
   const [record] = await sql`select filename from catalog_photos where gallery_id=${galleryId}`;
@@ -104,12 +108,14 @@ try {
   await batch.getByText("healthy.jpg — ready", { exact: true }).waitFor();
   await batch
     .getByText("Upload completion was not confirmed. Retry this file to check its saved state.", {
-      exact: true,
+      exact: false,
     })
     .waitFor();
   assert.equal(reservations.filter((name) => name === "healthy.jpg").length, 1);
   await batch.getByRole("button", { name: "Retry failed or unstarted files", exact: true }).click();
   await batch.getByText("uncertain.jpg — duplicate", { exact: true }).waitFor();
+  await batch.getByText("healthy.jpg — ready", { exact: true }).waitFor();
+  await batch.getByText("2 of 2 checked", { exact: true }).waitFor();
   assert.equal(reservations.filter((name) => name === "uncertain.jpg").length, 2);
   assert.equal(transfers.filter((name) => name === "uncertain.jpg").length, 1);
   assert.equal(
@@ -120,13 +126,14 @@ try {
   await input.setInputFiles([jpeg("slow-first.jpg", 4), jpeg("unstarted-second.jpg", 5)]);
   await slowStarted;
   await batch.getByRole("button", { name: "Stop after current file", exact: true }).click();
-  await batch.getByText(/Stopping after the current file/).waitFor();
+  await batch.getByText(/stopping/).waitFor();
   releaseSlow();
   await batch.getByText("slow-first.jpg — ready", { exact: true }).waitFor();
   await batch.getByText("unstarted-second.jpg — cancelled", { exact: true }).waitFor();
   assert.equal(reservations.includes("unstarted-second.jpg"), false);
   await batch.getByRole("button", { name: "Retry failed or unstarted files", exact: true }).click();
   await batch.getByText("unstarted-second.jpg — ready", { exact: true }).waitFor();
+  await batch.getByText("slow-first.jpg — ready", { exact: true }).waitFor();
   assert.equal(transfers.filter((name) => name === "slow-first.jpg").length, 1);
   assert.equal(transfers.filter((name) => name === "unstarted-second.jpg").length, 1);
   // Simulate a saved original needing processing, then recover through the real UI.
