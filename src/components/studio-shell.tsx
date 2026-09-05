@@ -99,7 +99,7 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
         >
           <div className="mx-auto flex h-16 max-w-[1400px] items-center justify-between px-4 sm:px-6">
             <Link to="/" className="min-w-0">
-              <span className="block max-w-[13rem] text-sm font-semibold leading-tight sm:max-w-none sm:text-base">
+              <span className="font-display block max-w-[14rem] text-lg leading-tight tracking-tight sm:max-w-none sm:text-xl">
                 {studio.name}
               </span>
             </Link>
@@ -129,7 +129,7 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
                   to={inStudio ? "/galleries" : "/organize"}
                   className="inline-flex h-12 items-center px-4 text-sm text-muted-foreground hover:text-foreground"
                 >
-                  {inStudio ? "View site" : "Owner studio"}
+                  {inStudio ? "View site" : "Studio"}
                 </Link>
               )}
               <SignedIn>
@@ -172,7 +172,7 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
                           to={inStudio ? "/galleries" : "/organize"}
                           className="mt-4 flex h-12 items-center border-t px-3 text-muted-foreground"
                         >
-                          {inStudio ? "View site" : "Owner studio"}
+                          {inStudio ? "View site" : "Studio"}
                         </Link>
                       </SheetClose>
                     )}

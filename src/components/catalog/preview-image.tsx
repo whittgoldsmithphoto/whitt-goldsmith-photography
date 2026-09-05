@@ -11,7 +11,7 @@ export function PreviewImage({ photo }: { photo: CatalogPhoto }) {
   const source = `${photo.src}${photo.src.includes("?") ? "&" : "?"}previewAttempt=${attempt}`;
   return (
     <div className="space-y-2">
-      <div className="max-h-[60svh] overflow-auto rounded" aria-busy={status === "loading"}>
+      <div className="max-h-[78svh] overflow-auto" aria-busy={status === "loading"}>
         {status === "failed" ? (
           <div role="alert" className="p-8 text-center">
             <p>
@@ -36,7 +36,7 @@ export function PreviewImage({ photo }: { photo: CatalogPhoto }) {
             alt={photo.caption || photo.filename}
             onLoad={() => setStatus("ready")}
             onError={() => setStatus("failed")}
-            className={zoom ? "mx-auto max-w-none" : "max-h-[60svh] w-full object-contain"}
+            className={zoom ? "mx-auto max-w-none" : "max-h-[78svh] w-full object-contain"}
             draggable={false}
           />
         )}

@@ -96,6 +96,24 @@
   }
 }
 
+.public-card img {
+  transition:
+    transform 420ms ease,
+    filter 420ms ease;
+}
+.public-card:hover img {
+  transform: scale(1.035);
+  filter: brightness(1.06);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-card img,
+  .public-card:hover img {
+    transform: none;
+    filter: none;
+  }
+}
+
 /* Workspace typography takes precedence over editorial utility classes. */
 .management-shell {
   --color-background: #101112;

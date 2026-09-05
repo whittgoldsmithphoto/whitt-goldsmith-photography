@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { catalogFetch } from "@/lib/catalog/client";
 import { useResourcePage } from "@/lib/catalog/resource-client";
 import type { GallerySummary } from "@/lib/catalog/gallery-service";
-import type { CatalogGallery, CatalogPhoto } from "@/lib/catalog/types";
+import type { CatalogPhoto } from "@/lib/catalog/types";
 import { defaultStudio } from "@/lib/seed";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,36 +34,41 @@ export function CatalogStatus({
     </div>
   );
 }
-function Card({ gallery, photos }: { gallery: CatalogGallery; photos: CatalogPhoto[] }) {
-  const cover = photos.find((p) => p.galleryId === gallery.id);
+function Card({ gallery }: { gallery: GallerySummary }) {
+  const cover = gallery.cover;
   return (
     <Link
       to="/galleries/$galleryId"
       params={{ galleryId: gallery.id }}
-      className="group min-w-0 focus-visible:outline-2 focus-visible:outline-offset-4"
+      className="public-card group min-w-0 focus-visible:outline-2 focus-visible:outline-offset-4"
     >
-      {cover ? (
-        <ProtectedPhoto
-          src={cover.thumbSrc}
-          alt=""
-          loading="lazy"
-          className="aspect-[3/2] w-full rounded-sm object-cover"
-        />
-      ) : (
-        <div
-          className="flex aspect-[3/2] w-full items-center justify-center rounded-sm border border-dashed border-border bg-muted/30 text-sm text-muted-foreground"
-          aria-label="Cover pending"
-        >
-          <span>Cover pending</span>
-        </div>
-      )}
-      <div className={`border-b border-border pb-5 pt-4 ${cover ? "" : "border-t"}`}>
-        <p className="text-sm text-muted-foreground">{gallery.category}</p>
-        <h2 className="mt-2 text-xl font-semibold leading-snug group-hover:underline">
+      <div className="overflow-hidden bg-card">
+        {cover ? (
+          <ProtectedPhoto
+            src={cover.thumbSrc}
+            alt=""
+            loading="lazy"
+            className="aspect-[3/2] w-full object-cover"
+          />
+        ) : (
+          <div
+            className="flex aspect-[3/2] w-full items-center justify-center border border-dashed border-border bg-muted/30 text-sm text-muted-foreground"
+            aria-label="Cover pending"
+          >
+            <span>Cover pending</span>
+          </div>
+        )}
+      </div>
+      <div className="border-b border-border pb-5 pt-4">
+        <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+          {gallery.category || "Gallery"}
+          {gallery.photoCount ? ` · ${gallery.photoCount}` : ""}
+        </p>
+        <h2 className="font-display mt-2 text-2xl font-normal leading-snug group-hover:underline">
           {gallery.title}
         </h2>
         {gallery.description && (
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
             {gallery.description}
           </p>
         )}
@@ -93,24 +98,24 @@ export function CatalogIndex({
   const visiblePage = state.data ?? lastSuccessfulPage.current;
   if (!visiblePage) return <CatalogStatus {...state} />;
   const listed = visiblePage.data;
-  const photos = listed.flatMap((g) => (g.cover ? [g.cover] : []));
   const home = page === "home";
+  const featured = listed[0]?.cover ?? null;
   return (
-    <div className="mx-auto max-w-[1440px] px-4 pb-16 pt-10 sm:px-6 sm:pt-14 lg:px-10">
-      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+    <div className="mx-auto max-w-[1440px] px-4 pb-24 pt-10 sm:px-6 sm:pt-16 lg:px-10">
+      <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
         {defaultStudio.location}
       </p>
-      <h1 className="font-display mt-3 max-w-4xl text-4xl font-normal leading-tight sm:text-6xl">
+      <h1 className="font-display mt-4 max-w-4xl text-5xl font-normal leading-[1.05] tracking-tight sm:text-7xl">
         {home || page === "about" ? defaultStudio.name : "Find your photos"}
       </h1>
-      <p className="mt-5 max-w-2xl text-lg text-muted-foreground">
+      <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
         {page === "about"
           ? "Sports, school games, and events in Greenville, South Carolina. For bookings, coverage requests, or questions about a gallery, contact Whitt on Instagram."
           : home
-            ? "Sports and event photography in Greenville."
-            : "Browse events or search for your gallery."}
+            ? "Sports and event photography. Find your gallery after the game, save favorites, and take the files home."
+            : "Search by event, team, school, or sport."}
       </p>
-      {page !== "galleries" && (
+      {page !== "about" && (
         <div className="my-8 flex flex-wrap gap-3">
           <Button asChild>
             <Link to="/galleries">Find your photos</Link>
@@ -126,24 +131,34 @@ export function CatalogIndex({
           </Button>
         </div>
       )}
-      {home && photos[0] && (
-        <Link to="/galleries/$galleryId" params={{ galleryId: photos[0].galleryId }}>
+      {home && featured && (
+        <Link
+          to="/galleries/$galleryId"
+          params={{ galleryId: listed[0].id }}
+          className="public-card group relative mb-16 block overflow-hidden"
+        >
           <ProtectedPhoto
-            src={photos[0].src}
-            alt={photos[0].caption || photos[0].filename}
-            className="mb-12 max-h-[70vh] w-full rounded-sm object-contain"
+            src={featured.src}
+            alt={featured.caption || listed[0].title}
+            className="max-h-[78vh] w-full object-cover"
           />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-background/90 to-transparent px-5 py-6 sm:px-8">
+            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+              {listed[0].category || "Gallery"}
+            </p>
+            <p className="font-display mt-1 text-3xl sm:text-4xl">{listed[0].title}</p>
+          </div>
         </Link>
       )}
       {page === "galleries" && (
         <section
           aria-label="Public gallery discovery"
-          className="my-8 space-y-10 border-y border-border py-8"
+          className="my-10 space-y-10 border-y border-border py-10"
         >
           <div>
-            <h2 className="font-display text-2xl">Search galleries</h2>
+            <h2 className="font-display text-3xl">Search galleries</h2>
             <form
-              className="mt-4 flex max-w-xl items-center gap-3"
+              className="mt-5 flex max-w-xl flex-col gap-3 sm:flex-row sm:items-center"
               onSubmit={(event) => {
                 event.preventDefault();
                 setSubmittedQuery(draftQuery.trim());
@@ -160,7 +175,7 @@ export function CatalogIndex({
                 placeholder="Event, team, or sport"
               />
               <Button className="min-h-12" type="submit">
-                Search galleries
+                Search
               </Button>
               {(draftQuery || submittedQuery) && (
                 <Button
@@ -195,25 +210,25 @@ export function CatalogIndex({
       )}
       {page !== "about" &&
         (listed.length ? (
-          <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
             {listed.map((g) => (
-              <Card key={g.id} gallery={g} photos={photos} />
+              <Card key={g.id} gallery={g} />
             ))}
           </div>
         ) : (
-          <div className="border-t border-border py-12">
-            <h2 className="font-display text-2xl">
-              {submittedQuery ? "No matching galleries" : "No public galleries yet"}
+          <div className="border-t border-border py-16">
+            <h2 className="font-display text-3xl">
+              {submittedQuery ? "No matching galleries" : "Galleries appear after each event"}
             </h2>
-            <p className="mt-3 text-muted-foreground">
+            <p className="mt-4 max-w-lg text-muted-foreground">
               {submittedQuery
-                ? "Try a different search."
-                : "Published collections will appear here."}
+                ? "Try a team name, school, or a shorter search."
+                : "When a collection is published, you can search it here, save favorites, and buy the files."}
             </p>
             {submittedQuery && (
               <Button
                 variant="outline"
-                className="mt-4"
+                className="mt-5"
                 onClick={() => {
                   setDraftQuery("");
                   setSubmittedQuery("");
@@ -337,10 +352,10 @@ export function CatalogGalleryPage({ id }: { id: string }) {
       >
         All galleries
       </Link>
-      <p className="mt-8 text-xs uppercase tracking-widest text-muted-foreground">
+      <p className="mt-10 text-xs uppercase tracking-[0.2em] text-muted-foreground">
         {gallery.category}
       </p>
-      <h1 className="font-display mt-2 max-w-4xl text-4xl font-normal leading-tight sm:text-5xl">
+      <h1 className="font-display mt-2 max-w-4xl text-4xl font-normal leading-[1.05] tracking-tight sm:text-6xl">
         {gallery.title}
       </h1>
       <p className="my-5 max-w-2xl text-muted-foreground">{gallery.description}</p>
@@ -379,15 +394,14 @@ export function CatalogGalleryPage({ id }: { id: string }) {
         {photos.length} {photos.length === 1 ? "photograph" : "photographs"}
         {resource.data?.page.hasMore ? " loaded" : ""}
       </p>
-      <div className="grid grid-cols-2 gap-x-3 gap-y-6 md:grid-cols-3 md:gap-x-5">
+      <div className="grid grid-cols-2 gap-x-2 gap-y-8 md:grid-cols-3 md:gap-x-4 lg:grid-cols-4">
         {photos.map((p, i) => (
-          <div key={p.id}>
+          <div key={p.id} className="min-w-0">
             <button
               type="button"
-              key={p.id}
               aria-label={`Open ${p.filename}`}
               onClick={() => setOpen(i)}
-              className={`block w-full overflow-hidden rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 ${proof.selection?.photoIds.includes(p.id) ? "outline-2 outline-offset-2 outline-primary" : ""}`}
+              className={`public-card block w-full overflow-hidden focus-visible:outline-2 focus-visible:outline-offset-4 ${proof.selection?.photoIds.includes(p.id) ? "outline-2 outline-offset-2 outline-primary" : ""}`}
             >
               <ProtectedPhoto
                 src={p.thumbSrc}
@@ -396,6 +410,9 @@ export function CatalogGalleryPage({ id }: { id: string }) {
                 className="aspect-[3/2] w-full object-cover"
               />
             </button>
+            {p.caption && (
+              <p className="mt-2 truncate text-sm text-muted-foreground">{p.caption}</p>
+            )}
             {proof.selection && (
               <Button
                 className="mt-2 w-full"
@@ -468,7 +485,7 @@ function CatalogLightbox({
     <dialog
       ref={ref}
       aria-label="Photograph viewer"
-      className="fixed inset-0 m-auto max-h-svh w-full max-w-6xl overflow-y-auto bg-background p-4 text-foreground backdrop:bg-black/90"
+      className="fixed inset-0 z-50 m-0 h-svh max-h-svh w-full max-w-none overflow-y-auto bg-background p-4 text-foreground sm:p-6 backdrop:bg-scrim"
       onCancel={(e) => {
         e.preventDefault();
         onClose();

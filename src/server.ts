@@ -11,7 +11,12 @@ import { runScheduledMaintenance } from "./lib/ops/scheduled-maintenance";
 type WorkerQueueBatch = Parameters<typeof processMediaQueueBatch>[0];
 
 async function fetch(request: Request, env: unknown, ctx: ExecutionContext): Promise<Response> {
-  const response = await handler.fetch(request, env, ctx);
+  const start = handler.fetch as (
+    request: Request,
+    env?: unknown,
+    ctx?: ExecutionContext,
+  ) => Promise<Response>;
+  const response = await start(request, env, ctx);
   const contentType = response.headers.get("content-type") ?? "";
   if (contentType.includes("text/html")) {
     const headers = new Headers(response.headers);
