@@ -44,6 +44,36 @@ async function fixture() {
   return { db, sql };
 }
 
+test("dispatch reconciliation makes exhausted crashed jobs retryable by the owner, not stuck processing", async () => {
+  const f = await fixture();
+  try {
+    const job = await enqueueMediaJob(f.sql, {
+      photoId: "00000000-0000-4000-8000-000000000002",
+      ownerId: "owner",
+      transformationVersion: 1,
+      maxAttempts: 1,
+    });
+    const lease = await claimNextMediaJob(f.sql, "crashed-worker", 300);
+    assert.ok(lease);
+    assert.deepEqual(await listDispatchableMediaJobs(f.sql, 10), []);
+    assert.equal((await loadMediaJob(f.sql, job.id))?.status, "processing");
+    await f.sql`update catalog_media_jobs set leased_until=now()-interval '1 second' where id=${job.id}`;
+    assert.deepEqual(await listDispatchableMediaJobs(f.sql, 10), []);
+    assert.equal((await loadMediaJob(f.sql, job.id))?.status, "failed");
+    assert.equal(await completeMediaJob(f.sql, job.id, lease!.leaseToken!), false);
+    const retry = await enqueueMediaJob(f.sql, {
+      photoId: job.photoId,
+      ownerId: "owner",
+      transformationVersion: 1,
+    });
+    assert.equal(retry.status, "queued");
+    assert.equal(retry.attempts, 0);
+    assert.equal((await listDispatchableMediaJobs(f.sql, 10)).length, 1);
+  } finally {
+    await f.db.close();
+  }
+});
+
 test("media jobs are idempotent, exclusively claimed, and require the active lease to complete", async () => {
   const f = await fixture();
   try {

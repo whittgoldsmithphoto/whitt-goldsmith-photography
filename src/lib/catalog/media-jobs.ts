@@ -151,6 +151,18 @@ export async function cancelMediaJobForPhoto(sql: Sql, photoId: string, ownerId:
 export async function listDispatchableMediaJobs(sql: Sql, limit: number) {
   if (!Number.isInteger(limit) || limit < 1 || limit > 100)
     throw new Error("Invalid dispatch limit");
+  // A process killed on its final attempt cannot run failMediaJob. Reconcile
+  // expired leases in a bounded statement so the owner can explicitly retry.
+  // Do not reset attempts automatically or touch originals/photo visibility.
+  await sql.query(
+    `update catalog_media_jobs set status='failed',stage='failed',lease_token=null,
+      leased_until=null,error_code='lease_exhausted',
+      error_message='Processing stopped after its final attempt. Owner retry required.',updated_at=now()
+      where id in (select id from catalog_media_jobs
+        where status='processing' and leased_until<=now() and attempts>=max_attempts
+        order by leased_until,id limit $1 for update skip locked)`,
+    [limit],
+  );
   const rows = await sql.query<MediaJobRow>(
     `select * from catalog_media_jobs
       where attempts < max_attempts and (

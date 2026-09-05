@@ -1,5 +1,48 @@
 # Photographer feature program
 
+## Perpetual license and real album acceptance — September 5
+
+Owner confirmed permanent personal/commercial usage rights, no resale. Only
+download access expires after three downloads per photo or 14 days, whichever
+comes first. Both single-photo and album product licenses were saved through
+the hosted owner UI; historical paid snapshots were not rewritten.
+
+Stripe sandbox preset category and staging runtime
+`CATALOG_STRIPE_DIGITAL_TAX_CODE` now match `txcd_10501000` (Digital
+Photographs/Images, downloaded, non-subscription, permanent rights). The
+Stripe UI confirmed the category save and Wrangler confirmed the staging
+setting update. Live Stripe settings and tax registrations were not changed.
+
+Real sandbox Checkout for album quote `018bcd19-0dc9-4795-b925-0f781e66dc54`
+completed using synthetic buyer data and Stripe's documented test card, with
+optional Link enrollment disabled. Order `50d3d14c-e1de-4b34-b89f-102af70e4c1e`
+returned server-confirmed **paid**, $29.95, and eight photo entitlements expiring
+September 19. This proves the album's per-photo delivery flow, not ZIP delivery,
+real-money payments, refund/replay acceptance or the full 131-photo import.
+
+SWG01452.jpg was downloaded three times; each 6,826,940-byte file matched the
+local source SHA-256 `7a3957f4b901ce657796539a760a7178ea568e3212668fe2a3bbd748113aba93`.
+The hosted order counter progressed 3 → 2 → 1 → 0, then disabled the download
+button. A hostile fourth server request and elapsed-time expiry still need
+live negative acceptance; existing automated tests cover those rules.
+
+Read-only Neon inventory found 13 football-gallery jobs stalled on attempt
+four of five, and 25 exhausted processing jobs plus one failed job in the test
+gallery. No original/gallery assignments were modified. Release `7f38e31`
+resumed staging processing after Workers Paid verification; Cloudflare version
+`6becb97b-db87-4b07-8a74-a78371e102b9` served the expected revision and 15 assets.
+The first post-release inventory was unchanged; completion is not yet claimed.
+
+An additional regression reproduces exhausted crashed leases staying
+"processing" forever. Dispatch reconciliation now marks only expired,
+exhausted jobs failed in a bounded, skip-locked statement, without resetting
+attempts automatically or changing originals/visibility. Owner retry can then
+reset a failed job normally. The regression verifies live leases are retained,
+stale completion is rejected, and explicit retry works.
+
+The user's phrase "remove backups" is awaiting clarification; no backups have
+been deleted and remote backups are not claimed complete.
+
 ## Launch acceptance follow-up — September 5
 
 This supersedes the older Workers Free/address blockers below. The account's
