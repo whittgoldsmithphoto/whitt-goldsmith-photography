@@ -80,17 +80,31 @@ Acceptance:
 - Run `npm test`, `npm run typecheck`, `npm run lint`, `npm run build:dev`, both focused browser harnesses, and `node scripts/brand-check.mjs --placeholder-ok`.
 - Capture fresh local desktop/mobile screenshots. Staging is comparison-only because this branch will not be deployed.
 
-## Deferred next slices
+## Expanded OSS capability campaign
 
-These remain in this plan so the branch can be compared honestly, but they are not prerequisites for the first pushed implementation:
+This follow-on branch is intentionally based on `feature/oss-gallery-ui-accelerator` and is published separately so the earlier implementation remains intact and can be compared directly. It treats the four projects as source-mapped references, not a license shortcut:
 
-1. Shared owner-resource query/cache to remove redundant capability/catalog calls.
-2. Human-readable gallery/photo selectors throughout Selling and quote preview, based on Picstome workflow requirements but written independently.
-3. Route-level lazy loading for owner, Stripe, diagnostics, migration, and legacy modules.
-4. Canonical media assets plus multi-gallery memberships.
-5. EXIF/IPTC/XMP metadata ingestion and indexed query grammar.
-6. Smart collections and revision-safe bulk operations.
-7. Invite-only proof rounds, guest comments, expiration, and notifications.
-8. Explicit free/limited delivery grants and asynchronous ZIP fulfillment.
+- **Lychee (MIT):** implementation-level patterns may inform safe archive handling, metadata normalization, temporary links, derivative pipelines, and gallery operations. Any copied implementation pattern must retain its MIT notice and be isolated from incompatible code.
+- **Piwigo (GPL-2.0-or-later):** batch-manager, category/tree, metadata, derivative, and permission workflows are behavioral references only. Reimplement them in this repository's TypeScript/server authorities.
+- **PhotoPrism (AGPL-3.0):** filter-first search, review/status vocabulary, duplicate-oriented workflows, and media lifecycle concepts are behavioral references only. Do not copy its application code or UI assets.
+- **Picstome (AGPL-3.0, with separately restricted commercial UI pieces):** proofing, share/payment-status, client workflow, and onboarding concepts are product references only. Reimplement independently; do not copy PHP, Blade, Flux components, or assets.
 
-The larger data-model features require dedicated migrations and authorization matrices. They should not be rushed into a UI repair branch merely to increase feature count.
+The implementation order is deliberately vertical and fail-closed:
+
+1. **Bulk photo workbench:** select visible/filtered photos, select all, clear selection, and apply real hide/unhide/archive/restore mutations through the existing revision-checked photo operation. This is the first expanded slice because it adds Piwigo/PhotoPrism leverage without a migration or a second data authority.
+2. **Canonical memberships:** introduce an asset identity separate from gallery membership, preserve existing photo IDs and paid references, backfill/reconcile counts, and dual-read/write only after authorization and rollback tests exist. This is the prerequisite for true multi-gallery reuse.
+3. **Metadata and smart collections:** add versioned EXIF/IPTC/XMP provenance, allowlisted indexed filters, saved searches, private previews, and revision-safe bulk metadata. Public responses must expose approved fields only.
+4. **Sharing and proof rounds:** add scoped hashed invitations, guest binding, named proof rounds, expiration/revocation, comments, activity pagination, and outbox-backed notifications. Existing password grants remain compatibility paths until migration is accepted.
+5. **Delivery and operations:** add explicit owner/free/limited/purchased grants, asynchronous immutable ZIP manifests, safe streamed extraction/recovery, bounded cleanup dry runs, derivative reconciliation, and truthful operator health.
+6. **Performance and polish:** owner route code splitting, shared owner-resource caching, advanced search grammar, and mobile workflow refinement after the data contracts are stable.
+
+Every slice must retain the existing catalog, R2, auth, integrity, proofing, sports, and commerce authorities. New controls must invoke a real action with readback/error handling; missing providers, decisions, and live acceptance remain explicit setup states. The branch will never activate payments, expose originals, or replace the earlier PR automatically.
+
+## Expanded slice acceptance
+
+- Focused RED → GREEN tests cover the new behavior and revision/error boundaries.
+- Owner browser acceptance exercises the visible control against the real local server/PGlite path where the harness supports it; simulated media/provider paths are labeled.
+- Full typecheck, lint, build, catalog/commerce/proof browser checks, responsive checks, brand check, dependency/security checks, and exact-tip spec/quality reviews run before publishing.
+- GitHub publication uses a new branch and draft PR targeting the earlier accelerator branch or another explicitly selected base. Existing branches and PR #1 remain untouched.
+
+The larger data-model features still require dedicated migrations and authorization matrices. They will be added in reviewable slices instead of being rushed into a UI repair branch merely to increase feature count.
