@@ -1,5 +1,40 @@
 # Photographer feature program
 
+## Launch acceptance follow-up — September 5
+
+This supersedes the older Workers Free/address blockers below. The account's
+Workers plan was verified as Paid. Stripe sandbox Tax displays South Carolina
+as its head office, but its preset category is Electronically Supplied Services.
+A real owner quote for SWG01565.jpg in the football gallery returned $4.95.
+Opening sandbox Checkout was blocked by the provider Tax configuration check;
+no successful purchase, webhook settlement or customer delivery is claimed.
+
+Release `5f93135ad244f7e45567da2f778a844aeaa057eb` replaces the generic Tax
+failure with distinct mode, setup-status, provider, category and registration
+messages while retaining every existing fail-closed condition. The new test
+failed against the old generic message, then passed. The canonical staging
+release completed the full tests, typecheck and lint, deployed Cloudflare
+version `9b4d7472-2068-48bb-927f-a6eb5105846f`, and verified its revision and
+15 served assets. The repair branch is pushed to GitHub.
+
+The historical reviewed code `txcd_10505000` describes limited-rights finished
+artwork, not simply a time-limited re-download link. Before changing the
+classification, confirm whether the personal/commercial usage license is
+permanent; do not alter Tax settings just to make the preflight pass.
+Reference: https://docs.stripe.com/tax/tax-codes
+
+Desktop snapshot `2026-09-05T19-17-29-000Z` under
+`~/Desktop/Whitt Goldsmith Photography Backups` contains source at `621b43f`,
+locally available Git history, all 131 original JPEGs and PNG/SVG branding.
+135 file checksums passed and a Git restore was verified. It does not contain
+Neon database data, R2-only objects or cloud secrets and is not a full server
+backup. It also predates this diagnostic release. No automatic expiry is set.
+
+Still open: full-gallery assignment/recovery and media acceptance, remote
+database/object backup and restore, individual and album Stripe acceptance,
+customer ZIP delivery, production configuration/migrations and live activation.
+Processing and live sales remain paused; SmugMug/domain routing is untouched.
+
 ## Cloudflare staging activation — September 5
 
 This activation supersedes the source-only deployment notes below for metadata
