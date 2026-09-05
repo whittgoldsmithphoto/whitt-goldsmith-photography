@@ -140,7 +140,7 @@ try {
   assert.equal(transfers.filter((name) => name === "slow-first.jpg").length, 1);
   assert.equal(transfers.filter((name) => name === "unstarted-second.jpg").length, 1);
   // Simulate a saved original needing processing, then recover through the real UI.
-  await sql`update catalog_photos set status='needs_review' where filename='healthy.jpg'`;
+  await sql`update catalog_photos set status='needs_review',error='Synthetic processor size limit' where filename='healthy.jpg'`;
   await page.reload();
   await page.getByRole("button", { name: /SYNTHETIC BATCH TEST/ }).click();
   await input.setInputFiles([jpeg("healthy.jpg", 3)]);
@@ -154,6 +154,9 @@ try {
     });
   });
   await page.getByText("Upload history", { exact: true }).click();
+  await page
+    .getByText("healthy.jpg — Needs review: Synthetic processor size limit", { exact: false })
+    .waitFor();
   await page.getByRole("button", { name: "Retry processing", exact: true }).click();
   await batch.getByText("healthy.jpg — ready", { exact: true }).waitFor();
   assert.deepEqual(errors, []);

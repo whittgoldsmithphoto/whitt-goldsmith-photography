@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { processingSummary } from "@/lib/catalog/processing-summary";
 import {
   uploadBatch,
   retryUploadBatch,
@@ -733,7 +734,7 @@ export function CatalogOrganizer() {
                       .filter((job) => job.galleryId === active.id)
                       .map((job) => (
                         <li key={job.id} className="text-xs text-muted-foreground">
-                          {job.filename} — {job.status.replaceAll("_", " ")}
+                          {job.filename} — {processingSummary(job)}
                           {["uploaded", "needs_review", "processing"].includes(job.status) && (
                             <Button
                               className="ml-2"

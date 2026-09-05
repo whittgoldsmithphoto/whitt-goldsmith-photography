@@ -49,6 +49,13 @@ This is same-tab recovery, not persistent access to local files after a browser 
 - Mounted browser verification saved the setting, reloaded the owner page, then verified one-column narrow and three-column desktop public rendering. Synthetic local media only. Hosted migration/deployment is still pending; named reusable presets are not yet implemented.
 - Recovery tab now reports 131/131 checked with one failed transfer (SWG01920.jpg). Retried that single failed transfer through the existing UI; final readiness remains to be checked. Existing batch processing labels are not a verified ready count.
 
+### Processing feedback checkpoint
+
+- Owner upload history now displays server-recorded failure reasons, queued states, processing stages and bounded recorded progress. A ready original suppresses stale failed-job messaging; unknown progress is never fabricated.
+- RED: missing summary module failed before implementation. Unit coverage then passed, and the mounted owner UI exposed a synthetic processor failure before a successful processing retry. Live history showed SWG01676.jpg still needs review; SWG01920.jpg retransmission completed and entered processing.
+- Diagnostics now includes migration 0033, so a deployment lacking the new gallery column cannot claim a complete catalog schema.
+- This does not solve the hosted large-image processor limit or complete the competitive plan. Recovery, named presets, private invitation/proof workflow, and later phases remain open.
+
 1. Complete Phase 0 visual baselines and record final checks for each commit.
 2. Finish hosted gallery/ZIP recovery and payment acceptance separately; current pending details are in ACCEPTANCE_2026_09_05_RECOVERY.md.
 3. Inventory existing gallery settings, folders, proofs and commerce before adding Phase 1 models. Prioritize missing behavior instead of parallel duplicate settings.
