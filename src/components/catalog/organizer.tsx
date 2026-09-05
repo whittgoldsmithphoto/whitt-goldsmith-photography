@@ -18,10 +18,19 @@ import {
   type OrganizerPhotoFilter,
   type OrganizerPhotoSort,
 } from "@/lib/catalog/organizer-photo-view";
+import {
+  clearPhotoSelection,
+  planBulkPhotoAction,
+  selectAllVisiblePhotos,
+  selectedPhotoCount,
+  togglePhotoSelection,
+  type BulkPhotoAction,
+} from "@/lib/catalog/bulk-photo-workbench";
 
 export function CatalogOrganizer() {
   const state = useCatalog<OwnerCatalog>("op=owner");
   const [selected, setSelected] = useState<string | null>(null);
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [foldersOpen, setFoldersOpen] = useState(false);
@@ -42,6 +51,7 @@ export function CatalogOrganizer() {
   const activePhotos = photos.filter((photo) => photo.galleryId === active?.id);
   const activePhotoCount = activePhotos.length;
   const visiblePhotos = filterAndSortOwnerPhotos(photos, active?.id, photoFilter, photoSort);
+  const selectedCount = selectedPhotoCount(selectedPhotoIds, photos, active?.id);
   const edit = (g?: CatalogGallery) =>
     setDraft(
       g
@@ -76,6 +86,25 @@ export function CatalogOrganizer() {
       state.reload();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Request failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function bulkAction(bulkActionName: BulkPhotoAction) {
+    const inputs = planBulkPhotoAction(photos, selectedPhotoIds, active?.id, bulkActionName);
+    if (!inputs.length) {
+      setMessage("Select at least one photograph first.");
+      return;
+    }
+    setBusy(true);
+    setMessage("");
+    try {
+      for (const input of inputs) await catalogFetch("op=photo", input);
+      setSelectedPhotoIds(clearPhotoSelection());
+      setMessage(`${inputs.length} photograph${inputs.length === 1 ? "" : "s"} ${bulkActionName}d successfully.`);
+      state.reload();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : `Could not ${bulkActionName} photographs.`);
     } finally {
       setBusy(false);
     }
@@ -335,22 +364,47 @@ export function CatalogOrganizer() {
               <p className="mb-3 text-sm text-muted-foreground" role="status">
                 {visiblePhotos.length} of {activePhotoCount} photographs
               </p>
+              <div className="mb-4 flex flex-wrap items-center gap-2 rounded border border-border p-3" aria-label="Bulk photograph actions">
+                <span className="text-sm font-medium">{selectedCount} selected</span>
+                <Button type="button" size="sm" variant="outline" disabled={busy || !visiblePhotos.length} onClick={() => setSelectedPhotoIds((ids) => selectAllVisiblePhotos(ids, visiblePhotos))}>
+                  Select all visible
+                </Button>
+                <Button type="button" size="sm" variant="outline" disabled={busy || !selectedPhotoIds.length} onClick={() => setSelectedPhotoIds(clearPhotoSelection())}>
+                  Clear selection
+                </Button>
+                {(["hide", "unhide", "archive", "restore"] as BulkPhotoAction[]).map((bulkActionName) => (
+                  <Button key={bulkActionName} type="button" size="sm" variant="outline" disabled={busy || !selectedCount} onClick={() => void bulkAction(bulkActionName)}>
+                    {bulkActionName[0].toUpperCase() + bulkActionName.slice(1)} selected
+                  </Button>
+                ))}
+              </div>
               <div className="grid grid-cols-2 gap-3 xl:grid-cols-3 lg:col-start-1 lg:row-start-2">
                 {visiblePhotos.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    disabled={busy}
-                    className="catalog-frame min-w-0 border border-border p-2 text-left"
-                    aria-pressed={photoDraft?.id === p.id}
-                    onClick={() => setPhotoDraft({ id: p.id, revision: p.revision, caption: p.caption, hidden: p.hidden, archived: p.archived, displayOrder: p.displayOrder })}
-                  >
-                    <img src={`${p.thumbSrc}&owner=1`} alt={p.caption || p.filename} className="aspect-[4/3] w-full rounded object-cover" />
-                    <span className="mt-2 block break-all text-sm">{p.filename}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {p.archived ? "Archived" : p.hidden ? "Hidden" : "In gallery"} · Order {p.displayOrder} · {photoDraft?.id === p.id ? "Selected" : "Edit"}
-                    </span>
-                  </button>
+                  <div key={p.id} className="catalog-frame min-w-0 border border-border p-2">
+                    <label className="mb-2 flex min-h-10 items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${p.filename}`}
+                        checked={selectedPhotoIds.includes(p.id)}
+                        disabled={busy}
+                        onChange={(event) => setSelectedPhotoIds((ids) => togglePhotoSelection(ids, p.id, event.target.checked))}
+                      />
+                      Select photograph
+                    </label>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      className="w-full text-left"
+                      aria-pressed={photoDraft?.id === p.id}
+                      onClick={() => setPhotoDraft({ id: p.id, revision: p.revision, caption: p.caption, hidden: p.hidden, archived: p.archived, displayOrder: p.displayOrder })}
+                    >
+                      <img src={`${p.thumbSrc}&owner=1`} alt={p.caption || p.filename} className="aspect-[4/3] w-full rounded object-cover" />
+                      <span className="mt-2 block break-all text-sm">{p.filename}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {p.archived ? "Archived" : p.hidden ? "Hidden" : "In gallery"} · Order {p.displayOrder} · {photoDraft?.id === p.id ? "Selected" : "Edit"}
+                      </span>
+                    </button>
+                  </div>
                 ))}
               </div>
               {photoDraft && (
