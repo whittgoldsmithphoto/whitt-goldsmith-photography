@@ -1,5 +1,7 @@
 # Backend revision: remaining work and decisions
 
+> Read [September 5 repair checkpoint](REPAIR_CHECKPOINT_2026_09_05.md) first for current owner decisions and live evidence. The historical table below predates approval of the public football gallery, USD 4.95/29.95 digital pricing and license, 14-day/three-download policy, Stripe Tax choice, supplied watermark and indefinite backup retention. Do not ask the owner to decide these again. Future migration numbers below are conceptual, not the current migration inventory.
+
 This is the unfinished-work register for `2026-09-03_224522-smugmug-like-backend-revision.md`, together with carryovers from the original A–D roadmap and second security audit. The [capability manifest](BACKEND_CAPABILITY_MANIFEST.md) is authoritative for implemented/gated capability status. This list deliberately distinguishes **engineering backlog** from things requiring **owner decisions/provider access** and from **unrealistic promises**. A roadmap entry is not permission to publish private photographs, activate live charging, purchase services, or change the SmugMug domain.
 
 ## Cannot complete without decisions or external acceptance

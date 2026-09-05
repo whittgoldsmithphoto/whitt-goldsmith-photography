@@ -1,99 +1,24 @@
-# Host on Cloudflare
+# Cloudflare release instructions
 
-The studio, originals, DNS, and CDN all live in your Cloudflare account. Stripe still takes the card. A small Postgres (Neon, behind Cloudflare Hyperdrive) holds owner sessions and orders — Workers cannot keep those in R2.
+Deploy from a clean checkout of the intended Git revision:
 
-Public site: galleries and guest checkout. Owner door: `/login` (first time `/login?setup=1`).
-
-## One-time map
-
-| Piece             | Cloudflare                             |
-| ----------------- | -------------------------------------- |
-| This app          | Workers (this repo)                    |
-| Photographs       | R2 — already connected in Settings     |
-| Domain            | Same zone as R2                        |
-| Sessions / orders | Hyperdrive → Neon Postgres             |
-| Payments          | Stripe Tax (webhook on the Worker URL) |
-
-I keep editing here. You publish from GitHub → Cloudflare. I am not in the live path.
-
-## 1. GitHub
-
-Create a repo and push this folder.
-
-## 2. Neon (sessions and orders)
-
-1. Create a Neon project (free tier is enough).
-2. Copy the pooled connection string.
-3. In Cloudflare: **Storage & databases → Hyperdrive → Create**. Point it at that Neon URL. Copy the Hyperdrive connection string — that is `DATABASE_URL` on the Worker.
-
-Then bind that Hyperdrive configuration to this Worker in `wrangler.jsonc`:
-
-```jsonc
-"hyperdrive": [{ "binding": "HYPERDRIVE", "id": "<your-hyperdrive-id>" }]
-```
-
-The repository currently has a placeholder comment for this account-specific ID. Do not deploy until the real ID is present and the Worker can reach the database.
-
-Apply schema once from a machine that can reach Neon:
-
-```
-DATABASE_URL="postgresql://…" npm run db:migrate
-```
-
-## 3. Cloudflare Worker
-
-**Dashboard (easiest)**
-
-1. [Workers & Pages](https://dash.cloudflare.com/) → **Create** → **Workers** → **Connect to Git**.
-2. Select the repo.
-3. This review branch is staging-only. Build command: `npm run build:staging`. Do not connect this branch to the production Worker; use the separate `wgp-catalog-staging` service.
-4. Deploy command: `npx wrangler deploy --config dist/server/wrangler.json`
-5. After the first deploy, **Settings → Variables and Secrets**:
-
-| Name                 | Value                             |
-| -------------------- | --------------------------------- |
-| `VITE_AUTH_ENABLED`  | `true` (already in wrangler vars) |
-| `BETTER_AUTH_URL`    | `https://your-domain`             |
-| `BETTER_AUTH_SECRET` | long random string                |
-| `DATABASE_URL`       | Hyperdrive connection string      |
-
-R2 and Stripe can stay in the in-app Settings screen after you sign in. Or set them here too:
-
-```
-R2_ACCOUNT_ID
-R2_ACCESS_KEY_ID
-R2_SECRET_ACCESS_KEY
-R2_BUCKET
-R2_PUBLIC_BASE_URL
-STRIPE_SECRET_KEY
-STRIPE_WEBHOOK_SECRET
-```
-
-**CLI (same account as R2)**
-
-```
-npx wrangler login
+```sh
+npm ci
 npm run deploy:staging
-npx wrangler secret put BETTER_AUTH_SECRET
-npx wrangler secret put DATABASE_URL
 ```
 
-You get a `*.workers.dev` URL immediately.
+This builds the Cloudflare Worker and browser assets together, runs tests/typecheck/lint, verifies staging resource bindings, deploys with `--keep-vars`, and checks the live `x-wgp-revision` header and application assets.
 
-## 4. Domain
+`npm run build` is the generic preview/Vercel build. It does **not** refresh `dist/server`, and must never be followed by bare `wrangler deploy`. That combination repeatedly deployed old Cloudflare files during September 5 updates. An HTTP 200 alone does not verify a new release.
 
-In the Worker: **Settings → Domains & Routes → Add** → your studio domain (the zone that already holds R2). Cloudflare will serve the site on that host. Keep SmugMug on the old URL until you are ready to cut DNS.
+Staging: https://wgp-catalog-staging.whittgoldsmithmedia.workers.dev
 
-Stripe webhook: `https://your-domain/api/webhooks/stripe`
+Owner login: `/login`. Organizer: `/organize`. Pricing and orders: `/sell`. Proof inbox: `/favorites`.
 
-## 5. First owner login
+Staging uses its own Neon database through the existing Hyperdrive binding and its private `wgp-catalog-staging` R2 bucket. Keep original photos and keys out of Git. Configure secrets on this exact Worker; `--keep-vars` preserves provider settings between releases.
 
-1. Open `https://your-domain/login?setup=1`
-2. Create the one owner account
-3. Bookmark `/login`
-4. Settings → paste R2 (if not already in secrets) and Stripe
-5. Stripe Tax: add this domain in the Stripe Tax dashboard
+Apply missing migrations from `migrations/` in order to the matching database, transactionally recording each filename in `_migrations`. A successful application build is not a database migration. Verify schema, retained photo counts, and affected workflows afterward.
 
-## After it is live
+The catalog Stripe webhook is `/api/commerce-webhook`, not the retained legacy `/api/webhooks/stripe` route. Test and live accounts have separate keys, signing secrets and acceptance gates. Stripe Tax configuration, an actual paid session, webhook settlement, delivery and refund revocation must be verified before enabling live sales.
 
-Create folders in Organizer, drop zips on Upload. Public galleries and checkout stay on the front. Owner tools stay behind the footer mark.
+The SmugMug custom domain stays where it is until Whitt approves the cutover. Production has its own guarded release command and migration gate; staging approval is not domain-cutover approval.
