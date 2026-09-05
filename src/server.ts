@@ -10,8 +10,21 @@ import { runScheduledMaintenance } from "./lib/ops/scheduled-maintenance";
 
 type WorkerQueueBatch = Parameters<typeof processMediaQueueBatch>[0];
 
+async function fetch(request: Request, env: unknown, ctx: ExecutionContext): Promise<Response> {
+  const response = await handler.fetch(request, env, ctx);
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("text/html")) {
+    const headers = new Headers(response.headers);
+    headers.set("cache-control", "no-cache, no-store, must-revalidate");
+    headers.set("pragma", "no-cache");
+    headers.set("expires", "0");
+    return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+  }
+  return response;
+}
+
 export default {
-  fetch: handler.fetch,
+  fetch,
   async queue(batch: WorkerQueueBatch) {
     const sql = await getSql();
     const catalog = createCatalog(sql, catalogMedia());
