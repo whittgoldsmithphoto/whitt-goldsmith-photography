@@ -1,5 +1,16 @@
 # Staging recovery and payment evidence — September 5, 2026
 
+## Latest verified checkpoint — 16:57 EDT
+
+- Staging source `e6aff5a1cb6e4b743d719ecfe660ce7122deaf55`, Cloudflare version `19418e8a-dcf0-4676-879c-d7d21dae0c33`, includes the customer archive route, native attachment form, and scheduled processing. Migration 0032 and the album ZIP flag are enabled in staging only.
+- Recovery completed: the football gallery has **131 ready photos, 131 distinct original checksums, 1,495,097,931 original bytes**. These totals match the 131 local source JPEGs. The final failed original, SWG01676.jpg, was recovered with an explicit operator-generated set of watermarked, metadata-free previews; all seven uploaded objects were read back and hash-verified. The exact original is unchanged. This is not a claim that automatic processing of oversized images is fixed.
+- `scripts/recover-large-photo.mjs` documents that narrowly scoped staging operation. `scripts/recovery-transaction-check.mjs` verifies the guarded transaction and rejection of repeated execution against changed state. The Postgres safety review informed short timeouts, row locking, and identity/state guards.
+- New hosted sandbox order `32c4e1df-0d66-4792-b956-283c86787fc6` was paid through Stripe test Checkout for **$29.95**. The returned server-confirmed customer order contains **131 photographs**, three attempts per photograph, and expiry September 19. No real money was charged and saving payment information was disabled.
+- The customer requested the full album ZIP. Preparation is pending hosted verification; no successful hosted ZIP delivery is claimed yet.
+- Production and the SmugMug domain remain unchanged. No backups were removed.
+
+The sections below preserve earlier checkpoints; the latest checkpoint supersedes their upload and archive-wiring pending notes.
+
 ## Verified hosted behavior
 
 - Staging media processing resumed; exhausted expired leases now become explicitly failed instead of remaining processing indefinitely. Current deployed source: `163243cc9bf09eb1961e83a8f52e3129de48e748`; Cloudflare version `eb276ce2-035d-4bbd-9cd3-4f7b5590a207`.
