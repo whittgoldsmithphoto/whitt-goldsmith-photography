@@ -99,3 +99,67 @@ test("pre-cancelled jobs never open originals or storage", async () => {
   assert.equal(f.state().writes, 0);
   assert.equal(f.state().committed, false);
 });
+
+test("cancellation interrupts a stalled original read and cleans up private output", async () => {
+  const f = fixture();
+  const stop = new AbortController();
+  let cancelled = false;
+  let reading!: () => void;
+  const started = new Promise<void>((resolve) => {
+    reading = resolve;
+  });
+  const pending = packPhotoArchive(
+    f.entries,
+    {
+      ...f.deps,
+      read: async () =>
+        new ReadableStream<Uint8Array>({
+          pull() {
+            reading();
+          },
+          cancel() {
+            cancelled = true;
+          },
+        }),
+    },
+    stop.signal,
+  );
+  await started;
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  stop.abort(new Error("job cancelled"));
+  const result = await Promise.race([
+    pending.then(
+      () => "committed",
+      (error: Error) => error.message,
+    ),
+    new Promise<string>((resolve) => setTimeout(() => resolve("stalled"), 100)),
+  ]);
+  assert.equal(result, "job cancelled");
+  assert.equal(cancelled, true);
+  assert.equal(f.state().aborted, true);
+  assert.equal(f.state().committed, false);
+});
+
+test("cancellation during initial authorization never opens private output", async () => {
+  const f = fixture();
+  const stop = new AbortController();
+  let opened = false;
+  await assert.rejects(
+    packPhotoArchive(
+      f.entries,
+      {
+        ...f.deps,
+        authorize: async () => {
+          stop.abort(new Error("expired"));
+        },
+        openSink: async () => {
+          opened = true;
+          return f.deps.openSink();
+        },
+      },
+      stop.signal,
+    ),
+    /expired/,
+  );
+  assert.equal(opened, false);
+});

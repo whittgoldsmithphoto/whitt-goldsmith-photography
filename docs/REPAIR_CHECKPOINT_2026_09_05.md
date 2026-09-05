@@ -72,6 +72,14 @@ Still required: bind the core to durable archive jobs and immutable paid snapsho
 
 The broader backlog above remains open. Production, prints, live checkout and custom-domain cutover have not been enabled by this repair pass.
 
-### Post-release verification
+### Next archive implementation slice (source only)
+
+- Added migration 0029 and a saved archive job ledger with content-derived manifest identity, idempotent enqueue, customer-scoped lookup/cancellation, atomic exclusive claims, expiring lease renewal, stale-worker fencing and five-attempt retry limits. Each attempt writes a different private ZIP key.
+- Connected the ledger contract to a background worker coordinator and the real ZIP/R2 storage adapter. Access is checked before, during and after packing; failed final checks or lost leases discard the attempt's private output instead of publishing it.
+- Fixed cancellation during stalled original reads and cancellation during initial authorization. Neither is allowed to commit a ZIP.
+- Verification: 451 tests passed, typecheck passed, lint zero errors/seven baseline warnings. Includes a real packer + storage adapter + PGlite job-ledger integration test using an in-memory storage provider. This is not a live R2, independent-connection PostgreSQL or Stripe acceptance result.
+- These are internal building blocks, not an activated customer feature. The worker requires a real paid-snapshot authorization implementation. Customer request/status/delivery routes, atomic allowance consumption, dispatch wiring, database migration on staging and live provider acceptance are still open. No changes to live-sales gates, production, the processing pause or the custom domain.
+
+### Previous deployed release verification
 
 Release `be682c062bb8f533d300b2a1e40c0eebc3d3aa51` passed 441 tests, typecheck and lint (zero errors; seven existing warnings). Cloudflare staging version `0044a432-2e4e-4567-ad95-a9a5b8a58679` was deployed and its revision plus 15 application assets verified. An authenticated browser reload confirmed the processing-pause notice. The organizer now displays eight visible football photos: several queued items completed before the pause took effect. The full 131-photo import and original-by-original acceptance are still unfinished.

@@ -30,11 +30,7 @@ const CHUNK_BYTES = 64 * 1024;
  * transactionally consume grants. No byte leaves the private sink on failure.
  * Stored JPEG/PNG data uses ZIP pass-through (already compressed), not deflate.
  */
-export async function packPhotoArchive(
-  input: readonly ArchiveEntry[],
-  deps: ArchivePackDependencies,
-  signal?: AbortSignal,
-) {
+export function snapshotArchiveEntries(input: readonly ArchiveEntry[]) {
   if (!input.length || input.length > 500) throw new Error("Archive supports 1–500 photos");
   const ids = new Set<string>();
   let expectedTotal = 0;
@@ -51,7 +47,9 @@ export async function packPhotoArchive(
       !entry.filename ||
       entry.filename.length > 180 ||
       /[\\/<>:"|?*]/.test(entry.filename) ||
-      Array.from(entry.filename).some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127) ||
+      Array.from(entry.filename).some(
+        (char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127,
+      ) ||
       /[. ]$/.test(entry.filename) ||
       !/\.(jpe?g|png)$/i.test(entry.filename)
     )
@@ -60,11 +58,27 @@ export async function packPhotoArchive(
     expectedTotal += entry.bytes;
     if (expectedTotal > MAX_ARCHIVE_BYTES - 1024 * 1024)
       throw new Error("Archive exceeds size limit");
-    return Object.freeze({ ...entry });
+    return Object.freeze({
+      photoId: entry.photoId,
+      filename: entry.filename,
+      objectKey: entry.objectKey,
+      bytes: entry.bytes,
+      checksum: entry.checksum,
+    });
   });
   Object.freeze(entries);
+  return entries;
+}
+
+export async function packPhotoArchive(
+  input: readonly ArchiveEntry[],
+  deps: ArchivePackDependencies,
+  signal?: AbortSignal,
+) {
+  const entries = snapshotArchiveEntries(input);
   signal?.throwIfAborted();
   await deps.authorize(entries);
+  signal?.throwIfAborted();
   const sink = await deps.openSink();
   const outputHash = createHash("sha256");
   let outputBytes = 0;
@@ -99,6 +113,10 @@ export async function packPhotoArchive(
       const stream = await deps.read(entry);
       if (!stream) throw new Error("Archive original unavailable");
       const reader = stream.getReader();
+      const cancelRead = () => {
+        void reader.cancel(signal?.reason).catch(() => {});
+      };
+      signal?.addEventListener("abort", cancelRead, { once: true });
       const photoHash = createHash("sha256");
       let photoBytes = 0;
       const file = new ZipPassThrough(`${String(index + 1).padStart(4, "0")}-${entry.filename}`);
@@ -109,6 +127,7 @@ export async function packPhotoArchive(
         for (;;) {
           signal?.throwIfAborted();
           const { done, value } = await reader.read();
+          signal?.throwIfAborted();
           if (done) break;
           photoBytes += value.length;
           if (photoBytes > entry.bytes) throw new Error("Archive original size mismatch");
@@ -123,6 +142,7 @@ export async function packPhotoArchive(
         file.push(new Uint8Array(), true);
         await flush();
       } finally {
+        signal?.removeEventListener("abort", cancelRead);
         await reader.cancel().catch(() => {});
         reader.releaseLock();
       }
