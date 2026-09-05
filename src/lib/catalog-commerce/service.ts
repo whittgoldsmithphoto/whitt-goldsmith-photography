@@ -23,12 +23,13 @@ export interface QuoteItem {
   productId: string;
   photoId: string;
   name: string;
-  kind: "digital_photo";
+  kind: "digital_photo" | "gallery_download";
   license: string;
   filename: string;
   quantity: number;
   unitCents: number;
   lineCents: number;
+  photoIds?: string[];
 }
 export interface Quote {
   id: string;
@@ -70,7 +71,8 @@ async function sha256(token: string) {
 /** Server-only domain. Callers authenticate the actor and enforce owner roles.
  * Gallery access callback MUST validate current password grants before quoting.
  * No request is trusted to supply price, license, name, tax or payment status.
- * Taxes/shipping/provider checkout are intentionally NOT ready in this slice.
+ * Shipping and physical fulfillment remain closed; digital checkout is enabled
+ * only behind the explicit staging/live configuration gates.
  */
 export function createCommerce(sql: Sql, authorizeGallery: (galleryId: string) => Promise<number>) {
   return {
@@ -275,8 +277,9 @@ export function createCommerce(sql: Sql, authorizeGallery: (galleryId: string) =
       );
       if (!row) throw new Error("Order unavailable");
       const entitlements = await sql.query(
-        `SELECT id,photo_id,expires_at,downloads,max_downloads,revoked_at
-         FROM commerce_entitlements WHERE order_id=$1 AND customer_id=$2 ORDER BY id LIMIT 100`,
+        `SELECT e.id,e.photo_id,e.expires_at,e.downloads,e.max_downloads,e.revoked_at,p.filename
+         FROM commerce_entitlements e JOIN catalog_photos p ON p.id=e.photo_id
+         WHERE e.order_id=$1 AND e.customer_id=$2 ORDER BY p.filename,e.id LIMIT 1000`,
         [orderId, customerId],
       );
       return { ...row, entitlements };

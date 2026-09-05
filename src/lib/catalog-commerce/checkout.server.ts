@@ -177,7 +177,10 @@ export function checkoutLines(quote: Quote): Stripe.Checkout.SessionCreateParams
     cents.parse(item.lineCents);
     z.number().int().min(1).max(99).parse(item.quantity);
     z.string().min(1).max(160).parse(item.name);
-    if (item.kind !== "digital_photo" || item.unitCents * item.quantity !== item.lineCents)
+    if (
+      !["digital_photo", "gallery_download"].includes(item.kind) ||
+      item.unitCents * item.quantity !== item.lineCents
+    )
       throw new CheckoutError("Invalid quote snapshot");
     subtotal += item.lineCents;
     return (
@@ -345,7 +348,12 @@ export function createSandboxCheckout(
        AND g.published AND g.visibility<>'private' AND g.access_version=q.access_version
        AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(q.items) i
          LEFT JOIN catalog_photos p ON p.id=i->>'photoId'
-         WHERE p.id IS NULL OR p.gallery_id<>q.gallery_id OR p.status<>'ready' OR p.hidden OR p.archived)`,
+         WHERE p.id IS NULL OR p.gallery_id<>q.gallery_id OR p.status<>'ready' OR p.hidden OR p.archived)
+       AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(q.items) i
+         CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(i->'photoIds','[]'::jsonb)) ids
+         LEFT JOIN catalog_photos p ON p.id=ids
+         WHERE i->>'kind'='gallery_download' AND
+           (p.id IS NULL OR p.gallery_id<>q.gallery_id OR p.status<>'ready' OR p.hidden OR p.archived))`,
       [quoteId, customerId],
     );
     if (!quote) throw new CheckoutError("Quote or gallery is no longer available");

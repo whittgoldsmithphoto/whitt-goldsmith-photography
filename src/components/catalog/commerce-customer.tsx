@@ -15,6 +15,7 @@ type OrderSummary = {
 type Entitlement = {
   id: string;
   photo_id: string;
+  filename: string;
   expires_at: string;
   downloads: number;
   max_downloads: number;
@@ -236,7 +237,10 @@ function OrderDetail({ orderId }: { orderId: string }) {
       </div>
       <ul className="divide-y rounded-lg border">
         {order.items.map((item, index) => {
-          const entitlement = order.entitlements?.find((entry) => entry.photo_id === item.photoId);
+          const entitlements =
+            item.kind === "gallery_download"
+              ? order.entitlements || []
+              : order.entitlements?.filter((entry) => entry.photo_id === item.photoId) || [];
           return (
             <li key={`${item.photoId}:${item.productId}:${index}`} className="space-y-2 p-4">
               <p className="break-words font-medium">{item.filename}</p>
@@ -244,12 +248,22 @@ function OrderDetail({ orderId }: { orderId: string }) {
                 {item.name} · {item.quantity} × {money(item.unitCents, order.currency)}
               </p>
               <p className="text-xs text-muted-foreground">{item.license}</p>
-              {order.status === "paid" && entitlement ? (
-                <Download
-                  entitlement={entitlement}
-                  filename={item.filename}
-                  onDownloaded={() => setRetry((n) => n + 1)}
-                />
+              {order.status === "paid" && entitlements.length ? (
+                <div className="space-y-3">
+                  {item.kind === "gallery_download" && (
+                    <p className="text-sm text-muted-foreground">
+                      {entitlements.length} photographs included in this gallery download.
+                    </p>
+                  )}
+                  {entitlements.map((entitlement) => (
+                    <Download
+                      key={entitlement.id}
+                      entitlement={entitlement}
+                      filename={entitlement.filename || item.filename}
+                      onDownloaded={() => setRetry((n) => n + 1)}
+                    />
+                  ))}
+                </div>
               ) : order.status === "paid" ? (
                 <p className="text-sm text-muted-foreground">
                   No download authorization is currently available. Contact the photographer if this

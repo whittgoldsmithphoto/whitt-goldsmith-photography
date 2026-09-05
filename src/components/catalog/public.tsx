@@ -11,7 +11,7 @@ import { ProofPanel } from "./proof-selection";
 import { useProofSelection, type ProofController } from "@/lib/catalog/use-proof";
 import { PreviewImage } from "./preview-image";
 import { ProtectedPhoto } from "./protected-photo";
-import { CheckoutPhoto } from "./checkout-photo";
+import { CheckoutGallery, CheckoutPhoto } from "./checkout-photo";
 
 export function CatalogStatus({
   loading,
@@ -374,6 +374,7 @@ export function CatalogGalleryPage({ id }: { id: string }) {
         Copy gallery link
       </Button>
       <ProofPanel proof={proof} galleryId={id} />
+      <CheckoutGallery galleryId={id} anchorPhotoId={photos[0]?.id} />
       <p className="mb-4 mt-8 border-t border-border pt-5 text-sm text-muted-foreground">
         {photos.length} {photos.length === 1 ? "photograph" : "photographs"}
         {resource.data?.page.hasMore ? " loaded" : ""}

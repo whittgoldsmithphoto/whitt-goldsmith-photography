@@ -201,7 +201,7 @@ test("live offers use saved prices and disappear for unavailable galleries or di
     const handler = createCommerceHandler(deps);
     const offers = await (await handler(request())).json();
     assert.deepEqual(offers.products, [
-      { id: "digital", name: "Digital original", license: "Personal use only", unit_cents: 2500 },
+      { id: "digital", name: "Digital original", license: "Personal use only", kind: "digital_photo", unit_cents: 2500 },
     ]);
     await f.commerce.configurePrice({
       priceListId: "default",

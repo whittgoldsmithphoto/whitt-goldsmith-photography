@@ -79,10 +79,10 @@ export function createCommerceHandler(deps: CommerceDependencies) {
           await deps.authorizeGallery(galleryId);
           if (!deps.liveCheckout) return json({ products: [], checkoutAvailable: false });
           const products = await deps.sql.query(
-            `SELECT p.id,p.name,p.license,r.unit_cents FROM catalog_galleries g
+            `SELECT p.id,p.name,p.license,p.kind,r.unit_cents FROM catalog_galleries g
              LEFT JOIN commerce_gallery_prices gp ON gp.gallery_id=g.id
              JOIN commerce_prices r ON r.price_list_id=COALESCE(gp.price_list_id,(SELECT id FROM commerce_price_lists WHERE is_default))
-             JOIN commerce_products p ON p.id=r.product_id AND p.active AND p.kind='digital_photo'
+             JOIN commerce_products p ON p.id=r.product_id AND p.active AND p.kind IN ('digital_photo','gallery_download')
              WHERE g.id=$1 AND g.published AND g.visibility<>'private' AND g.download_policy='purchased_only'
              ORDER BY p.name,p.id LIMIT 100`,
             [galleryId],

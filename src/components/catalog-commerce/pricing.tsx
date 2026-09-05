@@ -341,7 +341,9 @@ export function CommercePricing() {
           Prices, discounts, and orders in one place.
         </p>
         <details className="border-l-2 border-border pl-4 text-sm">
-          <summary className="cursor-pointer py-2 font-medium">Checkout is disabled</summary>
+          <summary className="cursor-pointer py-2 font-medium">
+            {sandboxAvailable ? "Owner sandbox checkout is enabled" : "Checkout is disabled"}
+          </summary>
           <p className="max-w-3xl pb-2 text-muted-foreground">
             These are configuration and quote tools, not a live store. Stripe, tax assessment, print
             shipping, and fulfillment still require acceptance testing.
@@ -999,7 +1001,7 @@ export function CommercePricing() {
                 <select aria-label="Product" required name="product" className={fieldClass}>
                   <option value="">Choose a product</option>
                   {data.products
-                    .filter((p) => p.active && p.kind === "digital_photo")
+                    .filter((p) => p.active && ["digital_photo", "gallery_download"].includes(p.kind))
                     .map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.name}
