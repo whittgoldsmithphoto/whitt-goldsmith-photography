@@ -40,9 +40,9 @@ function Card({ gallery }: { gallery: GallerySummary }) {
     <Link
       to="/galleries/$galleryId"
       params={{ galleryId: gallery.id }}
-      className="public-card group min-w-0 focus-visible:outline-2 focus-visible:outline-offset-4"
+      className="public-card group grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-4 sm:grid-cols-1 sm:items-stretch sm:gap-0"
     >
-      <div className="overflow-hidden bg-card">
+      <div className="overflow-hidden bg-[#1a1712]">
         {cover ? (
           <ProtectedPhoto
             src={cover.thumbSrc}
@@ -52,26 +52,21 @@ function Card({ gallery }: { gallery: GallerySummary }) {
           />
         ) : (
           <div
-            className="flex aspect-[3/2] w-full items-center justify-center border border-dashed border-border bg-muted/30 text-sm text-muted-foreground"
+            className="flex aspect-[3/2] w-full items-center justify-center text-sm text-muted-foreground"
             aria-label="Cover pending"
           >
             <span>Cover pending</span>
           </div>
         )}
       </div>
-      <div className="border-b border-border pb-5 pt-4">
-        <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+      <div className="sm:border-b sm:border-border sm:pb-5 sm:pt-3">
+        <p className="kicker">
           {gallery.category || "Gallery"}
           {gallery.photoCount ? ` · ${gallery.photoCount}` : ""}
         </p>
-        <h2 className="font-display mt-2 text-2xl font-normal leading-snug group-hover:underline">
+        <h2 className="mt-1 text-[1.65rem] leading-none group-hover:text-primary sm:text-[1.85rem]">
           {gallery.title}
         </h2>
-        {gallery.description && (
-          <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
-            {gallery.description}
-          </p>
-        )}
       </div>
     </Link>
   );
@@ -100,56 +95,72 @@ export function CatalogIndex({
   const listed = visiblePage.data;
   const home = page === "home";
   const featured = listed[0]?.cover ?? null;
+  const rest = home ? listed.slice(1) : listed;
   return (
-    <div className="mx-auto max-w-[1440px] px-4 pb-24 pt-10 sm:px-6 sm:pt-16 lg:px-10">
-      <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-        {defaultStudio.location}
-      </p>
-      <h1 className="font-display mt-4 max-w-4xl text-5xl font-normal leading-[1.05] tracking-tight sm:text-7xl">
-        {home || page === "about" ? defaultStudio.name : "Find your photos"}
-      </h1>
-      <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-        {page === "about"
-          ? "Sports, school games, and events in Greenville, South Carolina. For bookings, coverage requests, or questions about a gallery, contact Whitt on Instagram."
-          : home
-            ? "Sports and event photography. Find your gallery after the game, save favorites, and take the files home."
-            : "Search by event, team, school, or sport."}
-      </p>
-      {page !== "about" && (
-        <div className="my-8 flex flex-wrap gap-3">
-          <Button asChild>
-            <Link to="/galleries">Find your photos</Link>
-          </Button>
-          <Button variant="outline" asChild>
-            <a
-              href="https://www.instagram.com/whittgoldsmithphotography/"
-              target="_blank"
-              rel="noreferrer"
+    <div>
+      {home ? (
+        <section className="grid min-h-[70svh] border-b border-foreground/15 lg:grid-cols-[minmax(17rem,32vw)_minmax(0,1fr)]">
+          <div className="flex flex-col justify-between gap-10 px-4 py-10 sm:px-6 sm:py-14 lg:px-8 lg:py-16">
+            <div>
+              <p className="kicker">{defaultStudio.location}</p>
+              <h1 className="masthead mt-5 text-[clamp(3.2rem,12vw,6.4rem)]">
+                Whitt
+                <br />
+                Goldsmith
+              </h1>
+              <p className="lede mt-6 max-w-sm text-xl text-foreground/85">
+                Friday-night sports and events. Find your gallery after the game.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Button asChild>
+                <Link to="/galleries">Find your photos</Link>
+              </Button>
+              <Button variant="outline" asChild>
+                <a
+                  href="https://www.instagram.com/whittgoldsmithphotography/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Instagram
+                </a>
+              </Button>
+            </div>
+          </div>
+          {featured ? (
+            <Link
+              to="/galleries/$galleryId"
+              params={{ galleryId: listed[0].id }}
+              className="public-card relative min-h-[42vh] bg-[#1a1712] lg:min-h-full"
             >
-              Contact Whitt
-            </a>
-          </Button>
+              <ProtectedPhoto
+                src={featured.src}
+                alt={featured.caption || listed[0].title}
+                className="h-full max-h-[78vh] w-full object-cover lg:max-h-none lg:absolute lg:inset-0"
+              />
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent px-4 py-5 text-[#f3ead6] sm:px-6">
+                <p className="kicker text-[#f3ead6]/70">{listed[0].category || "Gallery"}</p>
+                <p className="masthead mt-1 text-3xl sm:text-4xl">{listed[0].title}</p>
+              </div>
+            </Link>
+          ) : (
+            <div className="min-h-[32vh] bg-[#1a1712]" />
+          )}
+        </section>
+      ) : (
+        <div className="mx-auto max-w-[1440px] px-4 pb-6 pt-8 sm:px-6 sm:pt-12">
+          <p className="kicker">{defaultStudio.location}</p>
+          <h1 className="masthead mt-3 text-[clamp(2.6rem,9vw,5.2rem)]">
+            {page === "about" ? "About" : "Find your photos"}
+          </h1>
+          <p className="lede mt-5 max-w-xl text-xl text-foreground/85">
+            {page === "about"
+              ? "Sports, school games, and events in Greenville, South Carolina."
+              : "Search by event, team, school, or sport."}
+          </p>
         </div>
       )}
-      {home && featured && (
-        <Link
-          to="/galleries/$galleryId"
-          params={{ galleryId: listed[0].id }}
-          className="public-card group relative mb-16 block overflow-hidden"
-        >
-          <ProtectedPhoto
-            src={featured.src}
-            alt={featured.caption || listed[0].title}
-            className="max-h-[78vh] w-full object-cover"
-          />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-background/90 to-transparent px-5 py-6 sm:px-8">
-            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-              {listed[0].category || "Gallery"}
-            </p>
-            <p className="font-display mt-1 text-3xl sm:text-4xl">{listed[0].title}</p>
-          </div>
-        </Link>
-      )}
+      <div className="mx-auto max-w-[1440px] px-4 pb-24 sm:px-6 lg:px-10">
       {page === "galleries" && (
         <section
           aria-label="Public gallery discovery"
@@ -209,13 +220,13 @@ export function CatalogIndex({
         </section>
       )}
       {page !== "about" &&
-        (listed.length ? (
-          <div className="grid gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
-            {listed.map((g) => (
+        ((home ? rest : listed).length ? (
+          <div className="grid gap-x-8 gap-y-8 pt-10 sm:grid-cols-2 sm:gap-y-12 lg:grid-cols-3">
+            {(home ? rest : listed).map((g) => (
               <Card key={g.id} gallery={g} />
             ))}
           </div>
-        ) : (
+        ) : home ? null : (
           <div className="border-t border-border py-16">
             <h2 className="font-display text-3xl">
               {submittedQuery ? "No matching galleries" : "Galleries appear after each event"}
@@ -254,21 +265,18 @@ export function CatalogIndex({
           Galleries are temporarily unavailable. Retry using Load more galleries.
         </p>
       )}
+      </div>
     </div>
   );
 }
 export function AboutPage() {
   return (
-    <main className="mx-auto max-w-3xl px-6 py-16 sm:py-24">
-      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-        {defaultStudio.location}
-      </p>
-      <h1 className="font-display mt-4 text-4xl font-normal leading-tight sm:text-6xl">
-        {defaultStudio.name}
-      </h1>
-      <p className="mt-6 text-xl leading-relaxed">{defaultStudio.about}</p>
+    <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6 sm:py-20">
+      <p className="kicker">{defaultStudio.location}</p>
+      <h1 className="masthead mt-4 text-[clamp(3rem,10vw,5.5rem)]">Whitt Goldsmith</h1>
+      <p className="lede mt-6 text-2xl">{defaultStudio.about}</p>
       <section className="mt-12 border-t border-border pt-8" aria-labelledby="about-practice">
-        <h2 id="about-practice" className="font-display text-2xl">
+        <h2 id="about-practice" className="text-3xl">
           The practice
         </h2>
         <p className="mt-4 leading-relaxed text-muted-foreground">
@@ -284,7 +292,7 @@ export function AboutPage() {
       >
         Contact Whitt on Instagram
       </a>
-    </main>
+    </div>
   );
 }
 export function CatalogGalleryPage({ id }: { id: string }) {
@@ -322,7 +330,7 @@ export function CatalogGalleryPage({ id }: { id: string }) {
           }
         }}
       >
-        <h1 className="font-display text-3xl">Protected gallery</h1>
+        <h1 className="masthead text-4xl">Protected gallery</h1>
         <label className="mt-6 block" htmlFor="gallery-password">
           Gallery password
         </label>
@@ -345,27 +353,23 @@ export function CatalogGalleryPage({ id }: { id: string }) {
   if (!state.data) return <CatalogStatus {...state} />;
   const { gallery, photos } = state.data;
   return (
-    <div className="mx-auto max-w-[1440px] px-4 py-10 sm:px-6 lg:px-10">
+    <div className="mx-auto max-w-[1440px] px-3 py-8 sm:px-6 sm:py-10 lg:px-10">
       <Link
         to="/galleries"
         className="inline-flex min-h-11 items-center text-sm underline underline-offset-4"
       >
         All galleries
       </Link>
-      <p className="mt-10 text-xs uppercase tracking-[0.2em] text-muted-foreground">
-        {gallery.category}
-      </p>
-      <h1 className="font-display mt-2 max-w-4xl text-4xl font-normal leading-[1.05] tracking-tight sm:text-6xl">
-        {gallery.title}
-      </h1>
-      <p className="my-5 max-w-2xl text-muted-foreground">{gallery.description}</p>
+      <p className="kicker mt-8">{gallery.category}</p>
+      <h1 className="masthead mt-2 max-w-4xl text-[clamp(2.4rem,8vw,4.8rem)]">{gallery.title}</h1>
+      <p className="lede my-5 max-w-2xl text-lg">{gallery.description}</p>
       <section
         aria-label="Gallery instructions and download policy"
-        className="my-5 max-w-3xl space-y-3 border-l-2 border-border pl-4"
+        className="my-5 max-w-3xl space-y-3 border-l-2 border-primary pl-4"
       >
         {gallery.customerInstructions && (
           <>
-            <h2 className="font-display text-xl">Gallery instructions</h2>
+            <h2 className="text-2xl">Gallery instructions</h2>
             <p className="whitespace-pre-wrap break-words">{gallery.customerInstructions}</p>
           </>
         )}
@@ -394,7 +398,7 @@ export function CatalogGalleryPage({ id }: { id: string }) {
         {photos.length} {photos.length === 1 ? "photograph" : "photographs"}
         {resource.data?.page.hasMore ? " loaded" : ""}
       </p>
-      <div className="grid grid-cols-2 gap-x-2 gap-y-8 md:grid-cols-3 md:gap-x-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-1 sm:gap-2 md:grid-cols-3 lg:grid-cols-4">
         {photos.map((p, i) => (
           <div key={p.id} className="min-w-0">
             <button
@@ -416,6 +420,7 @@ export function CatalogGalleryPage({ id }: { id: string }) {
             {proof.selection && (
               <Button
                 className="mt-2 w-full"
+                size="sm"
                 variant="outline"
                 disabled={proof.busy}
                 aria-pressed={proof.selection.photoIds.includes(p.id)}

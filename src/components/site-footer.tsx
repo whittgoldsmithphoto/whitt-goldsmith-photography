@@ -5,7 +5,7 @@ import { defaultStudio } from "@/lib/seed";
 export function SiteFooter() {
   const studio = defaultStudio;
   return (
-    <footer className="mt-auto border-t border-border/60 px-4 py-8 sm:px-6">
+    <footer className="border-t border-foreground/15 px-4 py-6 sm:px-6">
       <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4">
         <p className="text-xs text-muted-foreground">
           © {new Date().getFullYear()} {studio.name}

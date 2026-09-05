@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Menu, Images, ListChecks, ReceiptText } from "lucide-react";
+import { Menu } from "lucide-react";
 import { Toaster } from "sonner";
 import { catalogFetch } from "@/lib/catalog/client";
 import { SiteFooter } from "@/components/site-footer";
@@ -26,9 +26,9 @@ const PUBLIC_NAV = [
 ];
 
 const STUDIO_NAV = [
-  { to: "/organize" as const, label: "Organizer", icon: Images },
-  { to: "/favorites" as const, label: "Proofs", icon: ListChecks },
-  { to: "/sell" as const, label: "Selling", icon: ReceiptText },
+  { to: "/organize" as const, label: "Organizer" },
+  { to: "/favorites" as const, label: "Proofs" },
+  { to: "/sell" as const, label: "Selling" },
 ];
 
 export function StudioShell({ children }: { children: React.ReactNode }) {
@@ -80,54 +80,47 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
     return unsub;
   }, [persist, setHydrated]);
 
+  const name = studio.name.replace(/ photography$/i, "");
+
   return (
     <TooltipProvider delayDuration={250}>
-      <div
-        className={cn("min-h-svh bg-background text-foreground", inStudio && "management-shell")}
-      >
+      <div className={cn("min-h-svh bg-background text-foreground", inStudio && "management-shell")}>
         <a
           href="#main-content"
-          className="fixed left-4 top-2 z-[100] -translate-y-24 rounded-md bg-primary px-4 py-3 text-primary-foreground focus:translate-y-0"
+          className="fixed left-4 top-2 z-[100] -translate-y-24 bg-primary px-4 py-3 text-primary-foreground focus:translate-y-0"
         >
           Skip to content
         </a>
-        <header
-          className={cn(
-            "fixed inset-x-0 top-0 z-40 border-b bg-background",
-            inStudio && "management-header",
-          )}
-        >
-          <div className="mx-auto flex h-16 max-w-[1400px] items-center justify-between px-4 sm:px-6">
+        <header className="fixed inset-x-0 top-0 z-40 border-b border-foreground/15 bg-background">
+          <div className="mx-auto flex h-14 max-w-[1600px] items-center justify-between gap-3 px-4 sm:h-16 sm:px-6">
             <Link to="/" className="min-w-0">
-              <span className="font-display block max-w-[14rem] text-lg leading-tight tracking-tight sm:max-w-none sm:text-xl">
-                {studio.name}
+              <span className="masthead block text-[1.35rem] sm:text-[1.65rem]">{name}</span>
+              <span className="lede hidden text-[0.95rem] text-foreground/80 sm:block">
+                Photography
               </span>
             </Link>
 
             <nav
               aria-label={inStudio ? "Studio shortcuts" : "Main navigation"}
-              className="hidden items-center gap-1 md:flex"
+              className="hidden items-center gap-5 md:flex"
             >
-              {!inStudio &&
-                nav.map((item) => (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    className={cn(
-                      "inline-flex h-12 items-center border-b-2 px-3 text-sm transition-colors",
-                      active(item.to)
-                        ? "border-primary font-semibold text-foreground"
-                        : "border-transparent text-muted-foreground hover:text-foreground",
-                    )}
-                    aria-current={active(item.to) ? "page" : undefined}
-                  >
-                    {item.label}
-                  </Link>
-                ))}
+              {nav.map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={cn(
+                    "kicker inline-flex h-12 items-center",
+                    active(item.to) ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                  )}
+                  aria-current={active(item.to) ? "page" : undefined}
+                >
+                  {item.label}
+                </Link>
+              ))}
               {isOwner && (
                 <Link
                   to={inStudio ? "/galleries" : "/organize"}
-                  className="inline-flex h-12 items-center px-4 text-sm text-muted-foreground hover:text-foreground"
+                  className="kicker inline-flex h-12 items-center text-muted-foreground hover:text-foreground"
                 >
                   {inStudio ? "View site" : "Studio"}
                 </Link>
@@ -146,33 +139,34 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
                 </SheetTrigger>
                 <SheetContent>
                   <SheetHeader>
-                    <SheetTitle>{studio.name}</SheetTitle>
+                    <SheetTitle className="masthead text-3xl normal-case tracking-normal">
+                      {name}
+                    </SheetTitle>
                   </SheetHeader>
                   <nav
                     aria-label={inStudio ? "Owner workspace" : "Main navigation"}
                     className="mt-8 flex flex-col gap-1"
                   >
-                    {nav.map((item) => (
-                      <SheetClose key={item.to} asChild>
-                        <Link
-                          to={item.to}
-                          aria-current={active(item.to) ? "page" : undefined}
-                          className={cn(
-                            "flex h-12 items-center rounded-md px-3 text-base text-foreground",
-                            active(item.to) && "bg-accent font-semibold",
-                          )}
-                        >
-                          {item.label}
-                        </Link>
-                      </SheetClose>
-                    ))}
-                    {isOwner && (
+                    {(inStudio ? [...STUDIO_NAV, { to: "/galleries" as const, label: "View site" }] : PUBLIC_NAV).map(
+                      (item) => (
+                        <SheetClose key={item.to} asChild>
+                          <Link
+                            to={item.to}
+                            aria-current={active(item.to) ? "page" : undefined}
+                            className={cn(
+                              "flex min-h-12 items-center px-1 text-lg",
+                              active(item.to) && "font-semibold",
+                            )}
+                          >
+                            {item.label}
+                          </Link>
+                        </SheetClose>
+                      ),
+                    )}
+                    {isOwner && !inStudio && (
                       <SheetClose asChild>
-                        <Link
-                          to={inStudio ? "/galleries" : "/organize"}
-                          className="mt-4 flex h-12 items-center border-t px-3 text-muted-foreground"
-                        >
-                          {inStudio ? "View site" : "Studio"}
+                        <Link to="/organize" className="mt-4 flex min-h-12 items-center border-t px-1">
+                          Studio
                         </Link>
                       </SheetClose>
                     )}
@@ -188,57 +182,62 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        {inStudio && (
-          <aside className="management-rail fixed bottom-0 left-0 top-16 hidden w-24 border-r md:block">
-            <nav aria-label="Owner workspace" className="pt-5">
-              {STUDIO_NAV.map((item) => (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  aria-current={active(item.to) ? "page" : undefined}
-                  className="management-destination"
-                >
-                  <item.icon size={21} strokeWidth={1.4} aria-hidden="true" />
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
-          </aside>
-        )}
         <main
           id="main-content"
           tabIndex={-1}
-          className={cn("pt-16", inStudio && "owner-workspace md:pl-24")}
+          className={cn("pt-14 sm:pt-16", inStudio && "owner-workspace pb-[4.75rem] md:pb-0")}
         >
           {legacyPage && (
             <SignedIn>
               <div
                 role="note"
-                className="mx-auto mt-6 max-w-[1400px] rounded-lg border border-border p-4 text-sm text-muted-foreground"
+                className="mx-auto mt-6 max-w-[1400px] border border-border p-4 text-sm text-muted-foreground"
               >
-                This page still includes tools from the previous local workspace. Its photo, proof,
-                and pricing controls do not edit the shared catalog yet. Use Organizer for saved
-                galleries and uploads.
+                This page still includes tools from the previous local workspace. Use Organizer for
+                saved galleries and uploads.
               </div>
             </SignedIn>
           )}
           {legacyPage ? (
             <section className="mx-auto max-w-3xl px-6 py-20">
-              <h1 className="text-2xl">Legacy tools are disabled</h1>
-              <p className="mt-4">
-                These tools do not update the shared server catalog. No changes have been made. Use
-                Organizer or Selling for the current server-backed tools.
+              <h1>Legacy tools are disabled</h1>
+              <p className="mt-4 font-sans text-base font-normal normal-case tracking-normal">
+                These tools do not update the shared server catalog. Use Organizer or Selling.
               </p>
-              <Link to="/organize">Open Organizer</Link>
+              <Link to="/organize" className="mt-6 inline-block underline">
+                Open Organizer
+              </Link>
             </section>
           ) : (
             children
           )}
         </main>
+
+        {inStudio && (
+          <nav
+            aria-label="Owner workspace"
+            className="desk-tabs fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 border-t border-foreground/15 bg-background md:hidden"
+          >
+            {STUDIO_NAV.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                aria-current={active(item.to) ? "page" : undefined}
+                className={cn(
+                  "flex min-h-12 items-center justify-center text-[11px] font-semibold uppercase tracking-[0.12em]",
+                  active(item.to) ? "text-primary" : "text-muted-foreground",
+                )}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+        )}
+
         {pathname === "/login" || ownerPage ? null : <SiteFooter />}
 
         <Toaster
-          theme="dark"
+          theme="light"
           position="bottom-right"
           toastOptions={{
             className: "font-sans",

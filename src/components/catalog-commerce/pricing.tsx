@@ -334,9 +334,9 @@ export function CommercePricing() {
     }
   }
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-5 py-8">
+    <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-5 sm:py-8">
       <header className="space-y-2">
-        <h1 className="text-xl font-semibold">Selling</h1>
+        <h1>Selling</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
           Digital files only for now. Checkout is {sandboxAvailable ? "available in sandbox" : "still off"}
           — live charges stay disabled until you turn them on.

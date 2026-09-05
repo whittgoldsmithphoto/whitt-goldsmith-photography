@@ -1,39 +1,41 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Source+Serif+4:opsz,ital,wght@8..60,0,400;8..60,0,600;8..60,1,400&display=swap");
 
 @theme {
-  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-display: Georgia, "Times New Roman", serif;
+  --font-sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
 
-  --color-background: #101418;
-  --color-foreground: #f4f4f2;
-  --color-card: #191e24;
-  --color-card-foreground: #f4f4f2;
-  --color-popover: #191e24;
-  --color-popover-foreground: #f4f4f2;
-  --color-primary: #0866e6;
-  --color-primary-foreground: #f4f4f2;
-  --color-secondary: #222932;
-  --color-secondary-foreground: #f4f4f2;
-  --color-muted: #191e24;
-  --color-muted-foreground: #b4bbc5;
-  --color-accent: #222932;
-  --color-accent-foreground: #f4f4f2;
-  --color-destructive: #c45c4a;
-  --color-destructive-foreground: #f4f1ea;
-  --color-border: #343b44;
-  --color-input: #7a8594;
-  --color-ring: #79afff;
-  --color-scrim: rgb(16 20 24 / 0.88);
+  --color-background: #f3ead6;
+  --color-foreground: #1c1610;
+  --color-card: #f7f1e3;
+  --color-card-foreground: #1c1610;
+  --color-popover: #f7f1e3;
+  --color-popover-foreground: #1c1610;
+  --color-primary: #c94b12;
+  --color-primary-foreground: #fff7ee;
+  --color-secondary: #e6d9bf;
+  --color-secondary-foreground: #1c1610;
+  --color-muted: #e6d9bf;
+  --color-muted-foreground: #5e5549;
+  --color-accent: #ecdfc6;
+  --color-accent-foreground: #1c1610;
+  --color-destructive: #9b2c14;
+  --color-destructive-foreground: #fff7ee;
+  --color-border: #cfc0a4;
+  --color-input: #7d7162;
+  --color-ring: #c94b12;
+  --color-scrim: rgb(28 22 16 / 0.55);
 
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 12px;
-  --radius-xl: 14px;
-  --radius-2xl: 16px;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 2px;
+  --radius-2xl: 2px;
 
-  --shadow-border: 0 0 0 1px rgb(244 241 234 / 0.08);
-  --shadow-border-hover: 0 0 0 1px rgb(244 241 234 / 0.16);
+  --shadow-border: 0 0 0 1px rgb(28 22 16 / 0.16);
+  --shadow-border-hover: 0 0 0 1px rgb(28 22 16 / 0.32);
 }
 
 @layer base {
@@ -65,6 +67,11 @@
   h2,
   h3 {
     text-wrap: balance;
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+    line-height: 0.92;
   }
 
   p {
@@ -77,13 +84,12 @@
   }
 
   ::selection {
-    background: rgb(22 119 255 / 0.28);
+    background: rgb(201 75 18 / 0.28);
     color: var(--color-foreground);
   }
 
   img {
-    outline: 1px solid rgb(244 241 234 / 0.08);
-    outline-offset: -1px;
+    outline: none;
   }
 
   :focus-visible {
@@ -96,186 +102,108 @@
   }
 }
 
+.masthead {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 0.86;
+  text-transform: uppercase;
+}
+
+.lede {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.kicker {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+}
+
 .public-card img {
-  transition:
-    transform 420ms ease,
-    filter 420ms ease;
+  filter: saturate(0.92) contrast(1.04);
+  transition: filter 240ms ease;
 }
 .public-card:hover img {
-  transform: scale(1.035);
-  filter: brightness(1.06);
+  filter: saturate(1) contrast(1.06);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .public-card img,
   .public-card:hover img {
-    transform: none;
     filter: none;
   }
 }
 
-/* Workspace typography takes precedence over editorial utility classes. */
-.management-shell {
-  --color-background: #101112;
-  --color-card: #17191b;
-  --color-popover: #1c1e20;
-  --color-secondary: #232629;
-  --color-accent: #282c30;
-  --color-muted: #1c1e20;
-  --color-muted-foreground: #adb2b8;
-  --color-border: #34373b;
-  --color-primary: #e4e6e8;
-  --color-primary-foreground: #151719;
-  --color-input: #686e75;
-  --radius-md: 5px;
-  --radius-lg: 6px;
-}
-.management-header {
-  box-shadow: 0 1px 12px rgb(0 0 0 / 18%);
-}
-.management-header > div {
-  max-width: none;
-}
-.management-rail {
-  background: #151719;
-}
-.management-destination {
-  position: relative;
-  display: flex;
-  min-height: 80px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  border-left: 2px solid transparent;
-  font-size: 12px;
-  color: var(--color-muted-foreground);
-  transition:
-    background-color 180ms ease,
-    color 180ms ease;
-}
-.management-destination:hover {
-  background: #1c1f22;
-  color: #fff;
-}
-.management-destination[aria-current="page"] {
-  background: #24282c;
-  border-left-color: #dce1e6;
-  color: #fff;
-  font-weight: 600;
-}
-.management-toolbar {
-  min-height: 52px;
-  border-bottom: 1px solid var(--color-border);
-  padding-bottom: 18px;
-}
-.catalog-directory {
-  padding-right: 18px;
-}
-.catalog-directory-item {
-  border-color: transparent;
-  border-radius: 3px;
-  transition:
-    background-color 160ms,
-    border-color 160ms;
-}
-.catalog-directory-item:hover {
-  background: #1b1e21;
-}
-.catalog-directory-item[aria-pressed="true"] {
-  background: #25292d;
-  border-left-color: #dce1e6;
-}
-.catalog-canvas {
-  padding: 4px 0 24px;
-}
-.catalog-upload {
-  background: #17191b;
-}
-.catalog-frame {
-  background: #17191b;
-  border-radius: 4px;
-  transition:
-    border-color 170ms,
-    background-color 170ms,
-    box-shadow 170ms;
-}
-.catalog-frame:hover {
-  background: #22262a;
-  border-color: #858c94;
-  box-shadow: 0 3px 12px rgb(0 0 0 / 20%);
-}
-.catalog-frame[aria-pressed="true"] {
-  border-color: #dce1e6;
-  box-shadow: 0 0 0 1px #dce1e6;
-}
-.management-reveal,
-.management-shell section[id^="selling-"]:not([hidden]) {
-  animation: workspace-reveal 180ms ease-out;
-}
-@keyframes workspace-reveal {
-  from {
-    opacity: 0;
-    transform: translateY(3px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-.management-shell nav[aria-label="Selling tools"] {
-  gap: 0;
-  padding-bottom: 0;
-}
-.management-shell nav[aria-label="Selling tools"] button {
-  border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  min-height: 44px;
-  text-decoration: none;
-  transition:
-    color 160ms,
-    background-color 160ms,
-    border-color 160ms;
-}
-.management-shell nav[aria-label="Selling tools"] button[aria-pressed="true"] {
-  background: transparent;
-  border-bottom-color: #e4e6e8;
-}
-@media (min-width: 1024px) {
-  .catalog-directory {
-    border-right: 1px solid var(--color-border);
-  }
-}
-@media (max-width: 767px) {
-  .catalog-directory {
-    padding-right: 0;
-  }
-  .management-toolbar {
-    padding-bottom: 12px;
-  }
-}
+.management-shell h1,
+.management-shell h2,
+.management-shell h3,
 .owner-workspace h1,
 .owner-workspace h2,
 .owner-workspace h3 {
   font-family: var(--font-sans);
   letter-spacing: normal;
   text-transform: none;
-}
-.owner-workspace h1 {
-  font-size: 1.4rem;
-  font-weight: 600;
   line-height: 1.2;
+  font-weight: 600;
 }
+
+.management-header > div {
+  max-width: none;
+}
+
+.catalog-directory-item {
+  border-color: transparent;
+}
+
+.catalog-directory-item:hover {
+  background: var(--color-secondary);
+}
+
+.catalog-directory-item[aria-pressed="true"] {
+  background: var(--color-secondary);
+  border-left-color: var(--color-primary);
+}
+
+.catalog-upload {
+  background: color-mix(in srgb, var(--color-secondary) 55%, transparent);
+}
+
+.catalog-frame {
+  background: #1a1712;
+}
+
+.owner-workspace h1 {
+  font-size: 1.15rem;
+}
+
 .owner-workspace input:not([type="checkbox"]):not([type="radio"]),
-.owner-workspace select {
+.owner-workspace select,
+.owner-workspace textarea {
   min-height: 44px;
   font-size: 16px;
 }
+
 .owner-workspace summary {
   min-height: 44px;
   padding-block: 12px;
   cursor: pointer;
+}
+
+.desk-tabs {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (max-width: 767px) {
+  .catalog-directory {
+    padding-right: 0;
+  }
 }
 
 @media (prefers-reduced-transparency: reduce) {

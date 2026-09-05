@@ -278,10 +278,9 @@ export function CatalogOrganizer() {
     <div className="desk mx-auto max-w-[1680px] px-3 py-4 sm:px-5">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">Organizer</h1>
-          <p className="text-sm text-muted-foreground">
-            Drop a folder or zip. Click a frame to inspect. X hide · P show · A archive · drag to
-            reorder.
+          <h1>Organizer</h1>
+          <p className="mt-1 hidden text-sm text-muted-foreground sm:block">
+            Drop a folder or zip. Click a frame. X hide · P show · A archive.
           </p>
         </div>
         <Button disabled={busy} onClick={() => edit()}>
@@ -295,6 +294,26 @@ export function CatalogOrganizer() {
       )}
       <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
         <aside className="min-w-0 space-y-3">
+          <label className="block lg:hidden">
+            <span className="sr-only">Gallery</span>
+            <select
+              className="w-full rounded-sm border border-input bg-secondary px-3"
+              value={active?.id || ""}
+              onChange={(event) => {
+                const id = event.target.value;
+                setSelectedPhotoIds((ids) => resetSelectionOnGalleryChange(selected, id, ids));
+                setSelected(id);
+                setPhotoDraft(null);
+              }}
+            >
+              {listedGalleries.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="hidden lg:block">
           <Input
             aria-label="Search galleries"
             value={galleryQuery}
@@ -322,6 +341,7 @@ export function CatalogOrganizer() {
               </span>
             </button>
           ))}
+          </div>
           <details
             className="border-t border-border pt-2"
             open={libraryOpen}
@@ -372,7 +392,7 @@ export function CatalogOrganizer() {
             <>
               <div className="mb-4 flex flex-wrap items-center gap-2">
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                  <p className="kicker">
                     {statusLabel} · {activePhotoCount}
                   </p>
                   <h2 className="truncate text-lg font-semibold">{active.title}</h2>
@@ -409,8 +429,8 @@ export function CatalogOrganizer() {
 
               <div
                 className={cn(
-                  "catalog-upload mb-4 rounded border border-dashed border-border px-4 py-6 text-center text-sm",
-                  dropActive && "border-foreground bg-secondary",
+                  "catalog-upload mb-4 border border-dashed border-foreground/25 px-4 py-8 text-center text-sm sm:py-6",
+                  dropActive && "border-primary bg-secondary",
                 )}
                 onDragEnter={(event) => {
                   event.preventDefault();
@@ -681,7 +701,7 @@ export function CatalogOrganizer() {
       </div>
 
       {photoDraft && active && (
-        <aside className="fixed inset-y-16 right-0 z-30 w-[min(26rem,100%)] overflow-y-auto border-l border-border bg-card p-4 shadow-[var(--shadow-border)]">
+        <aside className="fixed inset-0 z-50 overflow-y-auto border-foreground/15 bg-background p-4 pb-24 lg:inset-y-16 lg:left-auto lg:right-0 lg:z-30 lg:w-[min(26rem,100%)] lg:border-l lg:pb-4">
           <form
             className="space-y-4"
             onSubmit={(event) => {
@@ -798,7 +818,9 @@ export function CatalogOrganizer() {
               }}
             >
               <DialogHeader>
-                <DialogTitle>{draft.id ? "Publish & settings" : "New gallery"}</DialogTitle>
+                <DialogTitle className="font-sans text-xl font-semibold normal-case tracking-normal">
+                  {draft.id ? "Publish & settings" : "New gallery"}
+                </DialogTitle>
                 <DialogDescription>
                   Visibility, password, and the customer-facing copy for this gallery.
                 </DialogDescription>

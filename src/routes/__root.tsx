@@ -25,7 +25,7 @@ export const Route = createRootRoute({
         content:
           "Whitt Goldsmith Photography — sports and events in Greenville, South Carolina. Prints and files from the galleries.",
       },
-      { name: "theme-color", content: "#101418" },
+      { name: "theme-color", content: "#f3ead6" },
     ],
     links: [
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },

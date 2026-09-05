@@ -20,8 +20,8 @@ export function ProofInbox() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-      <h1 className="text-xl font-semibold">Proofs</h1>
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
+      <h1>Proofs</h1>
       <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
         Favorites parents and players saved from a gallery. Mark a set done when you have seen it.
         Email alerts are not on yet.
