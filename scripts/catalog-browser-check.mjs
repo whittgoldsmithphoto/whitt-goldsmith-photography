@@ -40,36 +40,58 @@ try {
   await page.unroute("**/api/catalog/galleries*");
 
   let galleryRequests = 0;
+  let failDistinctiveSearch = true;
+  const galleryFixture = (title) => ({
+    data: [
+      {
+        id: title === "Synthetic browser test" ? "synthetic" : "recovered",
+        title,
+        description: "Not a real gallery",
+        category: "Test",
+        cover: null,
+        coverPhotoId: null,
+        photoCount: 0,
+        publishedAt: null,
+      },
+    ],
+    page: { hasMore: false, nextCursor: null },
+  });
   await page.route("**/api/catalog/galleries**", async (route) => {
     galleryRequests += 1;
+    const query = new URL(route.request().url()).searchParams.get("q");
+    if (query === "distinctive failure query" && failDistinctiveSearch) {
+      failDistinctiveSearch = false;
+      return route.fulfill({
+        status: 503,
+        json: { error: { message: "database connection refused" } },
+      });
+    }
     return route.fulfill({
-      json: {
-        data: [
-          {
-            id: "synthetic",
-            title: "Synthetic browser test",
-            description: "Not a real gallery",
-            category: "Test",
-            cover: null,
-            coverPhotoId: null,
-            photoCount: 0,
-            publishedAt: null,
-          },
-        ],
-        page: { hasMore: false, nextCursor: null },
-      },
+      json: galleryFixture(
+        query === "distinctive failure query"
+          ? "Recovered query gallery"
+          : "Synthetic browser test",
+      ),
     });
   });
   await page.goto(`${origin}/galleries`);
   await page.getByRole("heading", { name: "Synthetic browser test" }).waitFor();
   const requestsAfterLoad = galleryRequests;
   const gallerySearch = page.getByLabel("Gallery title search", { exact: true });
-  await gallerySearch.fill("synthetic");
+  await gallerySearch.fill("distinctive failure query");
   await page.waitForTimeout(100);
   assert.equal(galleryRequests, requestsAfterLoad, "gallery search must wait for explicit submit");
   await page.getByRole("button", { name: "Search galleries", exact: true }).click();
-  await page.waitForTimeout(100);
-  assert.equal(galleryRequests, requestsAfterLoad + 1);
+  await page
+    .getByRole("alert")
+    .getByText("Galleries are temporarily unavailable.", { exact: true })
+    .waitFor();
+  assert.equal(await gallerySearch.inputValue(), "distinctive failure query");
+  await page.getByRole("heading", { name: "Synthetic browser test" }).waitFor();
+  await page.getByRole("button", { name: "Retry search", exact: true }).click();
+  await page.getByRole("heading", { name: "Recovered query gallery" }).waitFor();
+  assert.equal(await gallerySearch.inputValue(), "distinctive failure query");
+  assert.equal(galleryRequests, requestsAfterLoad + 2);
   const discovery = page.getByRole("region", { name: "Public gallery discovery" });
   await discovery.getByRole("heading", { name: "Search galleries", exact: true }).waitFor();
   await discovery

@@ -86,8 +86,13 @@ export function CatalogIndex({
     `/api/catalog/galleries?limit=50&q=${encodeURIComponent(submittedQuery)}${folderId ? `&folder=${encodeURIComponent(folderId)}` : ""}`,
     true,
   );
-  if (!state.data) return <CatalogStatus {...state} />;
-  const listed = state.data.data;
+  const lastSuccessfulPage = useRef<typeof state.data>(undefined);
+  useEffect(() => {
+    if (state.data) lastSuccessfulPage.current = state.data;
+  }, [state.data]);
+  const visiblePage = state.data ?? lastSuccessfulPage.current;
+  if (!visiblePage) return <CatalogStatus {...state} />;
+  const listed = visiblePage.data;
   const photos = listed.flatMap((g) => (g.cover ? [g.cover] : []));
   const home = page === "home";
   return (
@@ -174,8 +179,16 @@ export function CatalogIndex({
             <p className="mt-3 text-sm text-muted-foreground" role="status">
               {state.loading
                 ? "Searching…"
-                : `${listed.length} ${listed.length === 1 ? "gallery" : "galleries"}${state.data.page.hasMore ? " loaded" : ""}`}
+                : `${listed.length} ${listed.length === 1 ? "gallery" : "galleries"}${visiblePage.page.hasMore ? " loaded" : ""}`}
             </p>
+            {state.error && submittedQuery && (
+              <div role="alert" className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                <span>Galleries are temporarily unavailable.</span>
+                <Button type="button" variant="outline" onClick={state.reload}>
+                  Retry search
+                </Button>
+              </div>
+            )}
           </div>
           {sportsSearch}
         </section>
@@ -211,7 +224,7 @@ export function CatalogIndex({
             )}
           </div>
         ))}
-      {page !== "about" && state.data.page.hasMore && (
+      {page !== "about" && visiblePage.page.hasMore && (
         <Button
           variant="outline"
           className="mt-8"
