@@ -1,10 +1,20 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { verifyHostedRelease } from "./verify-hosted-release.mjs";
 
 const mode = process.argv[2];
 assert.ok(["build", "verify", "deploy"].includes(mode), "Explicit production mode required");
 const env = { ...process.env };
+const head = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" });
+assert.equal(head.status, 0, "Cannot identify production source revision");
+const revision = head.stdout.trim();
+env.VITE_BUILD_REVISION = revision;
+if (mode === "deploy") {
+  const status = spawnSync("git", ["status", "--porcelain"], { encoding: "utf8" });
+  assert.equal(status.status, 0);
+  assert.equal(status.stdout.trim(), "", "Commit production changes before deployment");
+}
 delete env.CLOUDFLARE_ENV;
 delete env.VITE_AUTH_ENABLED;
 function run(command, args) {
@@ -74,4 +84,9 @@ if (mode === "deploy") {
     "--config",
     "dist/server/wrangler.json",
   ]);
+  const assets = await verifyHostedRelease(
+    "https://whitt-goldsmith-photography.whittgoldsmithmedia.workers.dev",
+    revision,
+  );
+  console.log(`Verified production revision ${revision} and ${assets} application assets.`);
 }

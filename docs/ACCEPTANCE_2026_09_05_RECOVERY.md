@@ -25,7 +25,15 @@
 - Production recovery branch `pre-live-readiness-2026-09-05` (`br-empty-water-a52qcp7y`) was created with auto-delete Never, then independently queried: schema 0022, three photos, zero orders and entitlements. This is a same-provider recovery point, not an independent full restore test. Production's active database was not changed.
 - Fresh Desktop source/history backup: `Whitt Goldsmith Photography Backups/verified-release-2026-09-05-Uvq3LH`, revision `451119f`; complete Git bundle verification passed. Older backups were preserved.
 
-The sections below preserve earlier checkpoints; newer checkpoints supersede their upload, owner setup, and archive-wiring pending notes.
+## Production schema upgrade completed
+
+- Applied canonical migrations 0023–0032 to the active production branch `br-twilight-term-a597tv8m` after a successful local rehearsal with three existing photo fixtures. The generated transaction used an advisory lock, 3-second lock timeout, 15-second statement timeout, baseline guards, and exact before/after JSON comparison of all existing photo records.
+- Neon reported COMMIT. A separate subsequent query confirmed **32 migrations, latest 0032, three photos, zero orders, zero entitlements**. The recovery branch was not modified.
+- `scripts/prepare-production-upgrade.mjs` retains the reproducible preparation/rehearsal, including rejection of replay after the baseline changes. It never directly connects to a remote database.
+- Created the missing production dead-letter queue `wgp-media-production-dlq`; the existing production queue had one producer and zero consumers before the upcoming deployment.
+- Production release tooling now requires clean committed source and verifies its exact Git revision plus referenced application assets after deployment. Focused negative verification tests passed. Deployment itself is pending at this checkpoint, and sales remain disabled.
+
+The sections below preserve earlier checkpoints; newer checkpoints supersede their upload, owner setup, schema, and archive-wiring pending notes.
 
 ## Verified hosted behavior
 
