@@ -134,16 +134,26 @@ try {
     }),
   );
   await studio.goto(`${origin}/organize`);
-  await studio.getByRole("button", { name: "Photo status: All", exact: true }).waitFor();
+  await studio.getByRole("button", { name: /^SYNTHETIC EVENT 000\b/ }).click();
+  const allPhotos = studio.getByRole("button", { name: "Photo status: All (52)", exact: true });
+  const archivedPhotos = studio.getByRole("button", { name: "Photo status: Archived (0)", exact: true });
+  await allPhotos.waitFor();
   await studio.getByLabel("Photo sort", { exact: true }).waitFor();
   await studio.getByRole("status").filter({ hasText: /52 of 52 photographs/ }).waitFor();
-  await studio.getByRole("button", { name: "Photo status: Archived (0)", exact: true }).click();
+  await archivedPhotos.click();
   await studio.getByRole("status").filter({ hasText: /0 of 52 photographs/ }).waitFor();
   assert.equal(await studio.getByRole("button", { name: /^synthetic-/ }).count(), 0);
-  await studio.getByRole("button", { name: "Photo status: All", exact: true }).click();
+  assert.equal(await studio.getByText("synthetic-zzz.jpg", { exact: true }).count(), 0);
+  await allPhotos.click();
+  await studio.getByRole("status").filter({ hasText: /52 of 52 photographs/ }).waitFor();
   const photoButtons = studio.getByRole("button", { name: /^synthetic-/ });
+  assert.equal(await photoButtons.count(), 52);
+  assert.equal(await studio.getByText("synthetic-zzz.jpg", { exact: true }).count(), 1);
+  const displayOrderFirst = await photoButtons.first().innerText();
   await studio.getByLabel("Photo sort", { exact: true }).selectOption("filename");
-  assert.match(await photoButtons.first().innerText(), /synthetic-aaa\.jpg/);
+  const filenameFirst = await photoButtons.first().innerText();
+  assert.notEqual(filenameFirst, displayOrderFirst, "Filename sorting changes the first tile");
+  assert.match(filenameFirst, /synthetic-002\.jpg/);
   await studio.getByLabel("Photo sort", { exact: true }).selectOption("display-order");
   assert.match(await photoButtons.first().innerText(), /synthetic-zzz\.jpg/);
   for (const width of [375, 768, 1440]) {
@@ -176,6 +186,10 @@ try {
   const page = await anonymous.newPage();
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  const gallerySearchRequests = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/api/catalog/galleries?")) gallerySearchRequests.push(request.url());
+  });
   await page.route("**/api/catalog?op=media&**", (route) =>
     route.fulfill({
       contentType: "image/svg+xml",
@@ -190,7 +204,23 @@ try {
     await page.getByRole("button", { name: "Load more galleries", exact: true }).count(),
     0,
   );
-  await page.getByLabel("Search galleries", { exact: true }).fill("EVENT 051");
+  const searchInput = page.getByLabel("Gallery title search", { exact: true });
+  const requestsBeforeTyping = gallerySearchRequests.length;
+  await searchInput.fill("EVENT 051");
+  await page.waitForTimeout(200);
+  assert.equal(
+    gallerySearchRequests.length,
+    requestsBeforeTyping,
+    "Typing a gallery query does not request results before submit",
+  );
+  const filtered = page.waitForResponse(
+    (response) => {
+      const url = new URL(response.url());
+      return url.pathname === "/api/catalog/galleries" && url.searchParams.get("q") === "EVENT 051" && response.status() === 200;
+    },
+  );
+  await page.getByRole("button", { name: "Search galleries", exact: true }).click();
+  await filtered;
   await page
     .getByRole("status")
     .filter({ hasText: /^1 gallery$/ })
