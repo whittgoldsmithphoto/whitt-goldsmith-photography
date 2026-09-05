@@ -27,6 +27,16 @@
 
 ## Production release and hosted delivery checkpoint
 
+### Follow-up verification
+
+- The $4.95 SWG01910.jpg download completed; SHA256 `fb8da3d63fcf300f08f542d32e0be648f63be2bbce9509e68f60a6b9663d7114` matched the source exactly. Its allowance changed from three to two.
+- Refunded only that sandbox payment (`pi_3UCRUXDHsmsdTdeg0AS80tGx`) through Stripe. After the refund webhook, an attempt from the still-open, stale paid page returned **Download unavailable**. Refresh then showed **refunded** with no download control.
+- Used Stripe's Resend for the original `checkout.session.completed` event `evt_1UCRUZDHsmsdTdegDAVV3rlK` after refund. The webhook was invoked again; the subsequent customer refresh remained refunded with downloads unavailable. This is hosted replay/revocation evidence, not an independent database connection race test.
+- Production's shared database now has the complete-gallery product at **$29.95**, confirmed after a fresh page reload; the existing full-resolution product remains **$4.95**. Both have the approved perpetual personal/commercial/no-resale terms and three-attempt/14-day access wording. Checkout remains disabled.
+- The 1.49 GB ZIP transfer was observed past 762 MiB, but its partial file subsequently disappeared without a completed ZIP found in Downloads. Final byte verification is **not passed**. Browser policy blocks opening download history; the user was asked to check completion/failure and save location. Do not substitute the older September 3 source ZIP as a customer-delivery result.
+- Production recovery reached 70/131 checked with SWG01920.jpg reporting Failed to fetch; subsequent files continued transferring. Retry and final processing reconciliation remain required. Keep the active upload tab open.
+- New Desktop source/history copy `verified-release-2026-09-05-LxsC3c` contains revision `05d9388`, with Git bundle verification passed. This does not replace independent database/R2 backup and restore acceptance.
+
 - Production source `900fb4b8e24c7d0ec39d26416189ea2bc39a9d70` deployed as Cloudflare version `de7e117c-0443-4f17-b1c3-c7eb57990b9f`. Release checks passed: 472 tests, typecheck, lint with seven existing warnings and no errors, exact revision and 15 referenced assets. Production owner Organizer was then opened successfully with the existing owner session; its three-photo draft was intact. Live checkout/download flags remain false; no custom domain was changed.
 - The corrected staging queue completed the 131-photo paid album preparation. Customer UI exposed Download album ZIP. One native download was requested and began transferring to the browser. A separately loaded order page showed **all 131 photos with two attempts remaining**, versus three before the ZIP request. Full downloaded-byte verification is still pending while transfer runs; a ready button alone is not the completed acceptance test.
 - A new hosted single-photo sandbox purchase for SWG01910.jpg completed at **$4.95**, order `7b174743-6f75-4367-84b0-6c1a2be5b482`. The application returned server-confirmed paid status, the correct perpetual personal/commercial/no-resale license, and three attempts expiring September 19. Synthetic Stripe test-card details were used and saving payment information was unchecked. Its original download was requested; downloaded checksum verification remains pending.
