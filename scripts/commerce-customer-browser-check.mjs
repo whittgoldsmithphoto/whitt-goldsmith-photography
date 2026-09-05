@@ -189,6 +189,26 @@ try {
   console.log("Checking owner pricing editor");
   ownerPage.on("pageerror", (error) => errors.push(error.message));
   await ownerPage.goto(`${origin}/sell`);
+  const tabs = ownerPage.getByRole("tab");
+  assert.equal(await tabs.count(), 4, "Selling exposes four accessible tabs");
+  assert.equal(await tabs.first().getAttribute("aria-selected"), "true");
+  await tabs.first().press("ArrowRight");
+  assert.equal(await tabs.nth(1).getAttribute("aria-selected"), "true");
+  await tabs.nth(1).press("End");
+  assert.equal(await tabs.nth(3).getAttribute("aria-selected"), "true");
+  await tabs.nth(3).press("Home");
+  assert.equal(await tabs.first().getAttribute("aria-selected"), "true");
+  assert.equal(await ownerPage.getByLabel("Gallery", { exact: true }).count(), 1);
+  assert.equal(await ownerPage.getByLabel("Gallery ID", { exact: true }).count(), 0);
+  assert.equal(await ownerPage.getByLabel("Photo ID", { exact: true }).count(), 0);
+  await ownerPage.getByRole("tab", { name: "Test quote", exact: true }).click();
+  await ownerPage
+    .getByLabel("Gallery", { exact: true })
+    .selectOption({ label: "SYNTHETIC COMMERCE FIXTURE" });
+  await ownerPage
+    .getByLabel("Photo", { exact: true })
+    .selectOption({ label: "synthetic-purchase.jpg" });
+  await ownerPage.getByRole("tab", { name: "Pricing", exact: true }).click();
   const productForm = ownerPage
     .locator("form")
     .filter({ has: ownerPage.getByRole("heading", { name: "2. Product details", exact: true }) });
