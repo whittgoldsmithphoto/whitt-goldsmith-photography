@@ -29,6 +29,9 @@
 
 ### Follow-up verification
 
+- Read-only live Stripe check: active destination `we_1UBv9SD2rNLvqnsKYWcbccYp` points to the production `/api/commerce-webhook`. Its eight configured events are checkout.session.completed/expired/async_payment_succeeded/async_payment_failed, charge.refunded, and charge.dispute.created/updated/closed. The dashboard shows zero deliveries this week, so this is configuration verification only, not live signing-secret or fulfillment acceptance.
+- Two other live destinations remain active: the older production `/api/webhooks/stripe` and `vibrant-euphoria` on an older sandbox-host domain. Neither was modified. Review their ownership and continued necessity before launch; do not silently delete unrelated destinations.
+
 - The $4.95 SWG01910.jpg download completed; SHA256 `fb8da3d63fcf300f08f542d32e0be648f63be2bbce9509e68f60a6b9663d7114` matched the source exactly. Its allowance changed from three to two.
 - Refunded only that sandbox payment (`pi_3UCRUXDHsmsdTdeg0AS80tGx`) through Stripe. After the refund webhook, an attempt from the still-open, stale paid page returned **Download unavailable**. Refresh then showed **refunded** with no download control.
 - Used Stripe's Resend for the original `checkout.session.completed` event `evt_1UCRUZDHsmsdTdegDAVV3rlK` after refund. The webhook was invoked again; the subsequent customer refresh remained refunded with downloads unavailable. This is hosted replay/revocation evidence, not an independent database connection race test.
