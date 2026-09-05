@@ -11,6 +11,8 @@ export interface ArchiveJob {
   attempts: number;
   lease_token: string | null;
   output_key: string | null;
+  output_checksum?: string | null;
+  output_bytes?: number | string | null;
 }
 
 /** Internal persistence, not a customer API or authorization boundary.
