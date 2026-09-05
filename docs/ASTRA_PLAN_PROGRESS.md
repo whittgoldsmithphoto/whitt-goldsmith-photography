@@ -56,6 +56,14 @@ This is same-tab recovery, not persistent access to local files after a browser 
 - Diagnostics now includes migration 0033, so a deployment lacking the new gallery column cannot claim a complete catalog schema.
 - This does not solve the hosted large-image processor limit or complete the competitive plan. Recovery, named presets, private invitation/proof workflow, and later phases remain open.
 
+### Reuse gallery setup checkpoint
+
+- Existing server-backed galleries can supply their layout and customer instructions to a new or existing gallery form. An explicit allowlist preserves identity, description, category, folders, passwords, publication and download rules. Nothing changes until the owner saves.
+- This is reuse of an existing gallery, not a separate named-preset library; that broader feature remains open.
+- RED test failed for missing implementation; GREEN covers the allowlist and non-mutation. Mounted browser verification copied a setup, saved a new gallery, and checked durable layout/instructions with private/unpublished/no-download defaults.
+- Verification: 481 tests passed, typecheck/build passed, lint zero errors/seven existing warnings. No deployment or live-payment activation.
+- Read-only production database check now finds only SWG01676.jpg not ready. Its stored checksum/size match the approved 20,638,004-byte original; preview recovery remains required.
+
 1. Complete Phase 0 visual baselines and record final checks for each commit.
 2. Finish hosted gallery/ZIP recovery and payment acceptance separately; current pending details are in ACCEPTANCE_2026_09_05_RECOVERY.md.
 3. Inventory existing gallery settings, folders, proofs and commerce before adding Phase 1 models. Prioritize missing behavior instead of parallel duplicate settings.

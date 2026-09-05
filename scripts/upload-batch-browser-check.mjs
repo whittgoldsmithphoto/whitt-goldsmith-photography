@@ -169,6 +169,9 @@ try {
   await settings.getByLabel("Visibility", { exact: true }).selectOption("unlisted");
   await settings.getByLabel("Photo layout", { exact: true }).selectOption("comfortable");
   await settings
+    .getByLabel("Instructions for customers", { exact: true })
+    .fill("Choose your favorite photographs.");
+  await settings
     .getByRole("checkbox", { name: "Published — needs a ready photograph", exact: true })
     .check();
   await settings.getByRole("button", { name: "Save", exact: true }).click();
@@ -209,6 +212,34 @@ try {
   }
   console.log(
     "PASS: gallery layout survives owner reload and controls narrow/desktop public rendering.",
+  );
+  await page.goto(`${origin}/organize`);
+  await page.getByRole("button", { name: "New gallery", exact: true }).click();
+  await settings.getByLabel("Title", { exact: true }).fill("SYNTHETIC REUSED SETUP");
+  await settings.getByLabel("Reuse a gallery setup", { exact: true }).selectOption(galleryId);
+  assert.equal(
+    await settings.getByLabel("Photo layout", { exact: true }).inputValue(),
+    "comfortable",
+  );
+  assert.equal(
+    await settings.getByLabel("Instructions for customers", { exact: true }).inputValue(),
+    "Choose your favorite photographs.",
+  );
+  assert.equal(await settings.getByLabel("Visibility", { exact: true }).inputValue(), "private");
+  assert.equal(await settings.getByLabel("Downloads", { exact: true }).inputValue(), "none");
+  await settings.getByRole("button", { name: "Save", exact: true }).click();
+  await settings.waitFor({ state: "hidden" });
+  const [reused] =
+    await sql`select layout,customer_instructions,published,visibility,download_policy from catalog_galleries where title='SYNTHETIC REUSED SETUP'`;
+  assert.deepEqual(reused, {
+    layout: "comfortable",
+    customer_instructions: "Choose your favorite photographs.",
+    published: false,
+    visibility: "private",
+    download_policy: "none",
+  });
+  console.log(
+    "PASS: reused setup persists through owner save without copying publication or download access.",
   );
   if (process.env.WGP_VISUAL_BASELINE === "true") {
     const directory = mkdtempSync(join(tmpdir(), "wgp-astra-visual-"));

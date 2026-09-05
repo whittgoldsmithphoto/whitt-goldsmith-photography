@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { processingSummary } from "@/lib/catalog/processing-summary";
+import { copyGalleryPresentation } from "@/lib/catalog/gallery-presentation";
 import {
   uploadBatch,
   retryUploadBatch,
@@ -896,6 +897,33 @@ export function CatalogOrganizer() {
                 <p role="alert" className="text-sm text-destructive">
                   {message}
                 </p>
+              )}
+              {galleries.some((gallery) => gallery.id !== draft.id) && (
+                <label className="block text-sm">
+                  Reuse a gallery setup
+                  <select
+                    aria-label="Reuse a gallery setup"
+                    value=""
+                    className="mt-1 block w-full rounded bg-secondary p-2"
+                    onChange={(event) => {
+                      const source = galleries.find((gallery) => gallery.id === event.target.value);
+                      if (source) setDraft(copyGalleryPresentation(draft, source));
+                    }}
+                  >
+                    <option value="">Choose an existing gallery</option>
+                    {galleries
+                      .filter((gallery) => gallery.id !== draft.id)
+                      .map((gallery) => (
+                        <option key={gallery.id} value={gallery.id}>
+                          {gallery.title}
+                        </option>
+                      ))}
+                  </select>
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    Copies layout and customer instructions into this form. Review before saving.
+                    Access, pricing, titles and publication stay unchanged.
+                  </span>
+                </label>
               )}
               <label className="block text-sm">
                 Title
