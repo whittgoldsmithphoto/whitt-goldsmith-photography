@@ -16,6 +16,19 @@ export async function executeBulkPhotoAction(
   for (const input of inputs) await execute(input);
 }
 
+export async function executeBulkPhotoActionWithReload(
+  inputs: PhotoInput[],
+  execute: (input: PhotoInput) => Promise<unknown>,
+  reload: () => void | Promise<void>,
+): Promise<void> {
+  try {
+    await executeBulkPhotoAction(inputs, execute);
+  } catch (error) {
+    await reload();
+    throw error;
+  }
+}
+
 export function formatBulkPhotoSuccessMessage(count: number, action: BulkPhotoAction): string {
   return `${count} photograph${count === 1 ? "" : "s"} ${BULK_ACTION_PAST_TENSE[action]} successfully.`;
 }

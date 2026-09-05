@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   clearPhotoSelection,
   executeBulkPhotoAction,
+  executeBulkPhotoActionWithReload,
   formatBulkPhotoSuccessMessage,
   planBulkPhotoAction,
   resetSelectionOnGalleryChange,
@@ -55,6 +56,29 @@ test("bulk execution stops at the first rejection and leaves selection for the c
 
   assert.deepEqual(calls, ["a", "b"]);
   assert.deepEqual(selected, ["a", "b", "d"]);
+});
+
+test("partial bulk failure reloads authoritative revisions before preserving selection for retry", async () => {
+  const inputs = planBulkPhotoAction(photos, ["a", "b", "d"], "g1", "hide");
+  const calls: string[] = [];
+  let reloads = 0;
+
+  await assert.rejects(
+    executeBulkPhotoActionWithReload(
+      inputs,
+      async (input) => {
+        calls.push(`${input.id}:${input.revision}`);
+        if (input.id === "b") throw new Error("b failed");
+      },
+      () => {
+        reloads += 1;
+      },
+    ),
+    /b failed/,
+  );
+
+  assert.deepEqual(calls, ["a:7", "b:3"]);
+  assert.equal(reloads, 1);
 });
 
 test("bulk execution clears selection only after every photo succeeds", async () => {

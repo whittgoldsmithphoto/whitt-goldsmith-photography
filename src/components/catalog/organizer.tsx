@@ -20,7 +20,7 @@ import {
 } from "@/lib/catalog/organizer-photo-view";
 import {
   clearPhotoSelection,
-  executeBulkPhotoAction,
+  executeBulkPhotoActionWithReload,
   formatBulkPhotoSuccessMessage,
   planBulkPhotoAction,
   resetSelectionOnGalleryChange,
@@ -102,7 +102,11 @@ export function CatalogOrganizer() {
     setBusy(true);
     setMessage("");
     try {
-      await executeBulkPhotoAction(inputs, (input) => catalogFetch("op=photo", input));
+      await executeBulkPhotoActionWithReload(
+        inputs,
+        (input) => catalogFetch("op=photo", input),
+        state.reload,
+      );
       setSelectedPhotoIds(clearPhotoSelection());
       setMessage(formatBulkPhotoSuccessMessage(inputs.length, bulkActionName));
       state.reload();
