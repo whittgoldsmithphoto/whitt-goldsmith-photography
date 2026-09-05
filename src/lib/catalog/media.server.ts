@@ -36,6 +36,7 @@ export async function catalogConfiguration() {
         : "s3-credentials",
     imagesConfigured: Boolean((env as unknown as { IMAGES?: unknown }).IMAGES),
     mediaQueueConfigured: mediaQueueConfigured(),
+    mediaProcessingPaused: runtimeSetting("CATALOG_MEDIA_PROCESSING_PAUSED") === "true",
     watermarkConfigured: Boolean(runtimeSetting("CATALOG_WATERMARK_KEY")),
     verification: "configuration-only",
     checkedAt: new Date().toISOString(),

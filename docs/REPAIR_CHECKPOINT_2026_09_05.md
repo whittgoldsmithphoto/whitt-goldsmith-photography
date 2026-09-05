@@ -40,3 +40,34 @@ After that: complete real sandbox checkout for individual and album products, ve
 - Production migration/configuration acceptance remains separate from staging; custom-domain cutover requires the owner's later approval.
 
 Screenshot blackout cannot be guaranteed for ordinary website photographs. Watermarks, private originals and entitlement checks protect delivery; right-click blocking is only a deterrent.
+
+## Latest uniform-interface and reliability pass
+
+- Published a shared charcoal/blue photography interface, Oswald headings, desktop left navigation and compact mobile navigation. Removed yellow accents and color filters from photographs; added a visible Purchases entry.
+- Fixed the upload picker clearing its live FileList before copying selections, and corrected R2's multipart resume argument order. Added regression tests for both.
+- Fixed integrity verification to accept the exact checksum-qualified original key used by the media pipeline, while still rejecting keys belonging to another photo or checksum.
+- Owner dialog save errors now appear inside the dialog, draft values survive errors, proof filters have accessible labels, and duplicate Selling errors were removed.
+- Local customer browser acceptance passed: pending/paid purchases, download counts, cross-account denial, refund revocation and persisted pricing. Local owner/proof browser acceptance passed at 375/768/1440 widths, including policy saves, failed saves, folder operations and access checks. These use provider fixtures and do not replace Stripe/R2 live acceptance.
+- Production dependency advisory scan reported zero vulnerabilities. This is not a full historical secret scan or a general security guarantee.
+
+### Import is blocked, not complete
+
+The 131-photo football batch was stopped after provider failures. Its displayed result was 0 ready, 17 processing, 2 duplicates, 51 failed and 61 skipped. A subsequent single-file retry also failed. The three previously ready photographs remain the verified public preview; do not present the full shoot as delivered.
+
+Cloudflare's actual Workers plan is Free and the queue logs report `Exceeded CPU Limit`. The owner has been asked to approve the displayed Paid plan charge in Cloudflare. Staging processing is explicitly paused with `CATALOG_MEDIA_PROCESSING_PAUSED=true`; diagnostics shows the pause. Queue messages are delayed, not discarded, but can eventually reach the dead-letter queue and must be reconciled with durable jobs when resuming.
+
+After the capacity change, verify the account plan, set the staging pause flag false through a reviewed release, inspect queued/failed/dead-letter jobs, retry the import safely, and verify all original checksums and public derivatives. Automatic batch uploads now stop after three consecutive transfer failures. Native derivatives are processed sequentially to reduce concurrent memory pressure. Neither mitigation replaces live capacity acceptance.
+
+### Album archive progress (not yet customer-ready)
+
+Implemented and unit-tested a private streaming ZIP packer and bounded R2 multipart sink. The core validates a frozen manifest, hashes each original, rechecks authorization, handles corrupt/missing originals, applies backpressure, and verifies the stored archive after commit. No customer endpoint or decorative download control was added.
+
+Still required: bind the core to durable archive jobs and immutable paid snapshots; enforce leases/revocation and transactional download allowance consumption; expose status and authorized delivery; test retries, interrupted processing, browser closure, expiry and refund behavior on real infrastructure. Individual-photo album entitlements remain the current delivery path.
+
+### Owner-dependent items
+
+1. Cloudflare paid-capacity approval, then controlled import recovery.
+2. Correct business/head-office address in Stripe Tax, followed by real sandbox acceptance. No invented address or live charge.
+3. Independent backup destination selection, followed by indefinite-retention setup and a restore drill.
+
+The broader backlog above remains open. Production, prints, live checkout and custom-domain cutover have not been enabled by this repair pass.

@@ -41,6 +41,22 @@ async function fixture() {
     values(${photoId},${galleryId},'owner','synthetic.jpg','image/jpeg',${bytes.length},${checksum},${`catalog/originals/${photoId}`},'ready')`;
   return { db, sql, photoId };
 }
+
+test("integrity supports checksum-addressed promoted originals but rejects another hash or photo", async () => {
+  const f = await fixture();
+  try {
+    const promoted = `catalog/originals/${f.photoId}/${checksum}`;
+    await f.sql`update catalog_photos set original_key=${promoted}`;
+    let reads = 0;
+    const verify = createIntegrityService(f.sql, { get: async (key) => { reads++; assert.equal(key, promoted); return object(); } });
+    assert.equal((await verify({ photoId: f.photoId })).status, "verified");
+    for (const bad of [`catalog/originals/${f.photoId}/${"0".repeat(64)}`, `catalog/originals/${crypto.randomUUID()}/${checksum}`]) {
+      await f.sql`update catalog_photos set original_key=${bad}`;
+      await assert.rejects(verify({ photoId: f.photoId }));
+    }
+    assert.equal(reads, 1);
+  } finally { await f.db.close(); }
+});
 test("owner integrity returns verified without keys/bytes, reads exactly one original and changes no database rows", async () => {
   const f = await fixture();
   try {

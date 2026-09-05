@@ -40,7 +40,13 @@ function fail(code: NativeProcessorErrorCode, message: string): never {
 }
 
 function stream(bytes: Uint8Array) {
-  return new Response(new Uint8Array(bytes)).body!;
+  // Each transform gets its own reader, without copying the entire original.
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(bytes);
+      controller.close();
+    },
+  });
 }
 
 function imageDimensions(value: unknown) {
@@ -135,24 +141,24 @@ export function createNativeImageProcessor(
       fail("processor_unavailable", "Native image processor watermark is unavailable");
     try {
       const dimensions = imageDimensions(await images.info(stream(bytes)));
-      const entries = await Promise.all(
-        DERIVATIVE_VARIANT_NAMES.map(async (name): Promise<[DerivativeVariantName, Uint8Array]> => {
-          const edge = VARIANT_MAX_EDGE[name];
-          const output = await images
-            .input(stream(bytes))
-            .transform({ width: edge, height: edge, fit: "scale-down", metadata: "none" })
-            .draw(
-              images
-                .input(stream(watermark))
-                .transform({ width: Math.round(edge * 0.5), fit: "scale-down" }),
-              { opacity: 0.5 },
-            )
-            .output({ format: "image/jpeg", quality: 85 });
-          if (!output || typeof output.response !== "function")
-            fail("invalid_output", "Processor response contract is malformed");
-          return [name, await boundedJpeg(output.response(), maxDerivativeBytes)];
-        }),
-      );
+      const entries: [DerivativeVariantName, Uint8Array][] = [];
+      // One source/transform at a time keeps large originals inside Worker memory limits.
+      for (const name of DERIVATIVE_VARIANT_NAMES) {
+        const edge = VARIANT_MAX_EDGE[name];
+        const output = await images
+          .input(stream(bytes))
+          .transform({ width: edge, height: edge, fit: "scale-down", metadata: "none" })
+          .draw(
+            images
+              .input(stream(watermark))
+              .transform({ width: Math.round(edge * 0.5), fit: "scale-down" }),
+            { opacity: 0.5 },
+          )
+          .output({ format: "image/jpeg", quality: 85 });
+        if (!output || typeof output.response !== "function")
+          fail("invalid_output", "Processor response contract is malformed");
+        entries.push([name, await boundedJpeg(output.response(), maxDerivativeBytes)]);
+      }
       return {
         ...dimensions,
         variants: Object.fromEntries(entries) as Record<DerivativeVariantName, Uint8Array>,

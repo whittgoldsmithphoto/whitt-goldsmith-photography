@@ -83,7 +83,10 @@ export function createIntegrityService(sql: Sql, storage: IntegrityStorage) {
       select original_key,bytes,checksum from catalog_photos where id=${photoId}`;
     if (!photo) throw new CatalogError("Photo not found", 404);
     if (
-      photo.original_key !== `catalog/originals/${photoId}` ||
+      ![
+        `catalog/originals/${photoId}`,
+        `catalog/originals/${photoId}/${photo.checksum}`,
+      ].includes(photo.original_key) ||
       !Number.isInteger(photo.bytes) ||
       photo.bytes <= 0 ||
       photo.bytes > MAX_BYTES ||

@@ -52,6 +52,7 @@
       "vars": {
         "VITE_AUTH_ENABLED": "true",
         "CATALOG_ENV": "staging",
+        "CATALOG_MEDIA_PROCESSING_PAUSED": "true",
         "BETTER_AUTH_URL": "https://wgp-catalog-staging.whittgoldsmithmedia.workers.dev",
         "CATALOG_LIVE_CHECKOUT_ENABLED": "false",
         "CATALOG_LIVE_DOWNLOADS_ENABLED": "false"

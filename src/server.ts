@@ -1,7 +1,7 @@
 import handler from "@tanstack/react-start/server-entry";
 import { getSql } from "./lib/db";
 import { createCatalog } from "./lib/catalog/repository";
-import { catalogMedia } from "./lib/catalog/media.server";
+import { catalogMedia, runtimeSetting } from "./lib/catalog/media.server";
 import { listDispatchableMediaJobs, loadMediaJob } from "./lib/catalog/media-jobs";
 import { processMediaQueueBatch } from "./lib/catalog/media-queue";
 import { dispatchMediaJob } from "./lib/catalog/media-queue.server";
@@ -36,6 +36,14 @@ async function fetch(request: Request, env: unknown, ctx: ExecutionContext): Pro
 export default {
   fetch,
   async queue(batch: WorkerQueueBatch) {
+    if (runtimeSetting("CATALOG_MEDIA_PROCESSING_PAUSED") === "true") {
+      await processMediaQueueBatch(batch, {
+        paused: true,
+        loadJob: async () => null,
+        processJob: async () => {},
+      });
+      return;
+    }
     const sql = await getSql();
     const catalog = createCatalog(sql, catalogMedia());
     await processMediaQueueBatch(batch, {
@@ -50,7 +58,8 @@ export default {
     const sql = await getSql();
     const result = await runScheduledMaintenance({
       cleanupExpiredUploads: () => cleanupExpiredUploads(sql, catalogMedia(), 25),
-      listDispatchableJobs: () => listDispatchableMediaJobs(sql, 50),
+      listDispatchableJobs: () => runtimeSetting("CATALOG_MEDIA_PROCESSING_PAUSED") === "true"
+        ? Promise.resolve([]) : listDispatchableMediaJobs(sql, 50),
       dispatchMediaJob,
     });
     if (result.cleanupFailed || result.dispatchListFailed || result.dispatchFailed)

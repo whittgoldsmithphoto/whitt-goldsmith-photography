@@ -70,6 +70,7 @@ export async function uploadBatch(options: {
   const { galleryId, files, onItem, shouldStop } = options;
   const transport = options.transport || uploadRequest;
   const results: UploadItem[] = [];
+  let consecutiveFailures = 0;
   for (let index = 0; index < files.length; index++) {
     const file = files[index];
     let photoId: string | undefined;
@@ -88,6 +89,11 @@ export async function uploadBatch(options: {
       emit("cancelled");
       continue;
     }
+    if (consecutiveFailures >= 3) {
+      emit("cancelled", "Batch paused after repeated failures. Retry after the service recovers.");
+      continue;
+    }
+    let transferStarted = false;
     try {
       const invalid = photoUploadError(file);
       if (invalid) throw new Error(invalid);
@@ -105,6 +111,7 @@ export async function uploadBatch(options: {
         idempotencyKey: crypto.randomUUID(),
       };
       let reservation: Reservation;
+      transferStarted = true;
       try {
         reservation = (await transport("op=reserve", reservationBody)) as Reservation;
       } catch {
@@ -116,10 +123,12 @@ export async function uploadBatch(options: {
         throw new Error("Invalid reservation response. Retry this file.");
       photoId = reservation.id;
       if (reservation.status === "ready") {
+        consecutiveFailures = 0;
         emit("duplicate");
         continue;
       }
       if (["uploaded", "needs_review", "processing"].includes(reservation.status)) {
+        consecutiveFailures = 0;
         emit("review");
         continue;
       }
@@ -138,7 +147,9 @@ export async function uploadBatch(options: {
         throw new Error(
           "Upload completion was not confirmed. Retry this file to check its saved state.",
         );
+      consecutiveFailures = 0;
     } catch (error) {
+      if (transferStarted) consecutiveFailures++;
       emit("failed", error instanceof Error ? error.message : "Upload failed. Retry this file.");
     }
   }

@@ -9,6 +9,34 @@ import { DERIVATIVE_VARIANT_NAMES } from "./media-variants.ts";
 
 const jpeg = new Uint8Array([255, 216, 255, 218, 0, 8, 1, 1, 0, 0, 63, 0, 1, 2, 255, 217]);
 
+test("native processor does not retain concurrent full-resolution transform inputs", async () => {
+  let active = 0,
+    peak = 0;
+  const provider: NativeImagesBinding = {
+    info: async () => ({ width: 6000, height: 4000 }),
+    input: () => ({
+      transform() {
+        return this;
+      },
+      draw() {
+        return this;
+      },
+      async output() {
+        active++;
+        peak = Math.max(peak, active);
+        await new Promise<void>((resolve) => setTimeout(resolve, 1));
+        active--;
+        return {
+          response: () => new Response(jpeg, { headers: { "content-type": "image/jpeg" } }),
+        };
+      },
+    }),
+  };
+  const output = await createNativeImageProcessor(provider, async () => jpeg)(jpeg);
+  assert.equal(Object.keys(output.variants).length, DERIVATIVE_VARIANT_NAMES.length);
+  assert.equal(peak, 1);
+});
+
 function binding(output: () => Response, info: unknown = { width: 6000, height: 4000 }) {
   const chain = () => ({
     transform() {
@@ -91,17 +119,18 @@ test("native processor rejects declared and streamed oversized outputs", async (
   );
   await failureCode(
     createNativeImageProcessor(
-      binding(() =>
-        new Response(
-          new ReadableStream<Uint8Array>({
-            start(controller) {
-              controller.enqueue(new Uint8Array(8));
-              controller.enqueue(new Uint8Array(8));
-              controller.close();
-            },
-          }),
-          { headers: { "content-type": "image/jpeg" } },
-        ),
+      binding(
+        () =>
+          new Response(
+            new ReadableStream<Uint8Array>({
+              start(controller) {
+                controller.enqueue(new Uint8Array(8));
+                controller.enqueue(new Uint8Array(8));
+                controller.close();
+              },
+            }),
+            { headers: { "content-type": "image/jpeg" } },
+          ),
       ),
       async () => jpeg,
       { maxDerivativeBytes: 10 },

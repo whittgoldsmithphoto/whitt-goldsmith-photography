@@ -42,6 +42,7 @@ export function ProofInbox() {
         <label className="flex min-w-[12rem] flex-1 flex-col gap-1 text-sm">
           Search
           <input
+            aria-label="Search"
             className="min-h-11 rounded border border-border bg-background px-3"
             maxLength={120}
             value={search}
@@ -52,6 +53,7 @@ export function ProofInbox() {
         <label className="flex flex-col gap-1 text-sm">
           Status
           <select
+            aria-label="Status"
             className="min-h-11 rounded border border-border bg-background px-3"
             value={filter}
             onChange={(event) => {

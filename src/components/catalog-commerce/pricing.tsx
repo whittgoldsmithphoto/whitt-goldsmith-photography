@@ -384,14 +384,6 @@ export function CommercePricing() {
               </button>
             ))}
           </div>
-          {error && (
-            <div role="alert" className="rounded border border-red-500 p-4">
-              {error}{" "}
-              <button className="underline" onClick={() => void reload()}>
-                Retry loading
-              </button>
-            </div>
-          )}
           {notice && <p role="status">{notice}</p>}
           {!data ? (
             <p role="status">{error ? "Pricing data is unavailable." : "Loading saved pricing…"}</p>

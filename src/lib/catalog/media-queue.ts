@@ -22,11 +22,16 @@ export function parseMediaQueueMessage(body: unknown): MediaQueueMessage | null 
 export async function processMediaQueueBatch<Job extends QueueJob>(
   batch: { messages: readonly QueueMessage[] },
   dependencies: {
+    paused?: boolean;
     loadJob(id: string): Promise<Job | null>;
     processJob(job: Job): Promise<void>;
   },
 ) {
   for (const message of batch.messages) {
+    if (dependencies.paused) {
+      message.retry({ delaySeconds: 900 });
+      continue;
+    }
     const envelope = parseMediaQueueMessage(message.body);
     if (!envelope) {
       message.ack();

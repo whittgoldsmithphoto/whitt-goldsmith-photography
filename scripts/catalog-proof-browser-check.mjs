@@ -264,25 +264,17 @@ try {
     await sql`insert into catalog_proofs(id,gallery_id,customer_id,note)
     values(${randomUUID()},${gallery.id},${`inbox-fixture-${i}-${randomUUID()}`},${`Additional selection ${i}`})`;
   await ownerPage.getByRole("button", { name: "Refresh inbox", exact: true }).click();
-  await ownerPage.getByRole("button", { name: "Next page", exact: true }).waitFor();
-  await ownerPage.getByRole("button", { name: "Next page", exact: true }).click();
-  await ownerPage.getByText("Page 2", { exact: true }).waitFor();
+  await ownerPage.getByRole("button", { name: "Next", exact: true }).waitFor();
+  await ownerPage.getByRole("button", { name: "Next", exact: true }).click();
   await ownerPage.getByText("Updated from the first device.", { exact: true }).waitFor();
-  await ownerPage.getByRole("button", { name: "First page", exact: true }).click();
-  await ownerPage
-    .getByLabel("Search gallery, note, or reference")
-    .fill("Updated from the first device.");
+  await ownerPage.getByRole("button", { name: "First", exact: true }).click();
+  await ownerPage.getByLabel("Search", { exact: true }).fill("Updated from the first device.");
   await ownerPage.getByRole("button", { name: "Search", exact: true }).click();
   await ownerPage.getByText("Updated from the first device.", { exact: true }).waitFor();
-  assert.equal(
-    await ownerPage
-      .getByRole("button", { name: "Mark this version reviewed", exact: true })
-      .count(),
-    1,
-  );
-  await ownerPage.getByLabel("Review status").selectOption("reviewed");
-  await ownerPage.getByText(/No selections match this page/).waitFor();
-  await ownerPage.getByLabel("Review status").selectOption("unreviewed");
+  assert.equal(await ownerPage.getByRole("button", { name: "Mark done", exact: true }).count(), 1);
+  await ownerPage.getByLabel("Status", { exact: true }).selectOption("reviewed");
+  await ownerPage.getByText("No selections yet.", { exact: true }).waitFor();
+  await ownerPage.getByLabel("Status", { exact: true }).selectOption("unreviewed");
   await ownerPage.getByText("Updated from the first device.", { exact: true }).waitFor();
   for (const width of [375, 768, 1440]) {
     await firstPage.setViewportSize({ width, height: 900 });
@@ -381,7 +373,7 @@ try {
     "Cancel preserves current draft",
   );
   await ownerPage.goto(`${origin}/organize`);
-  const workspaceNav = ownerPage.getByRole("navigation", { name: "Owner workspace", exact: true });
+  const workspaceNav = ownerPage.getByRole("navigation", { name: "Studio sections", exact: true });
   await workspaceNav.getByRole("link", { name: "Organizer", exact: true }).waitFor();
   assert.equal(await workspaceNav.getByRole("link").count(), 3, "Three owner destinations");
   assert.equal(await workspaceNav.getByRole("link", { name: "Upload", exact: true }).count(), 0);
@@ -396,11 +388,11 @@ try {
   await ownerPage.setViewportSize({ width: 1440, height: 900 });
   await ownerPage.getByRole("heading", { name: gallery.title, exact: true }).waitFor();
   await ownerPage.getByLabel("Search galleries", { exact: true }).fill("NO MATCHING GALLERY");
-  await ownerPage.getByText("No matching galleries.", { exact: true }).waitFor();
-  await ownerPage.getByRole("button", { name: "Clear search", exact: true }).click();
+  await ownerPage.getByText("No galleries yet.", { exact: true }).waitFor();
+  await ownerPage.getByLabel("Search galleries", { exact: true }).fill("");
   assert.equal(await ownerPage.getByLabel("Search galleries", { exact: true }).inputValue(), "");
   if (process.env.WGP_UI_REVIEW) await ownerPage.screenshot({ path: "test-results/owner-ui.png" });
-  await ownerPage.getByText("Manage folders", { exact: true }).click();
+  await ownerPage.getByText("Folders", { exact: true }).click();
   const manager = ownerPage.getByRole("region", { name: "Folder manager", exact: true });
   await manager.getByLabel("Folder title", { exact: true }).fill("Browser folder test");
   await manager.getByRole("button", { name: "Create folder", exact: true }).click();
@@ -413,7 +405,7 @@ try {
     .getByLabel("Folder to edit", { exact: true })
     .selectOption({ label: "Renamed browser folder" });
   await ownerPage.reload();
-  await ownerPage.getByText("Manage folders", { exact: true }).click();
+  await ownerPage.getByText("Folders", { exact: true }).click();
   await manager
     .getByLabel("Folder to edit", { exact: true })
     .selectOption({ label: "Renamed browser folder" });
@@ -444,13 +436,11 @@ try {
     "Browser move persisted nesting",
   );
   await ownerPage.getByRole("button", { name: /SYNTHETIC LOCAL PROOF TEST/ }).click();
-  await ownerPage.getByRole("button", { name: "Gallery settings", exact: true }).click();
+  await ownerPage.getByRole("button", { name: "Publish & settings", exact: true }).click();
   await ownerPage
     .getByLabel("Instructions for customers", { exact: true })
     .fill("Select your favorites, then save a note for Whitt.");
-  await ownerPage
-    .getByLabel("Customer download policy", { exact: true })
-    .selectOption("purchased_only");
+  await ownerPage.getByLabel("Downloads", { exact: true }).selectOption("purchased_only");
   await ownerPage.setViewportSize({ width: 375, height: 900 });
   assert.equal(
     await ownerPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
@@ -469,21 +459,24 @@ try {
       });
     } else await route.fallback();
   });
-  await ownerPage.getByRole("button", { name: "Save gallery", exact: true }).click();
-  await ownerPage.getByText("Synthetic gallery save failure", { exact: true }).waitFor();
+  await ownerPage.getByRole("dialog").getByRole("button", { name: "Save", exact: true }).click();
+  await ownerPage
+    .getByRole("dialog")
+    .getByText("Synthetic gallery save failure", { exact: true })
+    .waitFor();
   assert.equal(
     await ownerPage.getByLabel("Instructions for customers", { exact: true }).inputValue(),
     "Select your favorites, then save a note for Whitt.",
     "Gallery save failure preserves draft instructions",
   );
   assert.equal(
-    await ownerPage.getByLabel("Customer download policy", { exact: true }).inputValue(),
+    await ownerPage.getByLabel("Downloads", { exact: true }).inputValue(),
     "purchased_only",
     "Gallery save failure preserves draft policy",
   );
-  await ownerPage.getByRole("button", { name: "Save gallery", exact: true }).click();
+  await ownerPage.getByRole("dialog").getByRole("button", { name: "Save", exact: true }).click();
   await ownerPage
-    .getByRole("heading", { name: "Edit gallery", exact: true })
+    .getByRole("heading", { name: "Publish & settings", exact: true })
     .waitFor({ state: "hidden" });
   const policyPage = await anonymous.newPage();
   await policyPage.goto(`${origin}/galleries/${gallery.id}`);
@@ -512,19 +505,19 @@ try {
     ).status(),
     403,
   );
-  await ownerPage.getByRole("button", { name: "Gallery settings", exact: true }).click();
+  await ownerPage.getByRole("button", { name: "Publish & settings", exact: true }).click();
   assert.equal(
-    await ownerPage.getByLabel("Customer download policy", { exact: true }).inputValue(),
+    await ownerPage.getByLabel("Downloads", { exact: true }).inputValue(),
     "purchased_only",
   );
   assert.equal(
     await ownerPage.getByLabel("Instructions for customers", { exact: true }).inputValue(),
     "Select your favorites, then save a note for Whitt.",
   );
-  await ownerPage.getByLabel("Customer download policy", { exact: true }).selectOption("none");
-  await ownerPage.getByRole("button", { name: "Save gallery", exact: true }).click();
+  await ownerPage.getByLabel("Downloads", { exact: true }).selectOption("none");
+  await ownerPage.getByRole("dialog").getByRole("button", { name: "Save", exact: true }).click();
   await ownerPage
-    .getByRole("heading", { name: "Edit gallery", exact: true })
+    .getByRole("heading", { name: "Publish & settings", exact: true })
     .waitFor({ state: "hidden" });
   await policyPage.reload();
   await policyPage.getByText(/Download policy: no customer downloads/).waitFor();
@@ -544,7 +537,10 @@ try {
   });
   await ownerPage.goto(`${origin}/sell`);
   await ownerPage.getByText("Synthetic pricing read failure", { exact: false }).waitFor();
-  await ownerPage.getByRole("button", { name: "Retry loading", exact: true }).click();
+  await ownerPage
+    .getByText("Advanced price lists, coupons, and test quotes", { exact: true })
+    .click();
+  await ownerPage.getByRole("button", { name: "Retry", exact: true }).click();
   await ownerPage.getByText("No price lists have been saved.", { exact: true }).waitFor();
   await ownerPage.getByRole("tab", { name: "Pricing", exact: true }).click();
   const listForm = ownerPage.locator("form").filter({

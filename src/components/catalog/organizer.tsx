@@ -266,10 +266,7 @@ export function CatalogOrganizer() {
     });
   }
 
-  const live =
-    active &&
-    active.published &&
-    active.visibility !== "private";
+  const live = active && active.published && active.visibility !== "private";
   const statusLabel = active
     ? `${active.published ? "Live" : "Draft"} · ${active.visibility}${active.requiresPassword ? " · password" : ""}`
     : "";
@@ -314,33 +311,35 @@ export function CatalogOrganizer() {
             </select>
           </label>
           <div className="hidden lg:block">
-          <Input
-            aria-label="Search galleries"
-            value={galleryQuery}
-            onChange={(event) => setGalleryQuery(event.target.value)}
-            placeholder="Find a gallery"
-          />
-          {listedGalleries.length === 0 && <p className="text-sm text-muted-foreground">No galleries yet.</p>}
-          {listedGalleries.map((g) => (
-            <button
-              key={g.id}
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                setSelectedPhotoIds((ids) => resetSelectionOnGalleryChange(selected, g.id, ids));
-                setSelected(g.id);
-                setPhotoDraft(null);
-              }}
-              aria-pressed={active?.id === g.id}
-              className="catalog-directory-item block w-full border-l-2 px-3 py-2 text-left"
-            >
-              <span className="block text-sm font-medium">{g.title}</span>
-              <span className="mt-0.5 block text-xs text-muted-foreground">
-                {g.published ? g.visibility : "Draft"}
-                {g.requiresPassword ? " · password" : ""}
-              </span>
-            </button>
-          ))}
+            <Input
+              aria-label="Search galleries"
+              value={galleryQuery}
+              onChange={(event) => setGalleryQuery(event.target.value)}
+              placeholder="Find a gallery"
+            />
+            {listedGalleries.length === 0 && (
+              <p className="text-sm text-muted-foreground">No galleries yet.</p>
+            )}
+            {listedGalleries.map((g) => (
+              <button
+                key={g.id}
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setSelectedPhotoIds((ids) => resetSelectionOnGalleryChange(selected, g.id, ids));
+                  setSelected(g.id);
+                  setPhotoDraft(null);
+                }}
+                aria-pressed={active?.id === g.id}
+                className="catalog-directory-item block w-full border-l-2 px-3 py-2 text-left"
+              >
+                <span className="block text-sm font-medium">{g.title}</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  {g.published ? g.visibility : "Draft"}
+                  {g.requiresPassword ? " · password" : ""}
+                </span>
+              </button>
+            ))}
           </div>
           <details
             className="border-t border-border pt-2"
@@ -351,7 +350,9 @@ export function CatalogOrganizer() {
             {libraryOpen && (
               <LibrarySearch
                 onOpenGallery={(galleryId, photoId) => {
-                  setSelectedPhotoIds((ids) => resetSelectionOnGalleryChange(selected, galleryId, ids));
+                  setSelectedPhotoIds((ids) =>
+                    resetSelectionOnGalleryChange(selected, galleryId, ids),
+                  );
                   setSelected(galleryId);
                   const photo = photos.find((item) => item.id === photoId);
                   setPhotoDraft(
@@ -409,7 +410,10 @@ export function CatalogOrganizer() {
                           );
                           setMessage("Customer link copied.");
                         } catch {
-                          window.prompt("Copy gallery link", `${location.origin}/galleries/${active.id}`);
+                          window.prompt(
+                            "Copy gallery link",
+                            `${location.origin}/galleries/${active.id}`,
+                          );
                         }
                       }}
                     >
@@ -474,7 +478,10 @@ export function CatalogOrganizer() {
               </div>
 
               {batchItems.length > 0 && (
-                <section aria-label="Current upload batch" className="mb-4 rounded border border-border p-3">
+                <section
+                  aria-label="Current upload batch"
+                  className="mb-4 rounded border border-border p-3"
+                >
                   <p className="text-sm" role="status">
                     {
                       batchItems.filter(
@@ -535,7 +542,10 @@ export function CatalogOrganizer() {
                       "hidden",
                       `Hidden ${activePhotos.filter((photo) => photo.hidden && !photo.archived).length}`,
                     ],
-                    ["archived", `Archived ${activePhotos.filter((photo) => photo.archived).length}`],
+                    [
+                      "archived",
+                      `Archived ${activePhotos.filter((photo) => photo.archived).length}`,
+                    ],
                   ] as const
                 ).map(([value, label]) => (
                   <Button
@@ -662,7 +672,9 @@ export function CatalogOrganizer() {
 
               {jobs.some((job) => job.galleryId === active.id) && (
                 <details className="mt-6 text-sm">
-                  <summary className="cursor-pointer py-2 text-muted-foreground">Upload history</summary>
+                  <summary className="cursor-pointer py-2 text-muted-foreground">
+                    Upload history
+                  </summary>
                   <ul className="space-y-2">
                     {jobs
                       .filter((job) => job.galleryId === active.id)
@@ -826,9 +838,15 @@ export function CatalogOrganizer() {
                   Visibility, password, and the customer-facing copy for this gallery.
                 </DialogDescription>
               </DialogHeader>
+              {message && (
+                <p role="alert" className="text-sm text-destructive">
+                  {message}
+                </p>
+              )}
               <label className="block text-sm">
                 Title
                 <Input
+                  aria-label="Title"
                   value={draft.title}
                   onChange={(event) => setDraft({ ...draft, title: event.target.value })}
                   required
@@ -838,6 +856,7 @@ export function CatalogOrganizer() {
               <label className="block text-sm">
                 Description
                 <Textarea
+                  aria-label="Description"
                   value={draft.description}
                   onChange={(event) => setDraft({ ...draft, description: event.target.value })}
                   maxLength={4000}
@@ -846,6 +865,7 @@ export function CatalogOrganizer() {
               <label className="block text-sm">
                 Instructions for customers
                 <Textarea
+                  aria-label="Instructions for customers"
                   maxLength={4000}
                   value={draft.customerInstructions ?? ""}
                   onChange={(event) =>
@@ -907,6 +927,7 @@ export function CatalogOrganizer() {
               <label className="block text-sm">
                 Downloads
                 <select
+                  aria-label="Downloads"
                   className="mt-1 block w-full rounded bg-secondary p-2"
                   value={draft.downloadPolicy ?? "none"}
                   onChange={(event) =>
@@ -934,9 +955,7 @@ export function CatalogOrganizer() {
                 <select
                   className="mt-1 block w-full rounded bg-secondary p-2"
                   value={draft.folderId || ""}
-                  onChange={(event) =>
-                    setDraft({ ...draft, folderId: event.target.value || null })
-                  }
+                  onChange={(event) => setDraft({ ...draft, folderId: event.target.value || null })}
                 >
                   <option value="">No folder</option>
                   {folders.map((folder) => (
@@ -951,9 +970,7 @@ export function CatalogOrganizer() {
                   <input
                     type="checkbox"
                     checked={draft.revokeAccess || false}
-                    onChange={(event) =>
-                      setDraft({ ...draft, revokeAccess: event.target.checked })
-                    }
+                    onChange={(event) => setDraft({ ...draft, revokeAccess: event.target.checked })}
                   />
                   Revoke existing access cookies
                 </label>

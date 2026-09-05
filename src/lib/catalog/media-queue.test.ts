@@ -17,6 +17,16 @@ function message<T>(body: T, attempts = 1) {
   };
 }
 
+test("paused media processing defers jobs without reading database or losing messages", async () => {
+  const pending = message({ version: 1, jobId: "00000000-0000-4000-8000-000000000004" });
+  await processMediaQueueBatch({ messages: [pending] }, {
+    paused: true,
+    loadJob: async () => { throw new Error("Database must not be used while paused"); },
+    processJob: async () => { throw new Error("Processing must not run while paused"); },
+  });
+  assert.deepEqual(pending.actions, [["retry", 900]]);
+});
+
 test("queue batches isolate poison, replay, success, and retry decisions per message", async () => {
   const malformed = message({ photoId: "private-data-is-not-an-envelope" });
   const replay = message({ version: 1, jobId: "00000000-0000-4000-8000-000000000001" });

@@ -23,6 +23,25 @@ function file(name = "photo.jpg", type = "image/jpeg"): UploadFile {
   const bytes = new Uint8Array([255, 216, 255, 1]);
   return { name, type, size: bytes.length, arrayBuffer: async () => bytes.buffer };
 }
+
+test("three consecutive transfer failures pause the rest of a batch for safe retry", async () => {
+  let reservations = 0;
+  const results = await uploadBatch({
+    galleryId: "gallery",
+    files: Array.from({ length: 8 }, () => file()),
+    onItem: () => {},
+    transport: async (query) => {
+      if (query === "op=reserve") return { id: String(++reservations), status: "reserved" };
+      throw new Error("Provider unavailable");
+    },
+  });
+  assert.equal(reservations, 3);
+  assert.deepEqual(
+    results.map((item) => item.state),
+    ["failed", "failed", "failed", "cancelled", "cancelled", "cancelled", "cancelled", "cancelled"],
+  );
+  assert.match(results[3].error!, /paused/i);
+});
 test("a failed file does not stop later uploads and only verified ready is counted", async () => {
   let reservations = 0;
   const updates: UploadItem[] = [];

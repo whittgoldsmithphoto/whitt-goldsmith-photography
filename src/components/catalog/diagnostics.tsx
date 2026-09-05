@@ -9,6 +9,7 @@ export function CatalogDiagnostics() {
     r2Configured: boolean;
     imagesConfigured: boolean;
     watermarkConfigured: boolean;
+    mediaProcessingPaused: boolean;
     missingMigrations: string[];
     checkedAt: string;
   }>("op=diagnostics");
@@ -26,6 +27,13 @@ export function CatalogDiagnostics() {
   const data = state.data;
   return (
     <div className="mt-3 space-y-2">
+      {data.mediaProcessingPaused && (
+        <p role="status" className="border border-border p-3">
+          Photo processing is paused while hosting capacity is being resolved. Do not start another
+          upload batch yet. Existing originals are not deleted; unfinished jobs need to be reviewed
+          and resumed after processing is enabled again.
+        </p>
+      )}
       <p>
         Environment: {data.environment}. Database: {data.database}.
       </p>
