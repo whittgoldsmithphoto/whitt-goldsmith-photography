@@ -7,7 +7,7 @@ import { createCommerce, type VerifiedPayment } from "./service.ts";
 import { createCommerceHandler } from "./http.ts";
 import { consumeCheckoutAttempt, sandboxCheckoutSettings } from "./checkout-settings.ts";
 
-test("owner variant pricing persists but unsupported fulfillment stays closed", async () => {
+test("owner variant pricing persists while print fulfillment stays closed", async () => {
   const f = await fixture();
   try {
     await f.db.exec(
@@ -59,33 +59,27 @@ test("owner variant pricing persists but unsupported fulfillment stays closed", 
     await assert.rejects(f.commerce.configureProduct({ ...print, finish: undefined }), /required/);
     await assert.rejects(f.commerce.configureProduct({ ...print, widthInches: 8.001 }), /decimal/);
     await assert.rejects(f.commerce.configureProduct({ ...print, id: "digital" }), /kind cannot/);
-    await assert.rejects(
-      f.commerce.configureProduct({
-        id: "album",
-        name: "Album",
-        kind: "gallery_download",
-        license: "Personal use",
-        active: true,
-      }),
-      /fulfillment/,
-    );
+    await f.commerce.configureProduct({
+      id: "album",
+      name: "Album",
+      kind: "gallery_download",
+      license: "Personal use",
+      active: true,
+    });
     await assert.rejects(
       f.db.exec(
         "INSERT INTO commerce_products(id,name,kind,license) VALUES('bad','Incomplete print','print','Personal')",
       ),
     );
     // Even bypassing the owner API cannot make the existing checkout sell these.
-    await f.db.exec(
-      "UPDATE commerce_products SET active=true WHERE id IN ('album','print-8x10-lustre')",
+    await f.db.exec("UPDATE commerce_products SET active=true WHERE id='print-8x10-lustre'");
+    await assert.rejects(
+      f.commerce.quote("customer", {
+        galleryId: "gallery",
+        items: [{ productId: print.id, photoId: "photo", quantity: 1 }],
+      }),
+      /not enabled/,
     );
-    for (const productId of ["album", print.id])
-      await assert.rejects(
-        f.commerce.quote("customer", {
-          galleryId: "gallery",
-          items: [{ productId, photoId: "photo", quantity: 1 }],
-        }),
-        /not enabled/,
-      );
     const before = await f.commerce.quote("customer", f.request);
     await f.commerce.configurePrice({
       priceListId: "default",

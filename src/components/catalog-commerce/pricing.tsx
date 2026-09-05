@@ -450,7 +450,7 @@ export function CommercePricing() {
                     id: String(f.get("id")),
                     name: String(f.get("name")),
                     license: String(f.get("license")),
-                    active: productKind === "digital_photo" && f.get("active") === "on",
+                    active: productKind !== "print" && f.get("active") === "on",
                     kind: productKind,
                     ...(productKind === "print"
                       ? {
@@ -588,13 +588,10 @@ export function CommercePricing() {
                     </label>
                   </fieldset>
                 )}
-                {productKind !== "digital_photo" && (
+                {productKind === "print" && (
                   <p role="status" className="text-sm text-muted-foreground">
                     You can save this product and its prices now. Sales remain disabled until{" "}
-                    {productKind === "print"
-                      ? "print fulfillment and shipping"
-                      : "gallery packaging and delivery"}{" "}
-                    are connected.
+                    print fulfillment and shipping are connected.
                   </p>
                 )}
                 <label className="flex gap-2">
@@ -602,7 +599,7 @@ export function CommercePricing() {
                     type="checkbox"
                     name="active"
                     defaultChecked={editingProduct?.active}
-                    disabled={productKind !== "digital_photo"}
+                    disabled={productKind === "print"}
                   />
                   Available for quote previews
                 </label>

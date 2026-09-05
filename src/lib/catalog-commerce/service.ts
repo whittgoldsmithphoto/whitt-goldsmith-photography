@@ -89,8 +89,8 @@ export function createCommerce(sql: Sql, authorizeGallery: (galleryId: string) =
       return row;
     },
     async configureProduct(input: unknown) {
-      // Configuration does not enable fulfillment. SQL quote checks remain closed
-      // for gallery downloads and prints until their delivery adapters are ready.
+      // Gallery downloads are fulfilled as per-photo entitlements by the commerce
+      // webhook. Physical prints remain configuration-only until shipping exists.
       const data = z
         .object({
           id,
@@ -105,8 +105,8 @@ export function createCommerce(sql: Sql, authorizeGallery: (galleryId: string) =
         })
         .strict()
         .parse(input);
-      if (data.kind !== "digital_photo" && data.active)
-        throw new Error("Print and gallery-download fulfillment is not enabled; save as inactive");
+      if (data.kind === "print" && data.active)
+        throw new Error("Print fulfillment is not enabled; save as inactive");
       if (data.kind === "print") {
         if (!data.widthInches || !data.heightInches || !data.finish || !data.minimumDpi)
           throw new Error("Print size, finish and minimum DPI are required");
