@@ -57,12 +57,21 @@ export function assertStripeTaxConfiguration(
     }>;
   },
 ) {
+  if (tax.livemode !== (config.environment === "production"))
+    throw new CheckoutError("Stripe Tax mode does not match this checkout environment");
+  if (tax.status !== "active")
+    throw new CheckoutError(
+      "Stripe Tax setup is not active; complete Tax settings in the matching Stripe account",
+    );
+  if (tax.defaults.provider !== "stripe")
+    throw new CheckoutError("Stripe Tax provider does not match the reviewed configuration");
+  if (tax.defaults.tax_code !== config.digitalTaxCode)
+    throw new CheckoutError(
+      "Stripe Tax product category does not match the reviewed website configuration; review both before retrying",
+    );
+  if (registrations.has_more)
+    throw new CheckoutError("Stripe Tax registration list is incomplete; owner review required");
   if (
-    tax.livemode !== (config.environment === "production") ||
-    tax.status !== "active" ||
-    tax.defaults.provider !== "stripe" ||
-    tax.defaults.tax_code !== config.digitalTaxCode ||
-    registrations.has_more ||
     registrations.data.some(
       (reg) =>
         reg.livemode !== (config.environment === "production") ||
@@ -71,7 +80,7 @@ export function assertStripeTaxConfiguration(
     )
   )
     throw new CheckoutError(
-      "Stripe Tax settings or existing registrations differ from the reviewed configuration",
+      "Stripe Tax registrations differ from the reviewed South Carolina configuration",
     );
 }
 

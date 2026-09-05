@@ -11,6 +11,48 @@ const tax = {
 };
 const sc = { livemode: true, country: "US", country_options: { us: { state: "SC" } } };
 
+test("tax preflight identifies actionable mismatches without exposing account details", () => {
+  const registrations = { has_more: false, data: [] };
+  assert.throws(
+    () => assertStripeTaxConfiguration(config, { ...tax, status: "pending" }, registrations),
+    /Stripe Tax setup is not active/,
+  );
+  assert.throws(
+    () =>
+      assertStripeTaxConfiguration(
+        config,
+        { ...tax, defaults: { ...tax.defaults, tax_code: "txcd_10000000" } },
+        registrations,
+      ),
+    /Stripe Tax product category does not match/,
+  );
+  assert.throws(
+    () => assertStripeTaxConfiguration(config, { ...tax, livemode: false }, registrations),
+    /Stripe Tax mode does not match/,
+  );
+  assert.throws(
+    () =>
+      assertStripeTaxConfiguration(
+        config,
+        { ...tax, defaults: { ...tax.defaults, provider: "other" } },
+        registrations,
+      ),
+    /Stripe Tax provider does not match/,
+  );
+  assert.throws(
+    () => assertStripeTaxConfiguration(config, tax, { has_more: true, data: [] }),
+    /registration list is incomplete/,
+  );
+  assert.throws(
+    () =>
+      assertStripeTaxConfiguration(config, tax, {
+        has_more: false,
+        data: [{ ...sc, country: "CA" }],
+      }),
+    /registrations differ/,
+  );
+});
+
 test("digital provider preflight accepts no registrations without asserting exemption", () => {
   assert.doesNotThrow(() =>
     assertStripeTaxConfiguration(config, tax, { has_more: false, data: [] }),
