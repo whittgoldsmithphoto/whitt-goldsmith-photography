@@ -55,6 +55,7 @@ try {
         [id, kind, `private-synthetic-${i}-${kind}`],
       );
   }
+
   await server.listen();
   browser = await chromium.launch({ headless: true });
   const anonymous = await browser.newContext(),
@@ -133,6 +134,17 @@ try {
     }),
   );
   await studio.goto(`${origin}/organize`);
+  await studio.getByRole("button", { name: "Photo status: All", exact: true }).waitFor();
+  await studio.getByLabel("Photo sort", { exact: true }).waitFor();
+  await studio.getByRole("status").filter({ hasText: /52 of 52 photographs/ }).waitFor();
+  await studio.getByRole("button", { name: "Photo status: Archived (0)", exact: true }).click();
+  await studio.getByRole("status").filter({ hasText: /0 of 52 photographs/ }).waitFor();
+  assert.equal(await studio.getByRole("button", { name: /^synthetic-/ }).count(), 0);
+  await studio.getByRole("button", { name: "Photo status: All", exact: true }).click();
+  for (const width of [375, 768, 1440]) {
+    await studio.setViewportSize({ width, height: 900 });
+    assert.equal(await studio.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, `No horizontal overflow at ${width}px`);
+  }
   await studio.getByText("Search all photographs", { exact: true }).click();
   const library = studio.getByRole("region", { name: "Library search", exact: true });
   await library.getByLabel("Filename or caption", { exact: true }).fill("synthetic-051");
@@ -141,7 +153,12 @@ try {
   await library
     .getByRole("button", { name: "Open synthetic-051.jpg in Organizer", exact: true })
     .click();
-  await studio.getByRole("heading", { name: "Edit photograph", exact: true }).waitFor();
+  await studio.getByRole("heading", { name: "Editing synthetic-051.jpg", exact: true }).waitFor();
+  assert.equal(
+    await studio.getByRole("button", { name: /^synthetic-051\.jpg/ }).getAttribute("aria-pressed"),
+    "true",
+    "Selected photo remains selected while inspector is open",
+  );
   await studio.getByRole("button", { name: "Use as gallery cover", exact: true }).click();
   await studio
     .getByText("Gallery cover saved. Publication settings were not changed.", { exact: true })
