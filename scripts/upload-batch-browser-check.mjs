@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createServer } from "vite";
 import { chromium } from "playwright";
 
@@ -154,6 +157,54 @@ try {
   await page.getByRole("button", { name: "Retry processing", exact: true }).click();
   await batch.getByText("healthy.jpg — ready", { exact: true }).waitFor();
   assert.deepEqual(errors, []);
+  assert.equal(
+    await page.getByRole("button", { name: "Download QR code", exact: true }).count(),
+    0,
+  );
+  await page.getByRole("button", { name: "Publish & settings", exact: true }).click();
+  const settings = page.getByRole("dialog");
+  await settings.getByLabel("Visibility", { exact: true }).selectOption("unlisted");
+  await settings
+    .getByRole("checkbox", { name: "Published — needs a ready photograph", exact: true })
+    .check();
+  await settings.getByRole("button", { name: "Save", exact: true }).click();
+  const downloaded = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download QR code", exact: true }).click();
+  const qr = await downloaded;
+  assert.equal(qr.suggestedFilename(), `gallery-${galleryId}-qr.svg`);
+  assert.match(readFileSync(await qr.path(), "utf8"), /<svg/);
+  await page
+    .getByRole("status")
+    .filter({ hasText: "Gallery password and access rules still apply" })
+    .waitFor();
+  console.log(
+    "PASS: draft has no QR action; real local settings publish an unlisted gallery; browser downloads the correctly named SVG and confirms unchanged access rules.",
+  );
+  if (process.env.WGP_VISUAL_BASELINE === "true") {
+    const directory = mkdtempSync(join(tmpdir(), "wgp-astra-visual-"));
+    for (const [width, height] of [
+      [1440, 1000],
+      [390, 844],
+    ]) {
+      await page.setViewportSize({ width, height });
+      for (const [route, heading] of [
+        ["galleries", "Find your photos"],
+        ["organize", "Organizer"],
+        ["favorites", "Proofs"],
+        ["sell", "Selling"],
+      ]) {
+        await page.goto(`${origin}/${route}`);
+        await page.getByRole("heading", { name: heading, exact: true, level: 1 }).waitFor();
+        await page.evaluate(() => document.fonts.ready);
+        const overflow = await page.evaluate(
+          () => document.documentElement.scrollWidth > innerWidth + 1,
+        );
+        assert.equal(overflow, false, `${route} must fit at ${width}px`);
+        await page.screenshot({ path: join(directory, `${route}-${width}.png`), fullPage: true });
+      }
+    }
+    console.log(`Visual baseline screenshots: ${directory}`);
+  }
   console.log(
     "PASS: real local owner authentication/catalog reservations and mounted batch UI; invalid file does not stop good file, duplicate never transfers again, original filename preserved, unconfirmed completion fails then safely re-reserves, retry selects failed/unstarted only, stop waits for current file then skips remaining files. Upload completion/image processing explicitly simulated; not live-provider acceptance.",
   );

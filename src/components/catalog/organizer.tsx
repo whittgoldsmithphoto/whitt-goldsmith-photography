@@ -6,6 +6,7 @@ import {
   type UploadItem,
 } from "@/lib/catalog/upload-batch";
 import { collectUploadFiles } from "@/lib/catalog/ingest-files";
+import { galleryQrSvg } from "@/lib/catalog/gallery-share";
 import { MAX_PHOTO_LABEL } from "@/lib/catalog/upload-limits";
 import { Link } from "@tanstack/react-router";
 import { catalogFetch, useCatalog } from "@/lib/catalog/client";
@@ -61,6 +62,7 @@ export function CatalogOrganizer() {
   const [photoDraft, setPhotoDraft] = useState<PhotoInput | null>(null);
   const [batchItems, setBatchItems] = useState<UploadItem[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [qrBusy, setQrBusy] = useState(false);
   const [stopRequested, setStopRequested] = useState(false);
   const [photoFilter, setPhotoFilter] = useState<OrganizerPhotoFilter>("all");
   const [photoSort, setPhotoSort] = useState<OrganizerPhotoSort>("display-order");
@@ -433,6 +435,36 @@ export function CatalogOrganizer() {
                       <Link to="/galleries/$galleryId" params={{ galleryId: active.id }}>
                         View
                       </Link>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={qrBusy}
+                      onClick={async () => {
+                        setQrBusy(true);
+                        try {
+                          const svg = await galleryQrSvg(location.origin, active);
+                          const url = URL.createObjectURL(
+                            new Blob([svg], { type: "image/svg+xml" }),
+                          );
+                          const link = document.createElement("a");
+                          link.href = url;
+                          link.download = `gallery-${active.id}-qr.svg`;
+                          document.body.append(link);
+                          link.click();
+                          link.remove();
+                          setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                          setMessage(
+                            "QR code sent to your browser downloads. Gallery password and access rules still apply.",
+                          );
+                        } catch {
+                          setMessage("Could not create the QR code. Use Copy link or try again.");
+                        } finally {
+                          setQrBusy(false);
+                        }
+                      }}
+                    >
+                      {qrBusy ? "Preparing QR…" : "Download QR code"}
                     </Button>
                   </>
                 )}
@@ -896,6 +928,7 @@ export function CatalogOrganizer() {
               <label className="block text-sm">
                 Visibility
                 <select
+                  aria-label="Visibility"
                   className="mt-1 block w-full rounded bg-secondary p-2"
                   value={draft.visibility}
                   onChange={(event) =>
