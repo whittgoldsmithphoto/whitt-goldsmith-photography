@@ -1,5 +1,6 @@
 import { unzipSync } from "fflate";
 import { MAX_PHOTO_BYTES } from "./upload-limits.ts";
+import { validateArchiveEntries, type ArchiveEntry } from "../ingest/archive-safety.ts";
 
 const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024;
 const MAX_FILES = 1000;
@@ -17,7 +18,11 @@ function isImageFile(file: File) {
 }
 
 function isZip(file: File) {
-  return file.type === "application/zip" || file.type === "application/x-zip-compressed" || /\.zip$/i.test(file.name);
+  return (
+    file.type === "application/zip" ||
+    file.type === "application/x-zip-compressed" ||
+    /\.zip$/i.test(file.name)
+  );
 }
 
 function asJpegPng(file: File): File {
@@ -28,12 +33,36 @@ function asJpegPng(file: File): File {
 
 async function filesFromZip(file: File): Promise<File[]> {
   if (file.size > MAX_ARCHIVE_BYTES) throw new Error("That zip is larger than 512 MB.");
-  const unzipped = unzipSync(new Uint8Array(await file.arrayBuffer()));
+  const archive = new Uint8Array(await file.arrayBuffer());
+  const entries: ArchiveEntry[] = [];
+  let entryCount = 0;
+  // First inspect metadata with extraction disabled. Bounds must be checked
+  // before the decompressor allocates buffers from untrusted expanded sizes.
+  unzipSync(archive, {
+    filter(entry) {
+      if (++entryCount > MAX_FILES) throw new Error("Archive file count limit exceeded");
+      if (isImageName(entry.name))
+        entries.push({
+          path: entry.name,
+          compressedSize: entry.size,
+          uncompressedSize: entry.originalSize,
+          kind: "file",
+          type: /\.png$/i.test(entry.name) ? "image/png" : "image/jpeg",
+        });
+      return false;
+    },
+  });
+  if (!entries.length) return [];
+  const manifest = validateArchiveEntries(entries, { maxTotalBytes: 128 * 1024 * 1024 });
+  const accepted = new Set(manifest.files.map((entry) => entry.path));
+  const unzipped = unzipSync(archive, { filter: (entry) => accepted.has(entry.name) });
   const out: File[] = [];
   for (const [path, bytes] of Object.entries(unzipped)) {
     const name = path.split("/").pop() || path;
     if (!isImageName(name) || name.startsWith(".")) continue;
-    if (bytes.byteLength > MAX_PHOTO_BYTES) continue;
+    const declared = entries.find((entry) => entry.path === path);
+    if (bytes.byteLength > MAX_PHOTO_BYTES || bytes.byteLength !== declared?.uncompressedSize)
+      throw new Error("Archive photo size does not match its declaration");
     const type = /\.png$/i.test(name) ? "image/png" : "image/jpeg";
     out.push(new File([bytes.slice()], name, { type }));
     if (out.length >= MAX_FILES) break;
@@ -46,7 +75,12 @@ type FileSystemEntryLike = {
   isDirectory: boolean;
   name: string;
   file?: (ok: (file: File) => void, err?: (error: Error) => void) => void;
-  createReader?: () => { readEntries: (ok: (entries: FileSystemEntryLike[]) => void, err?: (error: Error) => void) => void };
+  createReader?: () => {
+    readEntries: (
+      ok: (entries: FileSystemEntryLike[]) => void,
+      err?: (error: Error) => void,
+    ) => void;
+  };
 };
 
 function readFile(entry: FileSystemEntryLike): Promise<File> {

@@ -31,3 +31,13 @@ test("expands a zip of photographs", async () => {
   assert.equal(files[0].name, "SWG01452.jpg");
   assert.equal(files[0].type, "image/jpeg");
 });
+
+test("rejects unsafe archive paths before producing upload files", async () => {
+  const zip = zipSync({ "../escape.jpg": new Uint8Array([255, 216, 255, 1]) });
+  await assert.rejects(collectUploadFiles([new File([zip], "unsafe.zip")]), /path/i);
+});
+
+test("rejects compressed image bombs before allocating expanded photos", async () => {
+  const zip = zipSync({ "bomb.jpg": new Uint8Array(1024 * 1024) });
+  await assert.rejects(collectUploadFiles([new File([zip], "bomb.zip")]), /compression/i);
+});

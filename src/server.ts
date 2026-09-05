@@ -24,7 +24,11 @@ async function fetch(request: Request, env: unknown, ctx: ExecutionContext): Pro
     headers.set("cache-control", "no-cache, no-store, must-revalidate");
     headers.set("pragma", "no-cache");
     headers.set("expires", "0");
-    return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
   }
   return response;
 }

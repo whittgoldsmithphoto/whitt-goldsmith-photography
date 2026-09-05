@@ -206,6 +206,12 @@ export function createCommerceHandler(deps: CommerceDependencies) {
       return json({ ok: true });
     } catch (error) {
       const failure = error as { status?: number; code?: string; message?: string };
+      // Record only classifications, never SQL, payment payloads or credentials.
+      console.error("Commerce operation failed", {
+        operation: new URL(request.url).searchParams.get("op")?.slice(0, 40),
+        code: typeof failure.code === "string" ? failure.code.slice(0, 80) : "unclassified",
+        status: failure.status ?? 500,
+      });
       if (failure.status && [401, 403, 404, 409, 429, 503].includes(failure.status))
         return json({ error: failure.message }, failure.status);
       if (error instanceof ZodError)

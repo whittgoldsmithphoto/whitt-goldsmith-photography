@@ -33,7 +33,9 @@ export interface CheckoutProvider {
     quoteId: string;
   }): Promise<{ sessions: Stripe.Checkout.Session[]; complete: boolean }>;
 }
-export class CheckoutError extends Error {}
+export class CheckoutError extends Error {
+  readonly status = 503;
+}
 
 /** An empty registration list is not proof of exemption or a provider failure.
  * Keep automatic tax and the separate release-acceptance gate; never fabricate
